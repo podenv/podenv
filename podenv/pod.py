@@ -15,9 +15,9 @@
 from podenv.env import Env, ExecArgs
 
 
-def setupPod(env: Env):
+def setupPod(env: Env) -> None:
     ...
 
 
-def executePod(args: ExecArgs):
+def executePod(args: ExecArgs) -> None:
     ...

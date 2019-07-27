@@ -12,8 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
 from dataclasses import dataclass, field, fields
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 ExecArgs = List[str]
@@ -27,7 +28,7 @@ class Env:
     parent: str = ""
     environment: Dict[str, str] = field(default_factory=dict)
 
-    def applyParent(self, parentEnv: 'Env'):
+    def applyParent(self, parentEnv: Env) -> None:
         for attr in fields(Env):
             if attr.name in ('name', 'parent'):
                 continue
@@ -48,5 +49,5 @@ def prepareEnv(env: Env) -> ExecArgs:
     return []
 
 
-def cleanupEnv(env: Env):
+def cleanupEnv(env: Env) -> None:
     ...

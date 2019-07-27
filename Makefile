@@ -12,10 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-test: test-lint test-type
+test: test-type test-lint
 
 test-lint:
 	flake8
 
 test-type:
-	mypy --check-untyped-defs podenv
+	mypy --strict podenv

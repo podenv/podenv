@@ -31,7 +31,7 @@ def usage() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def setupLogging(debug: bool):
+def setupLogging(debug: bool) -> None:
     loglevel = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         format="%(asctime)s %(levelname)-5.5s %(name)s - "
@@ -39,12 +39,12 @@ def setupLogging(debug: bool):
         level=loglevel)
 
 
-def fail(msg: str, code=1):
+def fail(msg: str, code: int = 1) -> None:
     print(f"\33[91m{msg}\033[m", file=sys.stderr)
     exit(code)
 
 
-def run():
+def run() -> None:
     args = usage()
     setupLogging(args.verbose)
 

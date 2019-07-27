@@ -16,16 +16,17 @@
 This module handles configuration schema.
 """
 
+from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from yaml import safe_load
 
 from podenv.env import Env
 
 
 class Config:
-    def __init__(self, schema):
+    def __init__(self, schema: Dict[str, Any]) -> None:
         self.dns: Optional[str] = schema.get('system', {}).get('dns')
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
@@ -33,7 +34,7 @@ class Config:
             self.envs[envName] = Env(envName, **envSchema)
 
 
-def initConfig(configDir: Path, configFile: Path):
+def initConfig(configDir: Path, configFile: Path) -> None:
     defaultConfig = dedent("""\
         # Podenv configuration file
         ---
@@ -66,7 +67,7 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
     if not envName:
         envName = conf.default
 
-    def resolvParents(parent: Optional[str], history: List[str]):
+    def resolvParents(parent: Optional[str], history: List[str]) -> None:
         if not parent:
             if "base" in history:
                 return
