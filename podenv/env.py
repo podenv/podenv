@@ -12,8 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass, field, fields
+from typing import Dict, List, Optional
 
 
 ExecArgs = List[str]
@@ -22,8 +22,26 @@ ExecArgs = List[str]
 @dataclass
 class Env:
     name: str
-    image: Optional[str] = None
+    image: str = ""
     command: ExecArgs = field(default_factory=list)
+    parent: str = ""
+    environment: Dict[str, str] = field(default_factory=dict)
+
+    def applyParent(self, parentEnv: 'Env'):
+        for attr in fields(Env):
+            if attr.name in ('name', 'parent'):
+                continue
+            if not getattr(self, attr.name):
+                setattr(self, attr.name, getattr(parentEnv, attr.name))
+            elif (attr.type == List[str]):
+                # List are extended
+                setattr(self, attr.name, getattr(self, attr.name) +
+                        getattr(parentEnv, attr.name))
+            elif (attr.type == Dict[str, str]):
+                # Dictionary are updated in reverse
+                mergedDict = getattr(parentEnv, attr.name)
+                mergedDict.update(getattr(self, attr.name))
+                setattr(self, attr.name, mergedDict)
 
 
 def prepareEnv(env: Env) -> ExecArgs:

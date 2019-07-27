@@ -18,7 +18,7 @@ This module handles configuration schema.
 
 from pathlib import Path
 from textwrap import dedent
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from yaml import safe_load
 
 from podenv.env import Env
@@ -65,7 +65,23 @@ def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
 def loadEnv(conf: Config, envName: Optional[str]) -> Env:
     if not envName:
         envName = conf.default
+
+    def resolvParents(parent: Optional[str], history: List[str]):
+        if not parent:
+            if "base" in history:
+                return
+            parent = "base"
+        if parent in history:
+            raise RuntimeError("Circular dependencies detected %s in %s" % (
+                parent, history))
+        parentEnv = conf.envs[parent]
+        resolvParents(parentEnv.parent, history + [parent])
+        env.applyParent(parentEnv)
+
     try:
-        return conf.envs[envName]
+        env: Env = conf.envs[envName]
+        resolvParents(env.parent, [])
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't find environment")
+
+    return env
