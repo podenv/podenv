@@ -12,16 +12,60 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""
+This module handles configuration schema.
+"""
+
+from pathlib import Path
+from textwrap import dedent
+from typing import Dict, Optional
+from yaml import safe_load
+
 from podenv.env import Env
 
 
 class Config:
-    ...
+    def __init__(self, schema):
+        self.dns: Optional[str] = schema.get('system', {}).get('dns')
+        self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
+        self.envs: Dict[str, Env] = {}
+        for envName, envSchema in schema.get('environments', {}).items():
+            self.envs[envName] = Env(envName, **envSchema)
 
 
-def loadConfig() -> Config:
-    return Config()
+def initConfig(configDir: Path, configFile: Path):
+    defaultConfig = dedent("""\
+        # Podenv configuration file
+        ---
+        # Site local variable
+        system:
+          # Set IP of local resolver when using dnsmasq
+          dns: null
+          defaultEnv: shell
+
+        environments:
+          # Default environment
+          base:
+            image: registry.fedoraproject.org/fedora:30
+          shell:
+            command: ["/bin/bash"]
+        """)
+    configDir.mkdir()
+    configFile.write_text(defaultConfig)
 
 
-def loadEnv(conf: Config, envName: str) -> Env:
-    return Env()
+def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
+    configDir = configDir.expanduser()
+    configFile = configDir / "config.yaml"
+    if not configDir.exists():
+        initConfig(configDir, configFile)
+    return Config(safe_load(configFile.read_text()))
+
+
+def loadEnv(conf: Config, envName: Optional[str]) -> Env:
+    if not envName:
+        envName = conf.default
+    try:
+        return conf.envs[envName]
+    except KeyError:
+        raise RuntimeError(f"{envName}: couldn't find environment")

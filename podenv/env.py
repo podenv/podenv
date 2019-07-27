@@ -12,14 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 
 ExecArgs = List[str]
 
 
+@dataclass
 class Env:
-    ...
+    name: str
+    image: Optional[str] = None
+    command: ExecArgs = field(default_factory=list)
 
 
 def prepareEnv(env: Env) -> ExecArgs:
