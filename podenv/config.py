@@ -60,7 +60,15 @@ def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
     configFile = configDir / "config.yaml"
     if not configDir.exists():
         initConfig(configDir, configFile)
-    return Config(safe_load(configFile.read_text()))
+    conf = Config(safe_load(configFile.read_text()))
+    # Look for local conf
+    localConf = Path("default.podenv")
+    if localConf.exists():
+        # Create profile name
+        envName = Path().resolve().name
+        conf.envs[envName] = Env(envName, **safe_load(localConf.read_text()))
+        conf.default = envName
+    return conf
 
 
 def loadEnv(conf: Config, envName: Optional[str]) -> Env:
