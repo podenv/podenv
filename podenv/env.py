@@ -17,7 +17,7 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 
 ExecArgs = List[str]
@@ -102,6 +102,11 @@ class Env:
                 mergedDict.update(getattr(self, attr.name))
                 setattr(self, attr.name, mergedDict)
 
+    def __post_init__(self) -> None:
+        for cap in self.capabilities:
+            if cap not in ValidCap:
+                raise RuntimeError(f"{self.name}: unknown cap {cap}")
+
 
 @dataclass
 class ExecContext:
@@ -177,6 +182,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         networkCap,
         autoUpdateCap,
     ]]
+ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
 
 
 def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
