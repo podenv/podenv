@@ -65,13 +65,13 @@ def run() -> None:
         conf = loadConfig()
         env = loadEnv(conf, args.env)
         applyCommandLineOverride(args, env)
-        podmanArgs, envArgs = prepareEnv(env)
+        containerName, containerArgs, envArgs = prepareEnv(env)
         imageName = setupPod(env)
     except RuntimeError as e:
         fail(str(e))
 
     try:
-        executePod(podmanArgs, imageName, envArgs)
+        executePod(containerName, containerArgs, imageName, envArgs)
         podResult = 0
     except RuntimeError:
         podResult = 1

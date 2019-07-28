@@ -76,6 +76,8 @@ class Env:
     parent: str = ""
     environ: Dict[str, str] = field(default_factory=dict)
     capabilities: Dict[str, bool] = field(default_factory=dict)
+    provides: Dict[str, str] = field(default_factory=dict)
+    requires: Dict[str, str] = field(default_factory=dict)
 
     # Internal attribute
     runtime: Optional[Runtime] = None
@@ -144,6 +146,21 @@ def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
         ctx.args("-it")
 
 
+def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "enable network"
+    networkNamespace = None
+    if env.requires.get("network"):
+        networkNamespace = "container:net-" + env.requires["network"]
+    elif env.provides.get("network"):
+        networkNamespace = "container:net-" + env.provides["network"]
+
+    if not active and not networkNamespace:
+        networkNamespace = "none"
+
+    if networkNamespace:
+        ctx.args("--network", networkNamespace)
+
+
 def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
     "keep environment updated"
     if active:
@@ -157,17 +174,18 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         uidmapCap,
         privilegedCap,
         terminalCap,
+        networkCap,
         autoUpdateCap,
     ]]
 
 
-def prepareEnv(env: Env) -> Tuple[ExecArgs, ExecArgs]:
+def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     """Generate podman exec args based on capabilities"""
     context = ExecContext()
     for name, _, capability in Capabilities:
         capability(env.capabilities.get(name, False), context, env)
 
-    args = ["--name", env.name, "--hostname", env.name]
+    args = ["--hostname", env.name]
     if context.cwd != Path():
         args.append("--workdir=" + str(context.cwd))
 
@@ -176,7 +194,7 @@ def prepareEnv(env: Env) -> Tuple[ExecArgs, ExecArgs]:
         env.command = ["/bin/bash"]
         args.append("-it")
 
-    return args + context.execArgs, env.command
+    return env.name, args + context.execArgs, env.command
 
 
 def cleanupEnv(env: Env) -> None:

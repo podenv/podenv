@@ -13,12 +13,13 @@
 # under the License.
 
 import logging
+import json
 import os
 import shlex
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 from subprocess import Popen, PIPE
 
 from podenv.env import Env, ExecArgs, Info, Runtime
@@ -26,6 +27,10 @@ from podenv.env import Env, ExecArgs, Info, Runtime
 log = logging.getLogger("podenv")
 BuildId = str
 TZFormat = "%Y-%m-%dT%H:%M:%S"
+
+
+class AlreadyRunning(Exception):
+    pass
 
 
 def execute(
@@ -54,6 +59,25 @@ def pread(args: ExecArgs, cwd: Optional[Path] = None) -> str:
     if output:
         return output
     return ""
+
+
+def readProcessJson(args: ExecArgs) -> Any:
+    """Silently read a process JSON output"""
+    proc = Popen(args, stdout=PIPE, stderr=PIPE, cwd='/')
+    stdout, _ = proc.communicate()
+    if proc.wait():
+        return None
+    return json.loads(stdout)
+
+
+def podmanInspect(objType: str, name: str) -> Dict[str, Any]:
+    infoList = readProcessJson(["podman", objType, "inspect", name])
+    if not infoList:
+        return {}
+    if len(infoList) != 1:
+        raise RuntimeError(f"Multiple container match {name}")
+    info: Dict[str, Any] = infoList[0]
+    return info
 
 
 def now() -> str:
@@ -153,7 +177,7 @@ class ContainerImage(Runtime):
         ...
 
 
-def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> str:
+def setupRuntime(env: Env, cacheDir: Path) -> str:
     """Ensure image is ready."""
     cacheDir = cacheDir.expanduser()
     if not cacheDir.exists():
@@ -184,6 +208,30 @@ def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> str:
     return env.runtime.getExecName()
 
 
-def executePod(args: ExecArgs, imageName: str, envArgs: ExecArgs) -> None:
-    execute(["podman", "run", "--rm"] + args + [imageName] + envArgs,
-            cwd=Path('/'))
+def setupInfraNetwork(networkName: str, imageName: str) -> None:
+    """Setup persistent infra pod"""
+    try:
+        executePod("net-" + networkName, ["--detach"],
+                   imageName, ["sleep", "Inf"])
+    except AlreadyRunning:
+        pass
+
+
+def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> str:
+    imageName = setupRuntime(env, cacheDir)
+    if env.provides.get("network"):
+        setupInfraNetwork(env.provides["network"], imageName)
+    return imageName
+
+
+def executePod(
+        name: str, args: ExecArgs, image: str, envArgs: ExecArgs) -> None:
+    podInfo = podmanInspect("container", name)
+    if podInfo:
+        if podInfo["State"]["Status"].lower() == "running":
+            raise AlreadyRunning()
+        log.info(f"Cleaning left-over container {name}")
+        execute(["podman", "rm", name])
+    execute(
+        ["podman", "run", "--rm", "--name", name] + args + [image] + envArgs,
+        cwd=Path('/'))
