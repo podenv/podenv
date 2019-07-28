@@ -21,6 +21,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Set
 from subprocess import Popen, PIPE
+try:
+    import selinux  # type: ignore
+    HAS_SELINUX = True
+except ImportError:
+    HAS_SELINUX = False
 
 from podenv.env import Env, ExecArgs, Info, Runtime
 
@@ -93,6 +98,14 @@ def updated(info: Info, maxAge: int = 3600 * 24) -> bool:
     if isinstance(lastUpdate, str):
         return age(lastUpdate) < maxAge
     raise RuntimeError("Info has incorrect updated metadata: %s" % lastUpdate)
+
+
+def isSelinux() -> bool:
+    return HAS_SELINUX and Path("/sys/fs/selinux/").exists()
+
+
+def getSelinuxLabel(env: Env) -> str:
+    return "system_u:object_r:container_file_t:s0"
 
 
 @contextmanager
@@ -238,6 +251,16 @@ def setupInfraNetwork(networkName: str, imageName: str) -> None:
         pass
 
 
+def setupRunDir(env: Env) -> None:
+    path = env.runDir
+    if path and not path.exists():
+        if not path.parent.exists():
+            path.parent.mkdir(mode=0o700)
+        path.mkdir(mode=0o700)
+        if isSelinux():
+            selinux.chcon(str(path), getSelinuxLabel(env))
+
+
 def setupPod(
         env: Env,
         packages: List[str],
@@ -246,6 +269,17 @@ def setupPod(
     configureRuntime(env, imageName, packages)
     if env.provides.get("network"):
         setupInfraNetwork(env.provides["network"], imageName)
+
+    for containerPath, hostPath in sorted(env.ctx.mounts.items()):
+        if not hostPath.exists() and str(hostPath).startswith(str(env.runDir)):
+            setupRunDir(env)
+            if hostPath.name == "tmp":
+                hostPath.mkdir(mode=0o1777)
+                # TODO: check why mkdir mode results in 1774
+                hostPath.chmod(0o1777)
+            else:
+                hostPath.mkdir(mode=0o755, parents=True)
+
     return imageName
 
 
