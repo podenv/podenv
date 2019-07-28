@@ -69,6 +69,18 @@ class Runtime(ABC):
 
 
 @dataclass
+class ExecContext:
+    environ: Dict[str, str] = field(default_factory=dict)
+    mounts: Dict[Path, Path] = field(default_factory=dict)
+    execArgs: ExecArgs = field(default_factory=list)
+    home: Path = field(default_factory=Path)
+    cwd: Path = field(default_factory=Path)
+
+    def args(self, *args: str) -> None:
+        self.execArgs.extend(args)
+
+
+@dataclass
 class Env:
     name: str
     image: str = ""
@@ -83,6 +95,7 @@ class Env:
 
     # Internal attribute
     runtime: Optional[Runtime] = None
+    ctx: ExecContext = field(default_factory=ExecContext)
     runDir: Optional[Path] = None
     autoUpdate: bool = False
 
@@ -109,18 +122,6 @@ class Env:
         for cap in self.capabilities:
             if cap not in ValidCap:
                 raise RuntimeError(f"{self.name}: unknown cap {cap}")
-
-
-@dataclass
-class ExecContext:
-    environ: Dict[str, str] = field(default_factory=dict)
-    mounts: Dict[Path, Path] = field(default_factory=dict)
-    execArgs: ExecArgs = field(default_factory=list)
-    home: Path = field(default_factory=Path)
-    cwd: Path = field(default_factory=Path)
-
-    def args(self, *args: str) -> None:
-        self.execArgs.extend(args)
 
 
 def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -183,7 +184,6 @@ def mountRunCap(active: bool, ctx: ExecContext, env: Env) -> None:
     if active:
         if env.runDir is None:
             raise RuntimeError("runDir isn't set")
-        ctx.cwd = Path("/data")
         ctx.mounts[ctx.home] = env.runDir / "home"
         ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
 
@@ -211,20 +211,20 @@ ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
 
 def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     """Generate podman exec args based on capabilities"""
-    context = ExecContext()
     for name, _, capability in Capabilities:
-        capability(env.capabilities.get(name, False), context, env)
+        capability(env.capabilities.get(name, False), env.ctx, env)
 
     args = ["--hostname", env.name]
-    if context.cwd != Path():
-        args.append("--workdir=" + str(context.cwd))
+    if env.ctx.cwd == Path():
+        env.ctx.cwd = env.ctx.home
+    args.append("--workdir=" + str(env.ctx.cwd))
 
-    for mount in sorted(context.mounts.keys()):
+    for mount in sorted(env.ctx.mounts.keys()):
         args.extend(["-v", "{hostPath}:{containerPath}".format(
-            hostPath=context.mounts[mount].expanduser().resolve(),
+            hostPath=env.ctx.mounts[mount].expanduser().resolve(),
             containerPath=mount)])
 
-    for e, v in sorted(context.environ.items()):
+    for e, v in sorted(env.ctx.environ.items()):
         args.extend(["-e", "%s=%s" % (e, v)])
 
     # Convenient default setting
@@ -232,7 +232,7 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
         env.command = ["/bin/bash"]
         args.append("-it")
 
-    return env.name, args + context.execArgs, env.command
+    return env.name, args + env.ctx.execArgs, env.command
 
 
 def cleanupEnv(env: Env) -> None:
