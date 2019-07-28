@@ -127,9 +127,11 @@ def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
     if active:
         ctx.home = Path("/root")
         ctx.environ["XDG_RUNTIME_DIR"] = "/run/user/0"
+        ctx.environ["HOME"] = "/root"
     else:
         ctx.home = Path("/home/user")
         ctx.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
+        ctx.environ["HOME"] = "/home/user"
         ctx.args("--user", "1000")
     ctx.environ["HOME"] = str(ctx.home)
 
@@ -208,6 +210,9 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
         args.extend(["-v", "{hostPath}:{containerPath}".format(
             hostPath=context.mounts[mount].expanduser().resolve(),
             containerPath=mount)])
+
+    for e, v in sorted(context.environ.items()):
+        args.extend(["-e", "%s=%s" % (e, v)])
 
     # Convenient default setting
     if not env.command:
