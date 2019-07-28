@@ -13,26 +13,73 @@
 # under the License.
 
 from __future__ import annotations
+import json
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
-from typing import Dict, List
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 
 ExecArgs = List[str]
+Requirements = List[str]
+Info = Dict[str, Union[str, Requirements]]
+
+
+class Runtime(ABC):
+    System = {
+        "rpm": {
+            "commands": {
+                "install": "dnf install -y",
+                "update": "dnf update -y",
+            }
+        }
+    }
+
+    def __init__(self, metadataPath: Path):
+        self.metadataPath = metadataPath
+        # TODO: discover system type
+        self.commands = self.System["rpm"]["commands"]
+        self.info: Info = {}
+
+    def updateInfo(self, info: Info) -> None:
+        self.info.update(info)
+        self.metadataPath.write_text(json.dumps(self.info))
+
+    def loadInfo(self) -> None:
+        self.info = json.loads(self.metadataPath.read_text())
+
+    def exists(self) -> bool:
+        return self.metadataPath.exists()
+
+    @abstractmethod
+    def create(self) -> None:
+        ...
+
+    @abstractmethod
+    def update(self) -> None:
+        ...
+
+    def install(self, packages: List[str]) -> None:
+        ...
 
 
 @dataclass
 class Env:
     name: str
     image: str = ""
+    rootfs: str = ""
     command: ExecArgs = field(default_factory=list)
     parent: str = ""
     environment: Dict[str, str] = field(default_factory=dict)
+
+    # Internal attribute
+    runtime: Optional[Runtime] = None
 
     def applyParent(self, parentEnv: Env) -> None:
         for attr in fields(Env):
             if attr.name in ('name', 'parent'):
                 continue
-            if not getattr(self, attr.name):
+            if getattr(self, attr.name) in (None, ""):
                 setattr(self, attr.name, getattr(parentEnv, attr.name))
             elif (attr.type == List[str]):
                 # List are extended
