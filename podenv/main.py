@@ -26,6 +26,8 @@ log = logging.getLogger("podenv")
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
+    parser.add_argument("--shell", action='store_true',
+                        help="Run bash instead of the profile command")
     parser.add_argument("-p", "--package", action='append',
                         help="Add a package to the environment")
     for name, doc, _ in Capabilities:
@@ -44,6 +46,9 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
             env.capabilities[name] = True
         if getattr(args, f"no_{name}"):
             env.capabilities[name] = False
+    if args.shell:
+        env.capabilities["terminal"] = True
+        env.command = ["/bin/bash"]
 
 
 def setupLogging(debug: bool) -> None:
