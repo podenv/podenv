@@ -111,7 +111,7 @@ class Env:
 @dataclass
 class ExecContext:
     environ: Dict[str, str] = field(default_factory=dict)
-    mounts: Dict[Path, str] = field(default_factory=dict)
+    mounts: Dict[Path, Path] = field(default_factory=dict)
     execArgs: ExecArgs = field(default_factory=list)
     home: Path = field(default_factory=Path)
     cwd: Path = field(default_factory=Path)
@@ -166,6 +166,12 @@ def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.args("--network", networkNamespace)
 
 
+def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
+    if active:
+        ctx.cwd = Path("/data")
+        ctx.mounts[ctx.cwd] = Path()
+
+
 def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
     "keep environment updated"
     if active:
@@ -180,6 +186,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         privilegedCap,
         terminalCap,
         networkCap,
+        mountCwdCap,
         autoUpdateCap,
     ]]
 ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
@@ -194,6 +201,11 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     args = ["--hostname", env.name]
     if context.cwd != Path():
         args.append("--workdir=" + str(context.cwd))
+
+    for mount in sorted(context.mounts.keys()):
+        args.extend(["-v", "{hostPath}:{containerPath}".format(
+            hostPath=context.mounts[mount].expanduser().resolve(),
+            containerPath=mount)])
 
     # Convenient default setting
     if not env.command:
