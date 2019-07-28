@@ -93,4 +93,5 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't find environment")
 
+    env.runDir = Path("/tmp/podenv") / env.name
     return env

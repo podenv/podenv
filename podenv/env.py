@@ -83,6 +83,7 @@ class Env:
 
     # Internal attribute
     runtime: Optional[Runtime] = None
+    runDir: Optional[Path] = None
     autoUpdate: bool = False
 
     def applyParent(self, parentEnv: Env) -> None:
@@ -171,9 +172,20 @@ def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
 
 
 def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
+    "mount cwd to /data"
     if active:
         ctx.cwd = Path("/data")
         ctx.mounts[ctx.cwd] = Path()
+
+
+def mountRunCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "mount home and tmp to host tmpfs"
+    if active:
+        if env.runDir is None:
+            raise RuntimeError("runDir isn't set")
+        ctx.cwd = Path("/data")
+        ctx.mounts[ctx.home] = env.runDir / "home"
+        ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
 
 
 def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
@@ -191,6 +203,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         terminalCap,
         networkCap,
         mountCwdCap,
+        mountRunCap,
         autoUpdateCap,
     ]]
 ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
