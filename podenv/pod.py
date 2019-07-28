@@ -110,6 +110,9 @@ class ContainerImage(Runtime):
     def __repr__(self) -> str:
         return self.name
 
+    def getExecName(self) -> str:
+        return self.name
+
     def create(self) -> None:
         with buildah(self.fromRef) as buildId:
             for command in [self.commands["update"],
@@ -150,7 +153,7 @@ class ContainerImage(Runtime):
         ...
 
 
-def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> None:
+def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> str:
     """Ensure image is ready."""
     cacheDir = cacheDir.expanduser()
     if not cacheDir.exists():
@@ -178,7 +181,9 @@ def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> None:
         log.info(f"Updating {env.runtime}")
         env.runtime.update()
 
+    return env.runtime.getExecName()
 
-def executePod(args: ExecArgs) -> None:
-    print(args)
-    ...
+
+def executePod(args: ExecArgs, imageName: str, envArgs: ExecArgs) -> None:
+    execute(["podman", "run", "--rm"] + args + [imageName] + envArgs,
+            cwd=Path('/'))

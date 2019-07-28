@@ -52,6 +52,10 @@ class Runtime(ABC):
         return self.metadataPath.exists()
 
     @abstractmethod
+    def getExecName(self) -> str:
+        ...
+
+    @abstractmethod
     def create(self) -> None:
         ...
 
@@ -157,7 +161,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
     ]]
 
 
-def prepareEnv(env: Env) -> ExecArgs:
+def prepareEnv(env: Env) -> Tuple[ExecArgs, ExecArgs]:
     """Generate podman exec args based on capabilities"""
     context = ExecContext()
     for name, _, capability in Capabilities:
@@ -167,7 +171,12 @@ def prepareEnv(env: Env) -> ExecArgs:
     if context.cwd != Path():
         args.append("--workdir=" + str(context.cwd))
 
-    return args + context.execArgs
+    # Convenient default setting
+    if not env.command:
+        env.command = ["/bin/bash"]
+        args.append("-it")
+
+    return args + context.execArgs, env.command
 
 
 def cleanupEnv(env: Env) -> None:
