@@ -174,10 +174,11 @@ def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> None:
     else:
         env.runtime.loadInfo()
 
-    if not updated(env.runtime.info):
+    if env.autoUpdate and not updated(env.runtime.info):
         log.info(f"Updating {env.runtime}")
         env.runtime.update()
 
 
 def executePod(args: ExecArgs) -> None:
+    print(args)
     ...

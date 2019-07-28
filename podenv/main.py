@@ -18,7 +18,7 @@ import sys
 
 from podenv.config import loadConfig, loadEnv
 from podenv.pod import setupPod, executePod
-from podenv.env import prepareEnv, cleanupEnv
+from podenv.env import Capabilities, Env, prepareEnv, cleanupEnv
 
 log = logging.getLogger("podenv")
 
@@ -26,9 +26,22 @@ log = logging.getLogger("podenv")
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
+    for name, doc, _ in Capabilities:
+        parser.add_argument(f"--{name}", action='store_true',
+                            help=f"Enable capibility: {doc}")
+        parser.add_argument(f"--no-{name}", action='store_true',
+                            help=f"Disable {name} capibility")
     parser.add_argument("env", nargs='?')
     parser.add_argument("args", nargs='*')
     return parser.parse_args()
+
+
+def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
+    for name, _, _ in Capabilities:
+        if getattr(args, f"{name}"):
+            env.capabilities[name] = True
+        if getattr(args, f"no_{name}"):
+            env.capabilities[name] = False
 
 
 def setupLogging(debug: bool) -> None:
@@ -51,8 +64,9 @@ def run() -> None:
     try:
         conf = loadConfig()
         env = loadEnv(conf, args.env)
-        setupPod(env)
+        applyCommandLineOverride(args, env)
         podmanArgs = prepareEnv(env)
+        setupPod(env)
     except RuntimeError as e:
         fail(str(e))
 
