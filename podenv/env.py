@@ -29,8 +29,8 @@ class Runtime(ABC):
     System = {
         "rpm": {
             "commands": {
-                "install": "dnf install -y",
-                "update": "dnf update -y",
+                "install": "dnf install -y ",
+                "update": "dnf update -y ",
             }
         }
     }
@@ -63,7 +63,8 @@ class Runtime(ABC):
     def update(self) -> None:
         ...
 
-    def install(self, packages: List[str]) -> None:
+    @abstractmethod
+    def install(self, packages: Set[str]) -> None:
         ...
 
 
@@ -78,6 +79,7 @@ class Env:
     capabilities: Dict[str, bool] = field(default_factory=dict)
     provides: Dict[str, str] = field(default_factory=dict)
     requires: Dict[str, str] = field(default_factory=dict)
+    packages: List[str] = field(default_factory=list)
 
     # Internal attribute
     runtime: Optional[Runtime] = None

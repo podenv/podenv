@@ -19,7 +19,7 @@ import shlex
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Set
 from subprocess import Popen, PIPE
 
 from podenv.env import Env, ExecArgs, Info, Runtime
@@ -173,8 +173,12 @@ class ContainerImage(Runtime):
                 log.warning("Retrying failed update...")
         self.updateInfo(dict(updated=now()))
 
-    def install(self, packages: List[str]) -> None:
-        ...
+    def install(self, packages: Set[str]) -> None:
+        with buildah(self.name) as buildId:
+            buildahRun(buildId, self.commands["install"] + " ".join(packages))
+            buildahCommitNow(buildId, self.name)
+            self.updateInfo(dict(packages=list(packages.union(
+                self.info["packages"]))))
 
 
 def setupRuntime(env: Env, cacheDir: Path) -> str:
@@ -208,6 +212,23 @@ def setupRuntime(env: Env, cacheDir: Path) -> str:
     return env.runtime.getExecName()
 
 
+def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
+    if not env.runtime:
+        raise RuntimeError("Env has no metadata")
+    imagePackages = env.runtime.info.get("packages")
+    if not isinstance(imagePackages, list):
+        raise RuntimeError("Invalid packages metadata")
+    envPackages = set(env.packages)
+    if packages:
+        # Add user provided extra packages
+        envPackages.update(packages)
+
+    need = envPackages.difference(imagePackages)
+    if need:
+        log.info(f"Installing {need}")
+        env.runtime.install(need)
+
+
 def setupInfraNetwork(networkName: str, imageName: str) -> None:
     """Setup persistent infra pod"""
     try:
@@ -217,8 +238,12 @@ def setupInfraNetwork(networkName: str, imageName: str) -> None:
         pass
 
 
-def setupPod(env: Env, cacheDir: Path = Path("~/.cache/podenv")) -> str:
+def setupPod(
+        env: Env,
+        packages: List[str],
+        cacheDir: Path = Path("~/.cache/podenv")) -> str:
     imageName = setupRuntime(env, cacheDir)
+    configureRuntime(env, imageName, packages)
     if env.provides.get("network"):
         setupInfraNetwork(env.provides["network"], imageName)
     return imageName

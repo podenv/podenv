@@ -26,6 +26,8 @@ log = logging.getLogger("podenv")
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
+    parser.add_argument("-p", "--package", action='append',
+                        help="Add a package to the environment")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capibility: {doc}")
@@ -66,7 +68,7 @@ def run() -> None:
         env = loadEnv(conf, args.env)
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs = prepareEnv(env)
-        imageName = setupPod(env)
+        imageName = setupPod(env, args.package)
     except RuntimeError as e:
         fail(str(e))
 
