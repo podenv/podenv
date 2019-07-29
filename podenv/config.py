@@ -88,7 +88,13 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
         env.applyParent(parentEnv)
 
     try:
+        variant = envName.split(".")
+        if len(variant) == 2:
+            envName = variant[-1]
+            variantName = variant[0]
         env: Env = conf.envs[envName]
+        if len(variant) == 2:
+            env.name = f"{variantName}-{envName}"
         resolvParents(env.parent, [])
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't find environment")
