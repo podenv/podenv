@@ -313,7 +313,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
 ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
 
 
-def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
+def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     """Generate podman exec args based on capabilities"""
     for name, _, capability in Capabilities:
         capability(env.capabilities.get(name, False), env.ctx, env)
@@ -331,12 +331,31 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     if env.home:
         env.ctx.mounts[env.ctx.home] = Path(env.home)
 
-    # Convenient default setting
-    if not env.command:
-        env.command = ["/bin/bash"]
-        args.append("-it")
+    # Look for file argument requirement
+    fileArg: Optional[Path] = None
+    if "$1" in env.command:
+        if len(cliArgs) > 1:
+            raise RuntimeError("Multiple file input %s" % cliArgs)
+        if cliArgs:
+            fileArg = Path(cliArgs[0]).expanduser().resolve(strict=True)
+            env.ctx.mounts[Path("/tmp") / fileArg.name] = fileArg
 
-    return env.name, args + env.ctx.getArgs(), env.command
+    commandArgs: List[str] = []
+    for command in env.command:
+        if command == "$@" and cliArgs:
+            commandArgs += cliArgs
+        elif command == "$1" and fileArg:
+            commandArgs.append("/tmp/" + fileArg.name)
+        else:
+            commandArgs.append(command)
+
+    # Only use cli args when env isn't a shell
+    if not commandArgs or (
+            commandArgs and not commandArgs[-1] != "/bin/bash"):
+        for arg in cliArgs:
+            commandArgs.append(arg)
+
+    return env.name, args + env.ctx.getArgs(), list(map(str, commandArgs))
 
 
 def cleanupEnv(env: Env) -> None:

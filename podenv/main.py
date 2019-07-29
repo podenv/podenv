@@ -72,7 +72,7 @@ def run() -> None:
         conf = loadConfig()
         env = loadEnv(conf, args.env)
         applyCommandLineOverride(args, env)
-        containerName, containerArgs, envArgs = prepareEnv(env)
+        containerName, containerArgs, envArgs = prepareEnv(env, args.args)
         imageName = setupPod(env, args.package)
     except RuntimeError as e:
         fail(str(e))
