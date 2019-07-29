@@ -100,4 +100,6 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
         raise RuntimeError(f"{envName}: couldn't find environment")
 
     env.runDir = Path("/tmp/podenv") / env.name
+    if conf.dns:
+        env.dns = conf.dns
     return env

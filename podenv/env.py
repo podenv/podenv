@@ -105,6 +105,7 @@ class Env:
     name: str
     image: str = ""
     rootfs: str = ""
+    dns: str = ""
     command: ExecArgs = field(default_factory=list)
     parent: str = ""
     environ: Dict[str, str] = field(default_factory=dict)
@@ -305,6 +306,8 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     args.append("--workdir=" + str(env.ctx.cwd))
     for cap in set(env.syscaps):
         env.ctx.args("--cap-add", cap)
+    if env.dns and "--network" not in env.ctx.execArgs:
+        args.append(f"--dns={env.dns}")
 
     # Convenient default setting
     if not env.command:
