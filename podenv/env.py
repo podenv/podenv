@@ -115,6 +115,7 @@ class Env:
     packages: List[str] = field(default_factory=list)
     syscaps: List[str] = field(default_factory=list)
     shmsize: str = ""
+    home: str = ""
 
     # Internal attribute
     runtime: Optional[Runtime] = None
@@ -314,6 +315,8 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
         args.append(f"--dns={env.dns}")
     if env.shmsize:
         args.append(f"--shm-size={env.shmsize}")
+    if env.home:
+        env.ctx.mounts[env.ctx.home] = Path(env.home)
 
     # Convenient default setting
     if not env.command:
