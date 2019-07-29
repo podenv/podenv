@@ -114,6 +114,7 @@ class Env:
     requires: Dict[str, str] = field(default_factory=dict)
     packages: List[str] = field(default_factory=list)
     syscaps: List[str] = field(default_factory=list)
+    shmsize: str = ""
 
     # Internal attribute
     runtime: Optional[Runtime] = None
@@ -311,6 +312,8 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
         env.ctx.args("--cap-add", cap)
     if env.dns and "--network" not in env.ctx.execArgs:
         args.append(f"--dns={env.dns}")
+    if env.shmsize:
+        args.append(f"--shm-size={env.shmsize}")
 
     # Convenient default setting
     if not env.command:
