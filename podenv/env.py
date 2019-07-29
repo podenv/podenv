@@ -241,6 +241,16 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
             Path(ctx.environ["XDG_RUNTIME_DIR"]) / "pulse"
 
 
+def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share ssh agent and keys"
+    if active:
+        ctx.seLinuxLabel = "disable"
+        ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
+        sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
+        ctx.mounts[Path(sshSockPath)] = sshSockPath
+        ctx.mounts[ctx.home / ".ssh"] = Path("~/.ssh")
+
+
 def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share webcam device"
     if active:
@@ -288,6 +298,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         ipcCap,
         x11Cap,
         pulseaudioCap,
+        sshCap,
         webcamCap,
         driCap,
         tunCap,
