@@ -75,29 +75,40 @@ class Runtime(ABC):
 
 @dataclass
 class ExecContext:
+    """The intermediary podman context representation"""
     environ: Dict[str, str] = field(default_factory=dict)
     mounts: Dict[Path, Path] = field(default_factory=dict)
+    syscaps: List[str] = field(default_factory=list)
     execArgs: ExecArgs = field(default_factory=list)
     home: Path = field(default_factory=Path)
     cwd: Path = field(default_factory=Path)
     xdgDir: Path = field(default_factory=Path)
     seLinuxLabel: str = ""
     seccomp: str = ""
+    networkNamespace: str = ""
 
     def args(self, *args: str) -> None:
         self.execArgs.extend(args)
 
     def getArgs(self) -> ExecArgs:
         args = []
+
         if self.seLinuxLabel:
             args.extend(["--security-opt", f"label={self.seLinuxLabel}"])
         if self.seccomp:
             args.extend(["--security-opt", f"seccomp={self.seccomp}"])
 
+        if self.cwd == Path():
+            self.cwd = self.home
+        args.extend(["--workdir", str(self.cwd)])
+
         for mount in sorted(self.mounts.keys()):
             args.extend(["-v", "{hostPath}:{containerPath}".format(
                 hostPath=self.mounts[mount].expanduser().resolve(),
                 containerPath=mount)])
+
+        for cap in set(self.syscaps):
+            args.extend(["--cap-add", cap])
 
         for e, v in sorted(self.environ.items()):
             args.extend(["-e", "%s=%s" % (e, v)])
@@ -107,6 +118,7 @@ class ExecContext:
 
 @dataclass
 class Env:
+    """The user provided container representation"""
     name: str
     image: str = ""
     rootfs: str = ""
@@ -191,20 +203,16 @@ def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
 
 def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable network"
-    networkNamespace = None
     if env.requires.get("network"):
-        networkNamespace = "container:net-" + env.requires["network"]
+        ctx.networkNamespace = "container:net-" + env.requires["network"]
     elif env.provides.get("network"):
-        networkNamespace = "container:net-" + env.provides["network"]
+        ctx.networkNamespace = "container:net-" + env.provides["network"]
 
-    if not active and not networkNamespace:
-        networkNamespace = "none"
+    if not active and not ctx.networkNamespace:
+        ctx.networkNamespace = "none"
 
-    if networkNamespace:
-        ctx.args("--network", networkNamespace)
-        if env.capabilities.get("uidmap") and \
-           networkNamespace.startswith("container:"):
-            ctx.args("--userns", networkNamespace)
+    if ctx.networkNamespace:
+        ctx.args("--network", ctx.networkNamespace)
 
 
 def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -234,14 +242,11 @@ def x11Cap(active: bool, ctx: ExecContext, env: Env) -> None:
     if active:
         ctx.mounts[Path("/tmp/.X11-unix")] = Path("/tmp/.X11-unix")
         ctx.environ["DISPLAY"] = ":0"
-        ctx.seLinuxLabel = "disable"
-        env.capabilities["uidmap"] = True
 
 
 def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share pulseaudio socket"
     if active:
-        ctx.seLinuxLabel = "disable"
         ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
         ctx.mounts[Path(os.environ["XDG_RUNTIME_DIR"]) / "pulse"] = \
             Path(ctx.environ["XDG_RUNTIME_DIR"]) / "pulse"
@@ -250,7 +255,6 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share ssh agent and keys"
     if active:
-        ctx.seLinuxLabel = "disable"
         ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
         sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
         ctx.mounts[Path(sshSockPath)] = sshSockPath
@@ -263,7 +267,6 @@ def gpgCap(active: bool, ctx: ExecContext, env: Env) -> None:
         gpgSockDir = Path("/run/user/1000/gnupg")
         ctx.mounts[ctx.xdgDir / "gnupg"] = gpgSockDir
         ctx.mounts[ctx.home / ".gnupg"] = Path("~/.gnupg")
-        selinuxCap(False, ctx, env)
 
 
 def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -282,8 +285,6 @@ def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share tun device"
     if active:
         ctx.args("--device", "/dev/net/tun")
-        env.syscaps.append("NET_ADMIN")
-        ctx.seLinuxLabel = "disable"
 
 
 def selinuxCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -336,17 +337,45 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
 ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
 
 
+def validateEnv(env: Env) -> None:
+    """Sanity check and warn user about missing setting"""
+    def warn(msg: str) -> None:
+        print(f"\033[93m{msg}\033[m")
+
+    # Check if SELinux will block socket access
+    if env.capabilities.get("selinux"):
+        for cap in ("x11", "tun"):
+            if env.capabilities.get(cap):
+                warn(
+                    f"SELinux is disabled because capability '{cap}' need "
+                    "extra type enforcement that are not currently supported.")
+                selinuxCap(False, env.ctx, env)
+
+    # Check for uid permissions
+    if not env.capabilities.get("root") and not env.capabilities.get("uidmap"):
+        for cap in ("x11", "pulseaudio", "ssh", "gpg"):
+            if env.capabilities.get(cap):
+                warn(
+                    f"UIDMap is required because '{cap}' need "
+                    "DAC access to the host file")
+                uidmapCap(True, env.ctx, env)
+                break
+
+    # Check for system capabilities
+    if env.capabilities.get("tun") and "NET_ADMIN" not in env.ctx.syscaps:
+        warn(f"NET_ADMIN capability is needed by the tun device")
+        env.ctx.syscaps.append("NET_ADMIN")
+
+
 def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     """Generate podman exec args based on capabilities"""
+    # Apply capabilities
     for name, _, capability in Capabilities:
         capability(env.capabilities.get(name, False), env.ctx, env)
 
+    # Apply extra settings from the environment definition:
     args = ["--hostname", env.name]
-    if env.ctx.cwd == Path():
-        env.ctx.cwd = env.ctx.home
     args.append("--workdir=" + str(env.ctx.cwd))
-    for cap in set(env.syscaps):
-        env.ctx.args("--cap-add", cap)
     if env.dns and "--network" not in env.ctx.execArgs:
         args.append(f"--dns={env.dns}")
     if env.shmsize:
@@ -354,6 +383,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     if env.home:
         env.ctx.mounts[env.ctx.home] = Path(env.home)
 
+    env.ctx.syscaps.extend(env.syscaps)
     env.ctx.environ.update(env.environ)
 
     for containerPath, hostPath in env.mounts.items():
@@ -385,6 +415,14 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
             commandArgs and not commandArgs[-1] != "/bin/bash"):
         for arg in cliArgs:
             commandArgs.append(arg)
+
+    # Sanity checks
+    validateEnv(env)
+
+    # OCI doesn't let you join a netns without the userns when using uidmap...
+    if env.capabilities.get("uidmap") and env.ctx.networkNamespace.startswith(
+            "container:"):
+        env.ctx.args("--userns", env.ctx.networkNamespace)
 
     return env.name, args + env.ctx.getArgs(), list(map(str, commandArgs))
 
