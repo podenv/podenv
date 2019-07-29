@@ -271,6 +271,12 @@ def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.seLinuxLabel = "disable"
 
 
+def selinuxCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "enable SELinux"
+    if not active:
+        ctx.seLinuxLabel = "disable"
+
+
 def seccompCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable seccomp"
     if not active:
@@ -303,6 +309,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         driCap,
         tunCap,
         seccompCap,
+        selinuxCap,
         ptraceCap,
         networkCap,
         mountCwdCap,
@@ -330,6 +337,8 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
         args.append(f"--shm-size={env.shmsize}")
     if env.home:
         env.ctx.mounts[env.ctx.home] = Path(env.home)
+
+    env.ctx.environ.update(env.environ)
 
     # Look for file argument requirement
     fileArg: Optional[Path] = None

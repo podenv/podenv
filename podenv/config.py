@@ -49,6 +49,13 @@ def initConfig(configDir: Path, configFile: Path) -> None:
           # Default environment
           base:
             image: registry.fedoraproject.org/fedora:30
+            capabilities:
+              seccomp: True
+              selinux: True
+            environ:
+              LC_ALL: en_US.UTF-8
+              SHLVL: 3
+              TERM: xterm
           shell:
             command: ["/bin/bash"]
         """)
