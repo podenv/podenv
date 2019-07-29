@@ -76,6 +76,7 @@ class ExecContext:
     execArgs: ExecArgs = field(default_factory=list)
     home: Path = field(default_factory=Path)
     cwd: Path = field(default_factory=Path)
+    xdgDir: Path = field(default_factory=Path)
     seLinuxLabel: str = ""
     seccomp: str = ""
 
@@ -154,13 +155,12 @@ def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
     "run as root"
     if active:
         ctx.home = Path("/root")
-        ctx.environ["XDG_RUNTIME_DIR"] = "/run/user/0"
-        ctx.environ["HOME"] = "/root"
+        ctx.xdgDir = Path("/run/user/0")
     else:
         ctx.home = Path("/home/user")
-        ctx.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
-        ctx.environ["HOME"] = "/home/user"
+        ctx.xdgDir = Path("/run/user/1000")
         ctx.args("--user", "1000")
+    ctx.environ["XDG_RUNTIME_DIR"] = str(ctx.xdgDir)
     ctx.environ["HOME"] = str(ctx.home)
 
 
@@ -251,6 +251,15 @@ def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.mounts[ctx.home / ".ssh"] = Path("~/.ssh")
 
 
+def gpgCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share gpg agent"
+    if active:
+        gpgSockDir = Path("/run/user/1000/gnupg")
+        ctx.mounts[ctx.xdgDir / "gnupg"] = gpgSockDir
+        ctx.mounts[ctx.home / ".gnupg"] = Path("~/.gnupg")
+        selinuxCap(False, ctx, env)
+
+
 def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share webcam device"
     if active:
@@ -305,6 +314,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         x11Cap,
         pulseaudioCap,
         sshCap,
+        gpgCap,
         webcamCap,
         driCap,
         tunCap,
