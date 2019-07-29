@@ -88,6 +88,15 @@ class ExecContext:
             args.extend(["--security-opt", f"label={self.seLinuxLabel}"])
         if self.seccomp:
             args.extend(["--security-opt", f"seccomp={self.seccomp}"])
+
+        for mount in sorted(self.mounts.keys()):
+            args.extend(["-v", "{hostPath}:{containerPath}".format(
+                hostPath=self.mounts[mount].expanduser().resolve(),
+                containerPath=mount)])
+
+        for e, v in sorted(self.environ.items()):
+            args.extend(["-e", "%s=%s" % (e, v)])
+
         return args + self.execArgs
 
 
@@ -270,14 +279,6 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     if env.ctx.cwd == Path():
         env.ctx.cwd = env.ctx.home
     args.append("--workdir=" + str(env.ctx.cwd))
-
-    for mount in sorted(env.ctx.mounts.keys()):
-        args.extend(["-v", "{hostPath}:{containerPath}".format(
-            hostPath=env.ctx.mounts[mount].expanduser().resolve(),
-            containerPath=mount)])
-
-    for e, v in sorted(env.ctx.environ.items()):
-        args.extend(["-e", "%s=%s" % (e, v)])
 
     # Convenient default setting
     if not env.command:
