@@ -112,6 +112,7 @@ class Env:
     provides: Dict[str, str] = field(default_factory=dict)
     requires: Dict[str, str] = field(default_factory=dict)
     packages: List[str] = field(default_factory=list)
+    syscaps: List[str] = field(default_factory=list)
 
     # Internal attribute
     runtime: Optional[Runtime] = None
@@ -232,6 +233,26 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
             Path(ctx.environ["XDG_RUNTIME_DIR"]) / "pulse"
 
 
+def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share webcam device"
+    if active:
+        ctx.args("--device", "/dev/video0")
+
+
+def driCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share graphic device"
+    if active:
+        ctx.args("--device", "/dev/dri")
+
+
+def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share tun device"
+    if active:
+        ctx.args("--device", "/dev/net/tun")
+        env.syscaps.append("NET_ADMIN")
+        ctx.seLinuxLabel = "disable"
+
+
 def seccompCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable seccomp"
     if not active:
@@ -259,6 +280,9 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         ipcCap,
         x11Cap,
         pulseaudioCap,
+        webcamCap,
+        driCap,
+        tunCap,
         seccompCap,
         ptraceCap,
         networkCap,
@@ -279,6 +303,8 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
     if env.ctx.cwd == Path():
         env.ctx.cwd = env.ctx.home
     args.append("--workdir=" + str(env.ctx.cwd))
+    for cap in set(env.syscaps):
+        env.ctx.args("--cap-add", cap)
 
     # Convenient default setting
     if not env.command:
