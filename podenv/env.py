@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 import json
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -75,9 +76,19 @@ class ExecContext:
     execArgs: ExecArgs = field(default_factory=list)
     home: Path = field(default_factory=Path)
     cwd: Path = field(default_factory=Path)
+    seLinuxLabel: str = ""
+    seccomp: str = ""
 
     def args(self, *args: str) -> None:
         self.execArgs.extend(args)
+
+    def getArgs(self) -> ExecArgs:
+        args = []
+        if self.seLinuxLabel:
+            args.extend(["--security-opt", f"label={self.seLinuxLabel}"])
+        if self.seccomp:
+            args.extend(["--security-opt", f"seccomp={self.seccomp}"])
+        return args + self.execArgs
 
 
 @dataclass
@@ -188,6 +199,42 @@ def mountRunCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
 
 
+def ipcCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share host ipc"
+    if active:
+        ctx.args("--ipc=host")
+
+
+def x11Cap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share x11 socket"
+    if active:
+        ctx.mounts[Path("/tmp/.X11-unix")] = Path("/tmp/.X11-unix")
+        ctx.environ["DISPLAY"] = ":0"
+        ctx.seLinuxLabel = "disable"
+        env.capabilities["uidmap"] = True
+
+
+def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share pulseaudio socket"
+    if active:
+        ctx.seLinuxLabel = "disable"
+        ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
+        ctx.mounts[Path(os.environ["XDG_RUNTIME_DIR"]) / "pulse"] = \
+            Path(ctx.environ["XDG_RUNTIME_DIR"]) / "pulse"
+
+
+def seccompCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "enable seccomp"
+    if not active:
+        ctx.seccomp = "unconfined"
+
+
+def ptraceCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "enable ptrace"
+    if active:
+        ctx.args("--cap-add", "SYS_PTRACE")
+
+
 def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
     "keep environment updated"
     if active:
@@ -198,13 +245,18 @@ Capability = Callable[[bool, ExecContext, Env], None]
 Capabilities: List[Tuple[str, Optional[str], Capability]] = [
     (func.__name__[:-3], func.__doc__, func) for func in [
         rootCap,
-        uidmapCap,
         privilegedCap,
         terminalCap,
+        ipcCap,
+        x11Cap,
+        pulseaudioCap,
+        seccompCap,
+        ptraceCap,
         networkCap,
         mountCwdCap,
         mountRunCap,
         autoUpdateCap,
+        uidmapCap,
     ]]
 ValidCap: Set[str] = set([cap[0] for cap in Capabilities])
 
@@ -232,7 +284,7 @@ def prepareEnv(env: Env) -> Tuple[str, ExecArgs, ExecArgs]:
         env.command = ["/bin/bash"]
         args.append("-it")
 
-    return env.name, args + env.ctx.execArgs, env.command
+    return env.name, args + env.ctx.getArgs(), env.command
 
 
 def cleanupEnv(env: Env) -> None:
