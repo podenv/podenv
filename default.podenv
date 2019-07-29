@@ -1,0 +1,9 @@
+# This file is a local podenv configuration
+---
+capabilities:
+  mountCwd: True
+packages:
+  - python3-mypy
+  - python3-flake8
+command:
+  - make

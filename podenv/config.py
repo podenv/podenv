@@ -58,6 +58,11 @@ def initConfig(configDir: Path, configFile: Path) -> None:
               TERM: xterm
           shell:
             command: ["/bin/bash"]
+            capabilities:
+              terminal: True
+              mountRun: True
+            overlays:
+              - bash
         """)
     configDir.mkdir()
     configFile.write_text(defaultConfig)

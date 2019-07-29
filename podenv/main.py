@@ -32,7 +32,7 @@ def usage() -> argparse.Namespace:
                         help="Add a package to the environment")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
-                            help=f"Enable capibility: {doc}")
+                            help=f"Enable capability: {doc}")
         parser.add_argument(f"--no-{name}", action='store_true',
                             help=f"Disable {name} capibility")
     parser.add_argument("env", nargs='?')
