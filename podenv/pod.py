@@ -310,6 +310,12 @@ def setupPod(
                 hostPath.chmod(0o1777)
             else:
                 hostPath.mkdir(mode=0o755, parents=True)
+        if env.runDir and env.runDir.exists() and \
+           str(containerPath).startswith(str(env.ctx.home) + "/"):
+            # Need to create parent dir, otherwise podman creates them as root
+            tmpPath = env.runDir / "home" / str(containerPath).replace(
+                str(env.ctx.home) + "/", "")
+            tmpPath.mkdir(parents=True, exist_ok=True)
 
     if env.overlaysDir:
         for overlay in env.overlays:

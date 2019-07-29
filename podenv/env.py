@@ -115,6 +115,7 @@ class Env:
     command: ExecArgs = field(default_factory=list)
     parent: str = ""
     environ: Dict[str, str] = field(default_factory=dict)
+    mounts: Dict[str, str] = field(default_factory=dict)
     capabilities: Dict[str, bool] = field(default_factory=dict)
     provides: Dict[str, str] = field(default_factory=dict)
     requires: Dict[str, str] = field(default_factory=dict)
@@ -354,6 +355,12 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
         env.ctx.mounts[env.ctx.home] = Path(env.home)
 
     env.ctx.environ.update(env.environ)
+
+    for containerPath, hostPath in env.mounts.items():
+        if containerPath.startswith("~/"):
+            env.ctx.mounts[env.ctx.home / containerPath[2:]] = Path(hostPath)
+        else:
+            env.ctx.mounts[Path(containerPath)] = Path(hostPath)
 
     # Look for file argument requirement
     fileArg: Optional[Path] = None
