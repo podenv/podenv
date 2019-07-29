@@ -125,6 +125,7 @@ class Env:
     dns: str = ""
     imageCustomizations: List[str] = field(default_factory=list)
     command: ExecArgs = field(default_factory=list)
+    args: ExecArgs = field(default_factory=list)
     parent: str = ""
     environ: Dict[str, str] = field(default_factory=dict)
     mounts: Dict[str, str] = field(default_factory=dict)
@@ -411,9 +412,8 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
             commandArgs.append(command)
 
     # Only use cli args when env isn't a shell
-    if not commandArgs or (
-            commandArgs and not commandArgs[-1] != "/bin/bash"):
-        for arg in cliArgs:
+    if not commandArgs or commandArgs[-1] != "/bin/bash":
+        for arg in env.args + cliArgs:
             commandArgs.append(arg)
 
     # Sanity checks
