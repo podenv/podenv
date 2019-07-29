@@ -18,8 +18,9 @@ import os
 import shlex
 import time
 from contextlib import contextmanager
+from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Set
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 from subprocess import Popen, PIPE
 try:
     import selinux  # type: ignore
@@ -83,6 +84,10 @@ def podmanInspect(objType: str, name: str) -> Dict[str, Any]:
         raise RuntimeError(f"Multiple container match {name}")
     info: Dict[str, Any] = infoList[0]
     return info
+
+
+def hash(message: str) -> str:
+    return md5(message.encode('utf-8')).hexdigest()
 
 
 def now() -> str:
@@ -193,6 +198,16 @@ class ContainerImage(Runtime):
             self.updateInfo(dict(packages=list(packages.union(
                 self.info["packages"]))))
 
+    def customize(self, commands: List[Tuple[str, str]]) -> None:
+        knownHash: Set[str] = set(self.info.get("customHash", []))
+        with buildah(self.name) as buildId:
+            for commandHash, command in commands:
+                execute(["buildah", "run", "--network", "host", buildId,
+                         "/bin/bash", "-c", command])
+                knownHash.add(commandHash)
+            buildahCommitNow(buildId, self.name)
+        self.updateInfo(dict(customHash=list(knownHash)))
+
 
 def setupRuntime(env: Env, cacheDir: Path) -> str:
     """Ensure image is ready."""
@@ -228,6 +243,16 @@ def setupRuntime(env: Env, cacheDir: Path) -> str:
 def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
     if not env.runtime:
         raise RuntimeError("Env has no metadata")
+
+    needCustomCommands: List[Tuple[str, str]] = []
+    for customCommand in env.imageCustomizations:
+        customCommandHash = hash(customCommand)
+        if customCommandHash not in env.runtime.info.get("customHash", []):
+            needCustomCommands.append((customCommandHash, customCommand))
+    if needCustomCommands:
+        log.info(f"Customizing image {needCustomCommands}")
+        env.runtime.customize(needCustomCommands)
+
     imagePackages = env.runtime.info.get("packages")
     if not isinstance(imagePackages, list):
         raise RuntimeError("Invalid packages metadata")

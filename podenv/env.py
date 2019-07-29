@@ -68,6 +68,10 @@ class Runtime(ABC):
     def install(self, packages: Set[str]) -> None:
         ...
 
+    @abstractmethod
+    def customize(self, commands: List[Tuple[str, str]]) -> None:
+        ...
+
 
 @dataclass
 class ExecContext:
@@ -107,6 +111,7 @@ class Env:
     image: str = ""
     rootfs: str = ""
     dns: str = ""
+    imageCustomizations: List[str] = field(default_factory=list)
     command: ExecArgs = field(default_factory=list)
     parent: str = ""
     environ: Dict[str, str] = field(default_factory=dict)
