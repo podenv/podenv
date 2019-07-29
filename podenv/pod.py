@@ -242,12 +242,17 @@ def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
         env.runtime.install(need)
 
 
-def setupInfraNetwork(networkName: str, imageName: str, dns: str) -> None:
+def setupInfraNetwork(networkName: str, imageName: str, env: Env) -> None:
     """Setup persistent infra pod"""
     try:
-        executePod("net-" + networkName,
-                   ["--detach"] + [f"--dns={dns}"] if dns else [],
-                   imageName, ["sleep", "Inf"])
+        args = ["--detach"]
+        if env.capabilities.get("uidmap"):
+            args.extend(["--uidmap", "1000:0:1", "--uidmap", "0:1:999",
+                         "--uidmap", "1001:1001:%s" % (2**16 - 1001)])
+        if env.dns:
+            args.append(f"--dns={env.dns}")
+
+        executePod("net-" + networkName, args, imageName, ["sleep", "Inf"])
     except AlreadyRunning:
         pass
 
@@ -269,7 +274,7 @@ def setupPod(
     imageName = setupRuntime(env, cacheDir)
     configureRuntime(env, imageName, packages)
     if env.provides.get("network"):
-        setupInfraNetwork(env.provides["network"], imageName, env.dns)
+        setupInfraNetwork(env.provides["network"], imageName, env)
 
     for containerPath, hostPath in sorted(env.ctx.mounts.items()):
         if not hostPath.exists() and str(hostPath).startswith(str(env.runDir)):

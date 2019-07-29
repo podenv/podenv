@@ -192,6 +192,9 @@ def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
 
     if networkNamespace:
         ctx.args("--network", networkNamespace)
+        if env.capabilities.get("uidmap") and \
+           networkNamespace.startswith("container:"):
+            ctx.args("--userns", networkNamespace)
 
 
 def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
