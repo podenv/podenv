@@ -30,6 +30,7 @@ class Config:
         self.dns: Optional[str] = schema.get('system', {}).get('dns')
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
+        self.overlaysDir: Optional[Path] = None
         for envName, envSchema in schema.get('environments', {}).items():
             self.envs[envName] = Env(envName, **envSchema)
 
@@ -55,12 +56,28 @@ def initConfig(configDir: Path, configFile: Path) -> None:
     configFile.write_text(defaultConfig)
 
 
+def initOverlays(overlayDir: Path) -> None:
+    overlayDir.mkdir()
+    bashOverlay = overlayDir / "bash"
+    bashOverlay.mkdir()
+    (bashOverlay / ".bashrc").write_text(dedent(r"""\
+        if [ -f /etc/bashrc ]; then
+            . /etc/bashrc
+        fi
+        export PS1="\[\033[01;32m\]\h \[\033[01;34m\]\w \$ \[\033[00m\]"
+        alias ls='ls -ap --color=auto'
+    """))
+
+
 def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
     configDir = configDir.expanduser()
     configFile = configDir / "config.yaml"
     if not configDir.exists():
         initConfig(configDir, configFile)
     conf = Config(safe_load(configFile.read_text()))
+    conf.overlaysDir = configDir / "overlay"
+    if not conf.overlaysDir.exists():
+        initOverlays(conf.overlaysDir)
     # Look for local conf
     localConf = Path("default.podenv")
     if localConf.exists():
@@ -99,6 +116,7 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't find environment")
 
+    env.overlaysDir = conf.overlaysDir
     env.runDir = Path("/tmp/podenv") / env.name
     if conf.dns:
         env.dns = conf.dns

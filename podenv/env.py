@@ -114,6 +114,7 @@ class Env:
     requires: Dict[str, str] = field(default_factory=dict)
     packages: List[str] = field(default_factory=list)
     syscaps: List[str] = field(default_factory=list)
+    overlays: List[str] = field(default_factory=list)
     shmsize: str = ""
     home: str = ""
 
@@ -121,6 +122,7 @@ class Env:
     runtime: Optional[Runtime] = None
     ctx: ExecContext = field(default_factory=ExecContext)
     runDir: Optional[Path] = None
+    overlaysDir: Optional[Path] = None
     autoUpdate: bool = False
 
     def applyParent(self, parentEnv: Env) -> None:

@@ -286,6 +286,17 @@ def setupPod(
             else:
                 hostPath.mkdir(mode=0o755, parents=True)
 
+    if env.overlaysDir:
+        for overlay in env.overlays:
+            overlayDir = env.overlaysDir / overlay
+            if not overlayDir.exists():
+                raise RuntimeError(f"{overlay} does not exists")
+            homeDir = env.ctx.mounts.get(env.ctx.home)
+            if not homeDir:
+                raise RuntimeError(
+                    "Overlays without home mount isn't supported")
+            execute(["rsync", "--copy-links", "-a", str(overlayDir) + "/",
+                     str(homeDir)])
     return imageName
 
 
