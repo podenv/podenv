@@ -385,7 +385,6 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
 
     # Apply extra settings from the environment definition:
     args = ["--hostname", env.name]
-    args.append("--workdir=" + str(env.ctx.cwd))
     if env.dns and "--network" not in env.ctx.execArgs:
         args.append(f"--dns={env.dns}")
     if env.shmsize:
