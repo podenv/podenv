@@ -303,7 +303,14 @@ def seccompCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def ptraceCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable ptrace"
     if active:
-        ctx.args("--cap-add", "SYS_PTRACE")
+        ctx.syscaps.append("SYS_PTRACE")
+
+
+def setuidCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "enable setuid"
+    if active:
+        for cap in ("SETUID", "SETGID"):
+            ctx.syscaps.append(cap)
 
 
 def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
@@ -328,6 +335,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         tunCap,
         seccompCap,
         selinuxCap,
+        setuidCap,
         ptraceCap,
         networkCap,
         mountCwdCap,
