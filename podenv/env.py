@@ -200,6 +200,7 @@ def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
     "interactive mode"
     if active:
         ctx.args("-it")
+        ctx.args("--detach-keys", "ctrl-e,e")
 
 
 def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
