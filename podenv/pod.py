@@ -122,9 +122,12 @@ def buildah(fromRef: str) -> Generator[BuildId, None, None]:
         execute(["buildah", "delete", ctr], textOutput=True)
 
 
+def buildahRunCommand(buildId: BuildId) -> ExecArgs:
+    return ["buildah", "run", "--network", "host", "--user", "0:0", buildId]
+
+
 def buildahRun(buildId: BuildId, command: str) -> None:
-    execute(["buildah", "run", "--network", "host", buildId] +
-            shlex.split(command))
+    execute(buildahRunCommand(buildId) + shlex.split(command))
 
 
 def buildahConfig(buildId: BuildId, config: str) -> None:
@@ -193,7 +196,7 @@ class ContainerImage(Runtime):
                 with buildah(self.name) as buildId:
                     self.getSystemType(buildId)
                     updateOutput = pread(
-                        ["buildah", "run", "--network", "host", buildId] +
+                        buildahRunCommand(buildId) +
                         shlex.split(self.commands["update"]))
                     print(updateOutput)
                     if "Nothing to do." in updateOutput:
@@ -218,8 +221,8 @@ class ContainerImage(Runtime):
         knownHash: Set[str] = set(self.info.get("customHash", []))
         with buildah(self.name) as buildId:
             for commandHash, command in commands:
-                execute(["buildah", "run", "--network", "host", buildId,
-                         "/bin/bash", "-c", command])
+                execute(buildahRunCommand(buildId) +
+                        ["/bin/bash", "-c", command])
                 knownHash.add(commandHash)
             buildahCommitNow(buildId, self.name)
         self.updateInfo(dict(customHash=list(knownHash)))
