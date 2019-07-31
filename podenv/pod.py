@@ -258,10 +258,6 @@ def setupRuntime(env: Env, cacheDir: Path) -> str:
     else:
         env.runtime.loadInfo()
 
-    if env.autoUpdate and not updated(env.runtime.info):
-        log.info(f"Updating {env.runtime}")
-        env.runtime.update()
-
     return env.runtime.getExecName()
 
 
@@ -277,6 +273,10 @@ def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
     if needCustomCommands:
         log.info(f"Customizing image {needCustomCommands}")
         env.runtime.customize(needCustomCommands)
+
+    if env.autoUpdate and not updated(env.runtime.info):
+        log.info(f"Updating {env.runtime}")
+        env.runtime.update()
 
     imagePackages = env.runtime.info.get("packages")
     if not isinstance(imagePackages, list):
