@@ -33,13 +33,18 @@ class Runtime(ABC):
                 "install": "dnf install -y ",
                 "update": "dnf update -y ",
             }
-        }
+        },
+        "apt": {
+            "commands": {
+                "install": "apt-get install -y ",
+                "update": "apt-get update -y "
+            }
+        },
     }
 
     def __init__(self, metadataPath: Path):
         self.metadataPath = metadataPath
-        # TODO: discover system type
-        self.commands = self.System["rpm"]["commands"]
+        self.commands: Dict[str, str] = {}
         self.info: Info = {}
 
     def updateInfo(self, info: Info) -> None:

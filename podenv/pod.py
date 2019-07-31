@@ -155,13 +155,28 @@ class ContainerImage(Runtime):
     def getExecName(self) -> str:
         return self.name
 
+    def getSystemType(self, buildId: BuildId) -> None:
+        if not self.commands:
+            for systemType, checkCommand in (
+                    ("rpm", "sh -c 'type dnf'"),
+                    ("apt", "sh -c 'type apt'")):
+                try:
+                    buildahRun(buildId, checkCommand)
+                    self.commands = self.System[systemType]["commands"]
+                    return
+                except RuntimeError:
+                    log.debug("%s failed", checkCommand)
+                    pass
+            raise RuntimeError("Couldn't discover system type")
+
     def create(self) -> None:
         with buildah(self.fromRef) as buildId:
+            self.getSystemType(buildId)
             for command in [self.commands["update"],
                             "useradd -u 1000 -m user",
-                            "mkdir /run/user/1000",
+                            "mkdir -p /run/user/1000",
                             "chown 1000:1000 /run/user/1000",
-                            "mkdir /run/user/0",
+                            "mkdir -p /run/user/0",
                             "chown 0:0 /run/user/0"]:
                 buildahRun(buildId, command)
             for config in ["--author='%s'" % os.environ["USER"],
@@ -177,6 +192,7 @@ class ContainerImage(Runtime):
         for retry in range(3):
             try:
                 with buildah(self.name) as buildId:
+                    self.getSystemType(buildId)
                     updateOutput = pread(
                         ["buildah", "run", "--network", "host", buildId] +
                         shlex.split(self.commands["update"]))
@@ -193,6 +209,7 @@ class ContainerImage(Runtime):
 
     def install(self, packages: Set[str]) -> None:
         with buildah(self.name) as buildId:
+            self.getSystemType(buildId)
             buildahRun(buildId, self.commands["install"] + " ".join(packages))
             buildahCommitNow(buildId, self.name)
             self.updateInfo(dict(packages=list(packages.union(
