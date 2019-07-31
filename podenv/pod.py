@@ -172,8 +172,7 @@ class ContainerImage(Runtime):
     def create(self) -> None:
         with buildah(self.fromRef) as buildId:
             self.getSystemType(buildId)
-            for command in [self.commands["update"],
-                            "useradd -u 1000 -m user",
+            for command in ["useradd -u 1000 -m user",
                             "mkdir -p /run/user/1000",
                             "chown 1000:1000 /run/user/1000",
                             "mkdir -p /run/user/0",
@@ -184,7 +183,7 @@ class ContainerImage(Runtime):
                 buildahConfig(buildId, config)
             buildahCommit(buildId, self.name)
         self.updateInfo(dict(created=now(),
-                             updated=now(),
+                             updated="1970-01-01T00:00:00",
                              packages=[],
                              fromRef=self.fromRef))
 
