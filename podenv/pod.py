@@ -158,23 +158,28 @@ class ContainerImage(Runtime):
     def getExecName(self) -> str:
         return self.name
 
-    def getSystemType(self, buildId: BuildId) -> None:
-        if not self.commands:
+    def getSystemType(self, buildId: BuildId) -> str:
+        systemType = self.info.get("system")
+        if not systemType:
             for systemType, checkCommand in (
                     ("rpm", "sh -c 'type dnf'"),
                     ("apt", "sh -c 'type apt'")):
                 try:
                     buildahRun(buildId, checkCommand)
-                    self.commands = self.System[systemType]["commands"]
-                    return
+                    break
                 except RuntimeError:
                     log.debug("%s failed", checkCommand)
-                    pass
-            raise RuntimeError("Couldn't discover system type")
+            else:
+                raise RuntimeError("Couldn't discover system type")
+        if not isinstance(systemType, str):
+            # Mypy is confused by the type from the for loop
+            raise RuntimeError("Invalid systemType")
+        self.commands = self.System[systemType]["commands"]
+        return systemType
 
     def create(self) -> None:
         with buildah(self.fromRef) as buildId:
-            self.getSystemType(buildId)
+            systemType = self.getSystemType(buildId)
             for command in ["useradd -u 1000 -m user",
                             "mkdir -p /run/user/1000",
                             "chown 1000:1000 /run/user/1000",
@@ -188,13 +193,14 @@ class ContainerImage(Runtime):
         self.updateInfo(dict(created=now(),
                              updated="1970-01-01T00:00:00",
                              packages=[],
+                             system=systemType,
                              fromRef=self.fromRef))
 
     def update(self) -> None:
         for retry in range(3):
             try:
                 with buildah(self.name) as buildId:
-                    self.getSystemType(buildId)
+                    systemType = self.getSystemType(buildId)
                     updateOutput = pread(
                         buildahRunCommand(buildId) +
                         shlex.split(self.commands["update"]))
@@ -207,14 +213,14 @@ class ContainerImage(Runtime):
                 if retry == 2:
                     raise
                 log.warning("Retrying failed update...")
-        self.updateInfo(dict(updated=now()))
+        self.updateInfo(dict(updated=now(), system=systemType))
 
     def install(self, packages: Set[str]) -> None:
         with buildah(self.name) as buildId:
-            self.getSystemType(buildId)
+            systemType = self.getSystemType(buildId)
             buildahRun(buildId, self.commands["install"] + " ".join(packages))
             buildahCommitNow(buildId, self.name)
-            self.updateInfo(dict(packages=list(packages.union(
+        self.updateInfo(dict(system=systemType, packages=list(packages.union(
                 self.info["packages"]))))
 
     def customize(self, commands: List[Tuple[str, str]]) -> None:
