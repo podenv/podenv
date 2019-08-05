@@ -23,7 +23,7 @@ from podenv.env import Capabilities, Env, prepareEnv, cleanupEnv
 log = logging.getLogger("podenv")
 
 
-def usage() -> argparse.Namespace:
+def usageParser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--shell", action='store_true',
@@ -37,7 +37,11 @@ def usage() -> argparse.Namespace:
                             help=f"Disable {name} capibility")
     parser.add_argument("env", nargs='?')
     parser.add_argument("args", nargs='*')
-    return parser.parse_args()
+    return parser
+
+
+def usage() -> argparse.Namespace:
+    return usageParser().parse_args()
 
 
 def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:

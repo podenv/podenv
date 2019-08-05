@@ -170,20 +170,72 @@ command:
 $ podenv
 ```
 
+## Environment definition
+
+The environment definition attributes are:
+
+Name                 | Type            | Doc                                      |
+-------------------- | --------------- | ---------------------------------------- |
+name                 | str             | The name of the environment              |
+parent               | str             | A parent environment name to inherit attributes from. |
+image                | str             | The container image reference            |
+rootfs               | str             | The path of a rootfs                     |
+dns                  | str             | A custom DNS server                      |
+imageCustomizations  | List[str]       | List of shell commands to execute and commit in the image |
+packages             | List[str]       | List of packages to be installed in the image |
+command              | ExecArgs        | Container starting command               |
+args                 | ExecArgs        | Optional arguments to append to the command |
+environ              | Dict[str, str]  | User environ(7)                          |
+syscaps              | List[str]       | List of system capabilities(7)           |
+mounts               | Dict[str, str]  | Extra mountpoints                        |
+capabilities         | Dict[str, bool] | List of capabilities                     |
+provides             | Dict[str, str]  | List of objects the environment provides |
+requires             | Dict[str, str]  | List of objects the environment requires |
+overlays             | List[str]       | List of overlay to copy in runtime directory |
+home                 | str             | Container home path mount                |
+shmsize              | str             | The shm-size value string                |
+
+
+The available capabilities are:
+
+Name                 | Doc                                                        |
+-------------------- | ---------------------------------------------------------- |
+root                 | run as root                                                  |
+privileged           | run as privileged container                                  |
+terminal             | interactive mode                                             |
+ipc                  | share host ipc                                               |
+x11                  | share x11 socket                                             |
+pulseaudio           | share pulseaudio socket                                      |
+ssh                  | share ssh agent and keys                                     |
+gpg                  | share gpg agent                                              |
+webcam               | share webcam device                                          |
+dri                  | share graphic device                                         |
+tun                  | share tun device                                             |
+seccomp              | enable seccomp                                               |
+selinux              | enable SELinux                                               |
+setuid               | enable setuid                                                |
+ptrace               | enable ptrace                                                |
+network              | enable network                                               |
+mountCwd             | mount cwd to /data                                           |
+mountRun             | mount home and tmp to host tmpfs                             |
+autoUpdate           | keep environment updated                                     |
+uidmap               | map host uid                                                 |
 
 ## Install and usage
 
-```
+```bash
 $ python3 -mpip install --user .
 $ podenv --help
 usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
               [--privileged] [--no-privileged] [--terminal] [--no-terminal]
               [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
-              [--no-pulseaudio] [--ssh] [--no-ssh] [--webcam] [--no-webcam]
-              [--dri] [--no-dri] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
-              [--ptrace] [--no-ptrace] [--network] [--no-network] [--mountCwd]
-              [--no-mountCwd] [--mountRun] [--no-mountRun] [--autoUpdate]
-              [--no-autoUpdate] [--uidmap] [--no-uidmap]
+              [--no-pulseaudio] [--ssh] [--no-ssh] [--gpg] [--no-gpg]
+              [--webcam] [--no-webcam] [--dri] [--no-dri] [--tun] [--no-tun]
+              [--seccomp] [--no-seccomp] [--selinux] [--no-selinux] [--setuid]
+              [--no-setuid] [--ptrace] [--no-ptrace] [--network]
+              [--no-network] [--mountCwd] [--no-mountCwd] [--mountRun]
+              [--no-mountRun] [--autoUpdate] [--no-autoUpdate] [--uidmap]
+              [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -199,39 +251,45 @@ optional arguments:
   -p PACKAGE, --package PACKAGE
                         Add a package to the environment
   --root                Enable capability: run as root
-  --no-root             Disable root capability
+  --no-root             Disable root capibility
   --privileged          Enable capability: run as privileged container
-  --no-privileged       Disable privileged capability
+  --no-privileged       Disable privileged capibility
   --terminal            Enable capability: interactive mode
-  --no-terminal         Disable terminal capability
+  --no-terminal         Disable terminal capibility
   --ipc                 Enable capability: share host ipc
-  --no-ipc              Disable ipc capability
+  --no-ipc              Disable ipc capibility
   --x11                 Enable capability: share x11 socket
-  --no-x11              Disable x11 capability
+  --no-x11              Disable x11 capibility
   --pulseaudio          Enable capability: share pulseaudio socket
-  --no-pulseaudio       Disable pulseaudio capability
+  --no-pulseaudio       Disable pulseaudio capibility
   --ssh                 Enable capability: share ssh agent and keys
-  --no-ssh              Disable ssh capability
+  --no-ssh              Disable ssh capibility
+  --gpg                 Enable capability: share gpg agent
+  --no-gpg              Disable gpg capibility
   --webcam              Enable capability: share webcam device
-  --no-webcam           Disable webcam capability
+  --no-webcam           Disable webcam capibility
   --dri                 Enable capability: share graphic device
-  --no-dri              Disable dri capability
+  --no-dri              Disable dri capibility
   --tun                 Enable capability: share tun device
-  --no-tun              Disable tun capability
+  --no-tun              Disable tun capibility
   --seccomp             Enable capability: enable seccomp
-  --no-seccomp          Disable seccomp capability
+  --no-seccomp          Disable seccomp capibility
+  --selinux             Enable capability: enable SELinux
+  --no-selinux          Disable selinux capibility
+  --setuid              Enable capability: enable setuid
+  --no-setuid           Disable setuid capibility
   --ptrace              Enable capability: enable ptrace
-  --no-ptrace           Disable ptrace capability
+  --no-ptrace           Disable ptrace capibility
   --network             Enable capability: enable network
-  --no-network          Disable network capability
+  --no-network          Disable network capibility
   --mountCwd            Enable capability: mount cwd to /data
-  --no-mountCwd         Disable mountCwd capability
+  --no-mountCwd         Disable mountCwd capibility
   --mountRun            Enable capability: mount home and tmp to host tmpfs
-  --no-mountRun         Disable mountRun capability
+  --no-mountRun         Disable mountRun capibility
   --autoUpdate          Enable capability: keep environment updated
-  --no-autoUpdate       Disable autoUpdate capability
+  --no-autoUpdate       Disable autoUpdate capibility
   --uidmap              Enable capability: map host uid
-  --no-uidmap           Disable uidmap capability
+  --no-uidmap           Disable uidmap capibility
 ```
 
 

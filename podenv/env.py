@@ -124,31 +124,54 @@ class ExecContext:
 @dataclass
 class Env:
     """The user provided container representation"""
-    name: str
-    image: str = ""
-    rootfs: str = ""
-    dns: str = ""
-    imageCustomizations: List[str] = field(default_factory=list)
-    command: ExecArgs = field(default_factory=list)
-    args: ExecArgs = field(default_factory=list)
-    parent: str = ""
-    environ: Dict[str, str] = field(default_factory=dict)
-    mounts: Dict[str, str] = field(default_factory=dict)
-    capabilities: Dict[str, bool] = field(default_factory=dict)
-    provides: Dict[str, str] = field(default_factory=dict)
-    requires: Dict[str, str] = field(default_factory=dict)
-    packages: List[str] = field(default_factory=list)
-    syscaps: List[str] = field(default_factory=list)
-    overlays: List[str] = field(default_factory=list)
-    shmsize: str = ""
-    home: str = ""
+    name: str = field(default="", metadata=dict(
+        doc="The name of the environment"))
+    parent: str = field(default="", metadata=dict(
+        doc="A parent environment name to inherit attributes from."))
+    image: str = field(default="", metadata=dict(
+        doc="The container image reference"))
+    rootfs: str = field(default="", metadata=dict(
+        doc="The path of a rootfs"))
+    dns: str = field(default="", metadata=dict(
+        doc="A custom DNS server"))
+    imageCustomizations: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of shell commands to execute and commit in the image"))
+    packages: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of packages to be installed in the image"))
+    command: ExecArgs = field(default_factory=list, metadata=dict(
+        doc="Container starting command"))
+    args: ExecArgs = field(default_factory=list, metadata=dict(
+        doc="Optional arguments to append to the command"))
+    environ: Dict[str, str] = field(default_factory=dict, metadata=dict(
+        doc="User environ(7)"))
+    syscaps: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of system capabilities(7)"))
+    mounts: Dict[str, str] = field(default_factory=dict, metadata=dict(
+        doc="Extra mountpoints"))
+    capabilities: Dict[str, bool] = field(default_factory=dict, metadata=dict(
+        doc="List of capabilities"))
+    provides: Dict[str, str] = field(default_factory=dict, metadata=dict(
+        doc="List of objects the environment provides"))
+    requires: Dict[str, str] = field(default_factory=dict, metadata=dict(
+        doc="List of objects the environment requires"))
+    overlays: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of overlay to copy in runtime directory"))
+    home: str = field(default="", metadata=dict(
+        doc="Container home path mount"))
+    shmsize: str = field(default="", metadata=dict(
+        doc="The shm-size value string"))
 
     # Internal attribute
-    runtime: Optional[Runtime] = None
-    ctx: ExecContext = field(default_factory=ExecContext)
-    runDir: Optional[Path] = None
-    overlaysDir: Optional[Path] = None
-    autoUpdate: bool = False
+    runtime: Optional[Runtime] = field(default=None, metadata=dict(
+        internal=True))
+    ctx: ExecContext = field(default_factory=ExecContext, metadata=dict(
+        internal=True))
+    runDir: Optional[Path] = field(default=None, metadata=dict(
+        internal=True))
+    overlaysDir: Optional[Path] = field(default=None, metadata=dict(
+        internal=True))
+    autoUpdate: bool = field(default=False, metadata=dict(
+        internal=True))
 
     def applyParent(self, parentEnv: Env) -> None:
         for attr in fields(Env):
