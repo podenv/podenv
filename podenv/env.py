@@ -19,6 +19,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
+try:
+    import selinux  # type: ignore
+    HAS_SELINUX = True
+except ImportError:
+    HAS_SELINUX = False
 
 
 ExecArgs = List[str]
@@ -403,6 +408,23 @@ def validateEnv(env: Env) -> None:
     if env.capabilities.get("tun") and "NET_ADMIN" not in env.ctx.syscaps:
         warn(f"NET_ADMIN capability is needed by the tun device")
         env.ctx.syscaps.append("NET_ADMIN")
+
+    # Check mount points labels
+    if env.capabilities.get("selinux") and HAS_SELINUX:
+        label = "container_file_t"
+        for hostPath in env.ctx.mounts.values():
+            hostPath = hostPath.expanduser().resolve()
+            if hostPath.exists() and \
+               selinux.getfilecon(str(hostPath))[1].split(':')[2] != label:
+                warn(f"SELinux is disabled because {hostPath} doesn't have "
+                     f"the {label} label.")
+                selinuxCap(False, env.ctx, env)
+
+    # Check mount points permissions
+    for hostPath in env.ctx.mounts.values():
+        hostPath = hostPath.expanduser().resolve()
+        if hostPath.exists() and not os.access(str(hostPath), os.R_OK):
+            warn(f"{hostPath} is not readable by the current user.")
 
 
 def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
