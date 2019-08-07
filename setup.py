@@ -24,6 +24,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/podenv/podenv",
     packages=["podenv"],
+    install_requires=["PyYAML"],
     entry_points={
         'console_scripts': [
             'podenv=podenv.main:run',
