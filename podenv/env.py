@@ -448,7 +448,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     if env.shmsize:
         args.append(f"--shm-size={env.shmsize}")
     if env.home:
-        env.ctx.mounts[env.ctx.home] = Path(env.home)
+        env.ctx.mounts[env.ctx.home] = Path(env.home).expanduser().resolve()
 
     env.ctx.syscaps.extend(env.syscaps)
     env.ctx.environ.update(env.environ)
