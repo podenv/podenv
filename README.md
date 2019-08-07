@@ -41,6 +41,7 @@ environments:
   shell:
     capabilities:
       terminal: True
+      mountRun: True
     overlays:
       - bash
     command:

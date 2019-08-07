@@ -262,8 +262,10 @@ def mountRunCap(active: bool, ctx: ExecContext, env: Env) -> None:
     if active:
         if env.runDir is None:
             raise RuntimeError("runDir isn't set")
-        ctx.mounts[ctx.home] = env.runDir / "home"
-        ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
+        if not ctx.mounts.get(ctx.home) and not env.home:
+            ctx.mounts[ctx.home] = env.runDir / "home"
+        if not ctx.mounts.get(Path("/tmp")):
+            ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
 
 
 def ipcCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -425,6 +427,12 @@ def validateEnv(env: Env) -> None:
         hostPath = hostPath.expanduser().resolve()
         if hostPath.exists() and not os.access(str(hostPath), os.R_OK):
             warn(f"{hostPath} is not readable by the current user.")
+
+    # Check for home mount point
+    if env.overlays and not env.ctx.mounts.get(env.ctx.home):
+        warn(f"overlay needs a home mount point, "
+             "mountRun capability is enabled.")
+        mountRunCap(True, env.ctx, env)
 
 
 def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
