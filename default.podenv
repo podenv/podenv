@@ -5,5 +5,6 @@ capabilities:
 packages:
   - python3-mypy
   - python3-flake8
+  - make
 command:
   - make
