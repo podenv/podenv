@@ -335,6 +335,10 @@ def setupPod(
                 hostPath.chmod(0o1777)
             else:
                 hostPath.mkdir(mode=0o755, parents=True)
+        elif not hostPath.exists():
+            hostPath.mkdir(mode=0o755, parents=True)
+            if isSelinux():
+                selinux.chcon(str(hostPath), getSelinuxLabel(env))
         if env.runDir and env.runDir.exists() and \
            str(containerPath).startswith(str(env.ctx.home) + "/"):
             # Need to create parent dir, otherwise podman creates them as root
