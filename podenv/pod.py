@@ -28,7 +28,7 @@ try:
 except ImportError:
     HAS_SELINUX = False
 
-from podenv.env import Env, ExecArgs, Info, Runtime
+from podenv.env import Env, ExecArgs, Info, Runtime, getUidMap
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -297,8 +297,7 @@ def setupInfraNetwork(networkName: str, imageName: str, env: Env) -> None:
     try:
         args = ["--detach"]
         if env.capabilities.get("uidmap"):
-            args.extend(["--uidmap", "1000:0:1", "--uidmap", "0:1:999",
-                         "--uidmap", "1001:1001:%s" % (2**16 - 1001)])
+            args.extend(getUidMap(env))
         if env.dns:
             args.append(f"--dns={env.dns}")
 

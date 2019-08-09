@@ -216,11 +216,15 @@ def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
     ctx.environ["HOME"] = str(ctx.home)
 
 
-def uidmapCap(active: bool, ctx: ExecContext, _: Env) -> None:
+def getUidMap(_: Env) -> ExecArgs:
+    return ["--uidmap", "1000:0:1", "--uidmap", "0:1:999",
+            "--uidmap", "1001:1001:%s" % (2**16 - 1001)]
+
+
+def uidmapCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "map host uid"
     if active:
-        ctx.args("--uidmap", "1000:0:1", "--uidmap", "0:1:999",
-                 "--uidmap", "1001:1001:%s" % (2**16 - 1001))
+        ctx.execArgs.extend(getUidMap(env))
 
 
 def privilegedCap(active: bool, ctx: ExecContext, _: Env) -> None:
