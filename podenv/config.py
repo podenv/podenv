@@ -105,7 +105,10 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
         envName = conf.default
 
     def resolvParents(parent: Optional[str], history: List[str]) -> None:
-        if not parent:
+        if parent is None:
+            # Environment is a parent, no need to load base
+            return
+        elif parent == "":
             if "base" in history:
                 return
             parent = "base"

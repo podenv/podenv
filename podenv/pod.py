@@ -17,10 +17,12 @@ import json
 import os
 import shlex
 import time
+from abc import abstractmethod
 from contextlib import contextmanager
 from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, ContextManager, Dict, Generator, List, \
+    Optional, Set, Tuple
 from subprocess import Popen, PIPE
 try:
     import selinux  # type: ignore
@@ -32,6 +34,7 @@ from podenv.env import Env, ExecArgs, Info, Runtime, getUidMap
 
 log = logging.getLogger("podenv")
 BuildId = str
+BuildSession = ContextManager[BuildId]
 TZFormat = "%Y-%m-%dT%H:%M:%S"
 
 
@@ -106,11 +109,8 @@ def canUpdate() -> bool:
     return False
 
 
-def updated(info: Info, maxAge: int = 3600 * 24) -> bool:
-    lastUpdate = info.get("updated")
-    if isinstance(lastUpdate, str):
-        return age(lastUpdate) < maxAge
-    raise RuntimeError("Info has incorrect updated metadata: %s" % lastUpdate)
+def updated(lastUpdate: str, maxAge: int = 3600 * 24) -> bool:
+    return age(lastUpdate) < maxAge
 
 
 def isSelinux() -> bool:
@@ -146,25 +146,62 @@ def buildahCommit(buildId: BuildId, tagRef: str) -> None:
     execute(["buildah", "commit", buildId, tagRef])
 
 
-def buildahCommitNow(buildId: BuildId, tagRef: str) -> None:
-    nowRef = "%s:%s" % (tagRef, now().replace(':', '-'))
-    buildahCommit(buildId, nowRef)
-    execute(["podman", "tag", nowRef, "%s:latest" % tagRef])
+class PodmanRuntime(Runtime):
+    System = {
+        "rpm": {
+            "commands": {
+                "install": "dnf install -y ",
+                "update": "dnf update -y ",
+            }
+        },
+        "apt": {
+            "commands": {
+                "install": "apt-get install -y ",
+                "update": "apt-get update -y "
+            }
+        },
+    }
 
+    def __init__(self, cacheDir: Path, name: str, fromRef: str):
+        self.commands: Dict[str, str] = {}
+        self.info: Info = {}
+        self.fromRef: str = fromRef
+        self.name: str = name
+        self.metadataPath = Path(
+            str(cacheDir / self.name).rstrip('/') + '.json')
 
-class ContainerImage(Runtime):
-    def __init__(
-            self, cacheDir: Path, fromRef: str, localName: str = "") -> None:
-        self.fromRef = fromRef
-        self.name = localName if localName else fromRef.replace(
-            ':', '-').replace('/', '_')
-        super().__init__(Path(str(cacheDir / self.name).rstrip('/') + '.json'))
+    def exists(self) -> bool:
+        return self.metadataPath.exists()
+
+    def loadInfo(self) -> None:
+        self.info = json.loads(self.metadataPath.read_text())
+
+    def getCustomizations(self) -> List[str]:
+        customHashes = self.info.get("customHash", [])
+        if not isinstance(customHashes, list):
+            raise RuntimeError("Invalid customHash metadata")
+        return customHashes
+
+    def getInstalledPackages(self) -> List[str]:
+        packages = self.info.get("packages", [])
+        if not isinstance(packages, list):
+            raise RuntimeError("Invalid packages metadata")
+        return packages
+
+    def needUpdate(self) -> bool:
+        if self.info.get("updated") and isinstance(self.info["updated"], str):
+            return not updated(self.info["updated"]) and canUpdate()
+        raise RuntimeError("Invalid last updated metadata")
+
+    def updateInfo(self, info: Info) -> None:
+        self.info.update(info)
+        self.metadataPath.write_text(json.dumps(self.info))
 
     def __repr__(self) -> str:
         return self.name
 
-    def getExecName(self) -> str:
-        return self.name
+    def getExecName(self) -> ExecArgs:
+        return [self.name]
 
     def getSystemType(self, buildId: BuildId) -> str:
         systemType = self.info.get("system")
@@ -173,7 +210,7 @@ class ContainerImage(Runtime):
                     ("rpm", "sh -c 'type dnf'"),
                     ("apt", "sh -c 'type apt'")):
                 try:
-                    buildahRun(buildId, checkCommand)
+                    self.runCommand(buildId, checkCommand)
                     break
                 except RuntimeError:
                     log.debug("%s failed", checkCommand)
@@ -186,18 +223,18 @@ class ContainerImage(Runtime):
         return systemType
 
     def create(self) -> None:
-        with buildah(self.fromRef) as buildId:
+        with self.getSession(create=True) as buildId:
             systemType = self.getSystemType(buildId)
             for command in ["useradd -u 1000 -m user",
                             "mkdir -p /run/user/1000",
                             "chown 1000:1000 /run/user/1000",
                             "mkdir -p /run/user/0",
                             "chown 0:0 /run/user/0"]:
-                buildahRun(buildId, command)
+                self.runCommand(buildId, command)
             for config in ["--author='%s'" % os.environ["USER"],
                            "--created-by podenv"]:
-                buildahConfig(buildId, config)
-            buildahCommit(buildId, self.name)
+                self.applyConfig(buildId, config)
+            self.commit(buildId, self.name)
         self.updateInfo(dict(created=now(),
                              updated="1970-01-01T00:00:00",
                              packages=[],
@@ -207,15 +244,15 @@ class ContainerImage(Runtime):
     def update(self) -> None:
         for retry in range(3):
             try:
-                with buildah(self.name) as buildId:
+                with self.getSession() as buildId:
                     systemType = self.getSystemType(buildId)
                     updateOutput = pread(
-                        buildahRunCommand(buildId) +
+                        self.runCommandArgs(buildId) +
                         shlex.split(self.commands["update"]))
                     print(updateOutput)
                     if "Nothing to do." in updateOutput:
                         break
-                    buildahCommitNow(buildId, self.name)
+                    self.commit(buildId, self.name)
                     break
             except RuntimeError:
                 if retry == 2:
@@ -224,25 +261,100 @@ class ContainerImage(Runtime):
         self.updateInfo(dict(updated=now(), system=systemType))
 
     def install(self, packages: Set[str]) -> None:
-        with buildah(self.name) as buildId:
+        with self.getSession() as buildId:
             systemType = self.getSystemType(buildId)
-            buildahRun(buildId, self.commands["install"] + " ".join(packages))
-            buildahCommitNow(buildId, self.name)
+            self.runCommand(
+                buildId, self.commands["install"] + " ".join(packages))
+            self.commit(buildId, self.name)
         self.updateInfo(dict(system=systemType, packages=list(packages.union(
                 self.info["packages"]))))
 
     def customize(self, commands: List[Tuple[str, str]]) -> None:
         knownHash: Set[str] = set(self.info.get("customHash", []))
-        with buildah(self.name) as buildId:
+        with self.getSession() as buildId:
             for commandHash, command in commands:
-                execute(buildahRunCommand(buildId) +
+                execute(self.runCommandArgs(buildId) +
                         ["/bin/bash", "-c", command])
                 knownHash.add(commandHash)
-            buildahCommitNow(buildId, self.name)
+            self.commit(buildId, self.name)
         self.updateInfo(dict(customHash=list(knownHash)))
 
+    @abstractmethod
+    def getSession(self, create: bool = False) -> BuildSession:
+        ...
 
-def setupRuntime(env: Env, cacheDir: Path) -> str:
+    @abstractmethod
+    def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
+        ...
+
+    @abstractmethod
+    def runCommand(self, buildId: BuildId, command: str) -> None:
+        ...
+
+    @abstractmethod
+    def applyConfig(self, buildId: BuildId, config: str) -> None:
+        ...
+
+    @abstractmethod
+    def commit(self, buildId: BuildId, name: str) -> None:
+        ...
+
+
+class ContainerImage(PodmanRuntime):
+    def __init__(
+            self, cacheDir: Path, fromRef: str, localName: str = "") -> None:
+        super().__init__(cacheDir,
+                         localName if localName else fromRef.replace(
+                             ':', '-').replace('/', '_'),
+                         fromRef)
+
+    def getSession(self, create: bool = False) -> BuildSession:
+        return buildah(self.fromRef if create else self.name)
+
+    def runCommand(self, buildId: BuildId, command: str) -> None:
+        buildahRun(buildId, command)
+
+    def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
+        return buildahRunCommand(buildId)
+
+    def applyConfig(self, buildId: BuildId, config: str) -> None:
+        buildahConfig(buildId, config)
+
+    def commit(self, buildId: BuildId, name: str) -> None:
+        tagRef = "%s:%s" % (name, now().replace(':', '-'))
+        buildahCommit(buildId, tagRef)
+        execute(["podman", "tag", tagRef, f"{name}:latest"])
+
+
+class RootfsDirectory(PodmanRuntime):
+    def __init__(self, cacheDir: Path, fromRef: str) -> None:
+        super().__init__(cacheDir, os.path.basename(fromRef), fromRef)
+
+    def getExecName(self) -> ExecArgs:
+        return ["--rootfs", self.fromRef]
+
+    def getSession(self, create: bool = False) -> BuildSession:
+        @contextmanager
+        def fakeSession() -> Generator[BuildId, None, None]:
+            yield "noop"
+        return fakeSession()
+
+    def runCommand(self, _: BuildId, command: str) -> None:
+        execute(self.runCommandArgs(_) + shlex.split(command))
+
+    def runCommandArgs(self, _: BuildId) -> ExecArgs:
+        return ["podman", "run", "--rm", "-t", "--rootfs", self.fromRef]
+
+    def applyConfig(self, buildId: BuildId, config: str) -> None:
+        # Rootfs doesn't have metadata
+        pass
+
+    def commit(self, buildId: BuildId, name: str) -> None:
+        # Rootfs doesn't have layer
+        pass
+
+
+def setupRuntime(env: Env, cacheDir: Path) -> ExecArgs:
     """Ensure image is ready."""
     cacheDir = cacheDir.expanduser()
     if not cacheDir.exists():
@@ -253,7 +365,7 @@ def setupRuntime(env: Env, cacheDir: Path) -> str:
             f"{env.name}: both image and rootfs can't be defined")
 
     if env.rootfs:
-        raise RuntimeError("rootfs is not implemented")
+        env.runtime = RootfsDirectory(cacheDir, env.rootfs)
     elif env.image:
         env.runtime = ContainerImage(cacheDir, env.image)
 
@@ -269,26 +381,24 @@ def setupRuntime(env: Env, cacheDir: Path) -> str:
     return env.runtime.getExecName()
 
 
-def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
+def configureRuntime(env: Env, packages: List[str]) -> None:
     if not env.runtime:
         raise RuntimeError("Env has no metadata")
 
     needCustomCommands: List[Tuple[str, str]] = []
     for customCommand in env.imageCustomizations:
         customCommandHash = hash(customCommand)
-        if customCommandHash not in env.runtime.info.get("customHash", []):
+        if customCommandHash not in env.runtime.getCustomizations():
             needCustomCommands.append((customCommandHash, customCommand))
     if needCustomCommands:
         log.info(f"Customizing image {needCustomCommands}")
         env.runtime.customize(needCustomCommands)
 
-    if env.autoUpdate and not updated(env.runtime.info) and canUpdate():
+    if env.autoUpdate and env.runtime.needUpdate():
         log.info(f"Updating {env.runtime}")
         env.runtime.update()
 
-    imagePackages = env.runtime.info.get("packages")
-    if not isinstance(imagePackages, list):
-        raise RuntimeError("Invalid packages metadata")
+    imagePackages = env.runtime.getInstalledPackages()
     envPackages = set(env.packages)
     if packages:
         # Add user provided extra packages
@@ -300,7 +410,7 @@ def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
         env.runtime.install(need)
 
 
-def setupInfraNetwork(networkName: str, imageName: str, env: Env) -> None:
+def setupInfraNetwork(networkName: str, imageName: ExecArgs, env: Env) -> None:
     """Setup persistent infra pod"""
     try:
         args = ["--detach"]
@@ -327,9 +437,9 @@ def setupRunDir(env: Env) -> None:
 def setupPod(
         env: Env,
         packages: List[str],
-        cacheDir: Path = Path("~/.cache/podenv")) -> str:
+        cacheDir: Path = Path("~/.cache/podenv")) -> ExecArgs:
     imageName = setupRuntime(env, cacheDir)
-    configureRuntime(env, imageName, packages)
+    configureRuntime(env, packages)
     if env.provides.get("network"):
         setupInfraNetwork(env.provides["network"], imageName, env)
 
@@ -368,7 +478,7 @@ def setupPod(
 
 
 def executePod(
-        name: str, args: ExecArgs, image: str, envArgs: ExecArgs) -> None:
+        name: str, args: ExecArgs, image: ExecArgs, envArgs: ExecArgs) -> None:
     podInfo = podmanInspect("container", name)
     if podInfo:
         if podInfo["State"]["Status"].lower() == "running":
@@ -376,5 +486,5 @@ def executePod(
         log.info(f"Cleaning left-over container {name}")
         execute(["podman", "rm", name])
     execute(
-        ["podman", "run", "--rm", "--name", name] + args + [image] + envArgs,
+        ["podman", "run", "--rm", "--name", name] + args + image + envArgs,
         cwd=Path('/'))

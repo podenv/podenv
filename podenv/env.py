@@ -13,7 +13,6 @@
 # under the License.
 
 from __future__ import annotations
-import json
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
@@ -32,38 +31,28 @@ Info = Dict[str, Union[str, Requirements]]
 
 
 class Runtime(ABC):
-    System = {
-        "rpm": {
-            "commands": {
-                "install": "dnf install -y ",
-                "update": "dnf update -y ",
-            }
-        },
-        "apt": {
-            "commands": {
-                "install": "apt-get install -y ",
-                "update": "apt-get update -y "
-            }
-        },
-    }
-
-    def __init__(self, metadataPath: Path):
-        self.metadataPath = metadataPath
-        self.commands: Dict[str, str] = {}
-        self.info: Info = {}
-
-    def updateInfo(self, info: Info) -> None:
-        self.info.update(info)
-        self.metadataPath.write_text(json.dumps(self.info))
-
-    def loadInfo(self) -> None:
-        self.info = json.loads(self.metadataPath.read_text())
-
+    @abstractmethod
     def exists(self) -> bool:
-        return self.metadataPath.exists()
+        ...
 
     @abstractmethod
-    def getExecName(self) -> str:
+    def loadInfo(self) -> None:
+        ...
+
+    @abstractmethod
+    def getCustomizations(self) -> List[str]:
+        ...
+
+    @abstractmethod
+    def getInstalledPackages(self) -> List[str]:
+        ...
+
+    @abstractmethod
+    def needUpdate(self) -> bool:
+        ...
+
+    @abstractmethod
+    def getExecName(self) -> ExecArgs:
         ...
 
     @abstractmethod
