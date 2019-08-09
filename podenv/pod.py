@@ -12,9 +12,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import fcntl
 import logging
 import json
 import os
+import select
 import shlex
 import time
 from abc import abstractmethod
@@ -63,11 +65,41 @@ def execute(
     return None
 
 
-def pread(args: ExecArgs, cwd: Optional[Path] = None) -> str:
+def pread(
+        args: ExecArgs, live: bool = False, cwd: Optional[Path] = None) -> str:
+    if live:
+        return preadLive(args, cwd)
     output = execute(args, cwd, True)
     if output:
         return output
     return ""
+
+
+def preadLive(args: ExecArgs, cwd: Optional[Path] = None) -> str:
+    log.debug("Running %s" % " ".join(args))
+    proc = Popen(
+        args, bufsize=0, start_new_session=True,
+        stdout=PIPE, stderr=PIPE, cwd=str(cwd) if cwd else None)
+    for f in (proc.stdout, proc.stderr):
+        # Make proc output non blocking
+        fd = f.fileno()
+        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+    output = []
+    while True:
+        active = False
+        r, w, x = select.select([proc.stdout, proc.stderr], [], [], 1)
+        for reader in r:
+            data = reader.read()
+            if data:
+                active = True
+                data = data.decode('utf-8')
+                print(data, end='')
+                output.append(data)
+        if not active and proc.poll() is not None:
+            if proc.poll():
+                raise RuntimeError("Failed to run %s" % " ".join(args))
+            return "".join(output)
 
 
 def readProcessJson(args: ExecArgs) -> Any:
@@ -248,8 +280,7 @@ class PodmanRuntime(Runtime):
                     systemType = self.getSystemType(buildId)
                     updateOutput = pread(
                         self.runCommandArgs(buildId) +
-                        shlex.split(self.commands["update"]))
-                    print(updateOutput)
+                        shlex.split(self.commands["update"]), live=True)
                     if "Nothing to do." in updateOutput:
                         break
                     self.commit(buildId, self.name)
