@@ -238,7 +238,7 @@ def setupRuntime(env: Env, cacheDir: Path) -> str:
     """Ensure image is ready."""
     cacheDir = cacheDir.expanduser()
     if not cacheDir.exists():
-        cacheDir.mkdir()
+        cacheDir.mkdir(parents=True)
 
     if env.image and env.rootfs:
         raise RuntimeError(

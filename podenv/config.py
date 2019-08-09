@@ -64,7 +64,7 @@ def initConfig(configDir: Path, configFile: Path) -> None:
             overlays:
               - bash
         """)
-    configDir.mkdir()
+    configDir.mkdir(parents=True)
     configFile.write_text(defaultConfig)
 
 
