@@ -98,6 +98,14 @@ def age(date: str) -> float:
     return time.time() - time.mktime(time.strptime(date, TZFormat))
 
 
+def canUpdate() -> bool:
+    try:
+        return "via" in pread(["ip", "route", "get", "1.1.1.1"])
+    except RuntimeError:
+        log.warning("Skipping update because host is not online")
+    return False
+
+
 def updated(info: Info, maxAge: int = 3600 * 24) -> bool:
     lastUpdate = info.get("updated")
     if isinstance(lastUpdate, str):
@@ -274,7 +282,7 @@ def configureRuntime(env: Env, imageName: str, packages: List[str]) -> None:
         log.info(f"Customizing image {needCustomCommands}")
         env.runtime.customize(needCustomCommands)
 
-    if env.autoUpdate and not updated(env.runtime.info):
+    if env.autoUpdate and not updated(env.runtime.info) and canUpdate():
         log.info(f"Updating {env.runtime}")
         env.runtime.update()
 
