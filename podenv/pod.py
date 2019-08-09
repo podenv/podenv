@@ -180,16 +180,23 @@ def buildahCommit(buildId: BuildId, tagRef: str) -> None:
 
 class PodmanRuntime(Runtime):
     System = {
-        "rpm": {
+        "dnf": {
             "commands": {
                 "install": "dnf install -y ",
                 "update": "dnf update -y ",
             }
         },
-        "apt": {
+        "apt-get": {
             "commands": {
                 "install": "apt-get install -y ",
                 "update": "apt-get update -y "
+            }
+        },
+        "emerge": {
+            "commands": {
+                "install": "emerge -vaDNt --verbose-conflicts ",
+                "update": "emerge -uvaDNt ",
+                "pre-update": "emerge --sync --quiet",
             }
         },
     }
@@ -237,15 +244,18 @@ class PodmanRuntime(Runtime):
 
     def getSystemType(self, buildId: BuildId) -> str:
         systemType = self.info.get("system")
+        # Backward compat
+        if systemType == "rpm":
+            systemType = "dnf"
+        elif systemType == "apt":
+            systemType = "apt-get"
         if not systemType:
-            for systemType, checkCommand in (
-                    ("rpm", "sh -c 'type dnf'"),
-                    ("apt", "sh -c 'type apt'")):
+            for systemType in self.System:
                 try:
-                    self.runCommand(buildId, checkCommand)
+                    self.runCommand(buildId, "sh -c 'type %s'" % systemType)
                     break
                 except RuntimeError:
-                    log.debug("%s failed", checkCommand)
+                    pass
             else:
                 raise RuntimeError("Couldn't discover system type")
         if not isinstance(systemType, str):
@@ -278,6 +288,8 @@ class PodmanRuntime(Runtime):
             try:
                 with self.getSession() as buildId:
                     systemType = self.getSystemType(buildId)
+                    if self.commands.get("pre-update"):
+                        self.runCommand(buildId, self.commands["pre-update"])
                     updateOutput = pread(
                         self.runCommandArgs(buildId) +
                         shlex.split(self.commands["update"]), live=True)
