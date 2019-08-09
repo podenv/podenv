@@ -19,6 +19,7 @@ import os
 import select
 import shlex
 import time
+import urllib.request
 from abc import abstractmethod
 from contextlib import contextmanager
 from hashlib import md5
@@ -63,6 +64,18 @@ def execute(
         output: str = stdout.decode('utf-8')
         return output
     return None
+
+
+def pwrite(args: ExecArgs, stdin: bytes) -> None:
+    log.debug("Running %s" % " ".join(args))
+    proc = Popen(args, stdin=PIPE)
+    try:
+        proc.stdin.write(stdin)
+    except KeyboardInterrupt:
+        proc.terminate()
+        proc.kill()
+    if proc.wait():
+        raise RuntimeError("Failed to run %s" % " ".join(args))
 
 
 def pread(
@@ -369,9 +382,28 @@ class ContainerImage(PodmanRuntime):
         execute(["podman", "tag", tagRef, f"{name}:latest"])
 
 
+def extractUrl(url: str, target: Path) -> None:
+    log.info(f"Downloading {url} to memory...")
+    req = urllib.request.urlopen(url)
+    target.mkdir(parents=True, exist_ok=True)
+    if isSelinux():
+        selinux.chcon(str(target), "system_u:object_r:container_file_t:s0")
+    pwrite(["tar", "-C", str(target),
+            "--exclude", "dev/*", "-xJf", "-"], req.read())
+
+
 class RootfsDirectory(PodmanRuntime):
     def __init__(self, cacheDir: Path, fromRef: str) -> None:
-        super().__init__(cacheDir, os.path.basename(fromRef), fromRef)
+        if fromRef.startswith("http"):
+            self.url = fromRef
+            fromRefPath = Path("~/.config/share/podenv/") / os.path.basename(
+                fromRef).split(".tar")[0]
+        else:
+            fromRefPath = Path(fromRef)
+            self.url = ""
+        self.rootfs = fromRefPath.expanduser().resolve()
+        super().__init__(
+            cacheDir, os.path.basename(fromRefPath), str(self.rootfs))
 
     def getExecName(self) -> ExecArgs:
         return ["--rootfs", self.fromRef]
@@ -383,6 +415,11 @@ class RootfsDirectory(PodmanRuntime):
         return fakeSession()
 
     def runCommand(self, _: BuildId, command: str) -> None:
+        if not self.rootfs.exists():
+            if self.url:
+                extractUrl(self.url, self.rootfs)
+            else:
+                raise RuntimeError(f"{self.rootfs}: does not exist")
         execute(self.runCommandArgs(_) + shlex.split(command))
 
     def runCommandArgs(self, _: BuildId) -> ExecArgs:
