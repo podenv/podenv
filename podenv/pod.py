@@ -206,6 +206,9 @@ class PodmanRuntime(Runtime):
             }
         },
         "emerge": {
+            "mounts": {
+                "/var/db/repos/gentoo": "~/.cache/podenv/portage",
+            },
             "commands": {
                 "install": "emerge -vaDNt --verbose-conflicts ",
                 "update": "emerge -uvaDNt ",
@@ -216,6 +219,7 @@ class PodmanRuntime(Runtime):
 
     def __init__(self, cacheDir: Path, name: str, fromRef: str):
         self.commands: Dict[str, str] = {}
+        self.mounts: Dict[str, str] = {}
         self.info: Info = {}
         self.fromRef: str = fromRef
         self.name: str = name
@@ -227,6 +231,8 @@ class PodmanRuntime(Runtime):
 
     def loadInfo(self) -> None:
         self.info = json.loads(self.metadataPath.read_text())
+        if self.info.get("system") and isinstance(self.info["system"], str):
+            self.setSystemType(self.info["system"])
 
     def getCustomizations(self) -> List[str]:
         customHashes = self.info.get("customHash", [])
@@ -255,13 +261,17 @@ class PodmanRuntime(Runtime):
     def getExecName(self) -> ExecArgs:
         return [self.name]
 
-    def getSystemType(self, buildId: BuildId) -> str:
-        systemType = self.info.get("system")
+    def setSystemType(self, systemType: str) -> None:
         # Backward compat
         if systemType == "rpm":
             systemType = "dnf"
         elif systemType == "apt":
             systemType = "apt-get"
+        self.commands = self.System[systemType]["commands"]
+        self.mounts = self.System[systemType].get("mounts", {})
+
+    def getSystemType(self, buildId: BuildId) -> str:
+        systemType = self.info.get("system")
         if not systemType:
             for systemType in self.System:
                 try:
@@ -274,7 +284,7 @@ class PodmanRuntime(Runtime):
         if not isinstance(systemType, str):
             # Mypy is confused by the type from the for loop
             raise RuntimeError("Invalid systemType")
-        self.commands = self.System[systemType]["commands"]
+        self.setSystemType(systemType)
         return systemType
 
     def create(self) -> None:
@@ -406,7 +416,17 @@ class RootfsDirectory(PodmanRuntime):
             cacheDir, os.path.basename(fromRefPath), str(self.rootfs))
 
     def getExecName(self) -> ExecArgs:
-        return ["--rootfs", self.fromRef]
+        mounts = []
+        for containerDir, hostDir in self.mounts.items():
+            hostPath = Path(hostDir).expanduser().resolve()
+            if not hostPath.exists():
+                hostPath.mkdir(parents=True, exist_ok=True)
+                if isSelinux():
+                    selinux.chcon(
+                        str(hostPath), "system_u:object_r:container_file_t:s0")
+            mounts.extend(["-v", "%s:%s" % (
+                hostPath, Path(containerDir).expanduser().resolve())])
+        return mounts + ["--rootfs", self.fromRef]
 
     def getSession(self, create: bool = False) -> BuildSession:
         @contextmanager
@@ -423,7 +443,7 @@ class RootfsDirectory(PodmanRuntime):
         execute(self.runCommandArgs(_) + shlex.split(command))
 
     def runCommandArgs(self, _: BuildId) -> ExecArgs:
-        return ["podman", "run", "--rm", "-t", "--rootfs", self.fromRef]
+        return ["podman", "run", "--rm", "-t"] + self.getExecName()
 
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         # Rootfs doesn't have metadata
