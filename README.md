@@ -35,8 +35,6 @@ environments:
       LC_ALL: en_US.UTF-8
       SHLVL: 3
       TERM: xterm
-    imageCustomizations:
-      - sed -e 's/nodocs//' -i /etc/dnf/dnf.conf
 
   shell:
     capabilities:
@@ -51,6 +49,8 @@ environments:
           alias ls='ls -ap --color=auto'
     command:
       - /bin/bash
+    imageCustomizations:
+      - sed -e 's/nodocs//' -i /etc/dnf/dnf.conf
 
   ansible:
     parent: shell
