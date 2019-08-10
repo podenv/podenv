@@ -460,7 +460,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
         if len(cliArgs) > 1:
             raise RuntimeError("Multiple file input %s" % cliArgs)
         if cliArgs:
-            fileArg = Path(cliArgs[0]).expanduser().resolve(strict=True)
+            fileArg = Path(cliArgs.pop()).expanduser().resolve(strict=True)
             env.ctx.mounts[Path("/tmp") / fileArg.name] = fileArg
 
     commandArgs: List[str] = []
