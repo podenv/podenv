@@ -168,9 +168,11 @@ as the one from this project:
 $ cat ./default.podenv
 capabilities:
   mountCwd: True
+  uidmap: True
 packages:
   - python3-mypy
   - python3-flake8
+  - make
 command:
   - make
 $ podenv

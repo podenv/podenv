@@ -2,9 +2,11 @@
 ---
 capabilities:
   mountCwd: True
+  uidmap: True
 packages:
   - python3-mypy
   - python3-flake8
+  - python3-pyyaml
   - make
 command:
   - make
