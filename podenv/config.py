@@ -26,13 +26,15 @@ from podenv.env import Env
 
 
 class Config:
-    def __init__(self, schema: Dict[str, Any]) -> None:
+    def __init__(self, configFile: Path) -> None:
+        schema: Dict[str, Any] = safe_load(configFile.read_text())
         self.dns: Optional[str] = schema.get('system', {}).get('dns')
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
         for envName, envSchema in schema.get('environments', {}).items():
-            self.envs[envName] = Env(envName, **envSchema)
+            self.envs[envName] = Env(
+                envName, configFile=configFile, **envSchema)
 
 
 def initConfig(configDir: Path, configFile: Path) -> None:
@@ -86,7 +88,7 @@ def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
     configFile = configDir / "config.yaml"
     if not configDir.exists():
         initConfig(configDir, configFile)
-    conf = Config(safe_load(configFile.read_text()))
+    conf = Config(configFile)
     conf.overlaysDir = configDir / "overlay"
     if not conf.overlaysDir.exists():
         initOverlays(conf.overlaysDir)
@@ -95,7 +97,8 @@ def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
     if localConf.exists():
         # Create profile name
         envName = Path().resolve().name
-        conf.envs[envName] = Env(envName, **safe_load(localConf.read_text()))
+        conf.envs[envName] = Env(
+            envName, configFile=localConf, **safe_load(localConf.read_text()))
         conf.default = envName
     return conf
 

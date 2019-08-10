@@ -186,6 +186,7 @@ Name                 | Type            | Doc                                    
 -------------------- | --------------- | ---------------------------------------- |
 name                 | str             | The name of the environment              |
 parent               | str             | A parent environment name to inherit attributes from. |
+desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
 image                | str             | The container image reference            |
 rootfs               | str             | The path of a rootfs                     |
 dns                  | str             | A custom DNS server                      |

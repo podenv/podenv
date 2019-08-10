@@ -33,7 +33,7 @@ try:
 except ImportError:
     HAS_SELINUX = False
 
-from podenv.env import Env, ExecArgs, Info, Runtime, getUidMap
+from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -553,6 +553,19 @@ def setupInfraNetwork(networkName: str, imageName: ExecArgs, env: Env) -> None:
         pass
 
 
+def setupDesktopFile(
+        desktopEntry: DesktopEntry,
+        appDir: Path = Path("~/.local/share/applications")) -> None:
+    appDir = appDir.expanduser().resolve()
+    if not appDir.exists():
+        appDir.mkdir(parents=True)
+    desktopFile = appDir / (desktopEntry.envName + ".desktop")
+    desktopContent = desktopEntry.format()
+    if not desktopFile.exists() or desktopContent != desktopFile.read_text():
+        desktopFile.write_text(desktopContent)
+        log.info(f"{desktopFile}: wrote entry spec")
+
+
 def setupRunDir(env: Env) -> None:
     path = env.runDir
     if path and not path.exists():
@@ -571,6 +584,9 @@ def setupPod(
     configureRuntime(env, packages)
     if env.provides.get("network"):
         setupInfraNetwork(env.provides["network"], imageName, env)
+
+    if env.desktop:
+        setupDesktopFile(env.desktop)
 
     for containerPath, hostPath in sorted(env.ctx.mounts.items()):
         if not hostPath.exists() and str(hostPath).startswith(str(env.runDir)):
