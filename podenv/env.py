@@ -28,6 +28,7 @@ except ImportError:
 ExecArgs = List[str]
 Requirements = List[str]
 Info = Dict[str, Union[str, Requirements]]
+Overlay = Union[str, Dict[str, str]]
 
 
 class Runtime(ABC):
@@ -148,7 +149,7 @@ class Env:
         doc="List of objects the environment provides"))
     requires: Dict[str, str] = field(default_factory=dict, metadata=dict(
         doc="List of objects the environment requires"))
-    overlays: List[str] = field(default_factory=list, metadata=dict(
+    overlays: List[Overlay] = field(default_factory=list, metadata=dict(
         doc="List of overlay to copy in runtime directory"))
     home: str = field(default="", metadata=dict(
         doc="Container home path mount"))

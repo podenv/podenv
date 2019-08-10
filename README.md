@@ -43,7 +43,12 @@ environments:
       terminal: True
       mountRun: True
     overlays:
-      - bash
+      - .bashrc: |
+          if [ -f /etc/bashrc ]; then
+            . /etc/bashrc
+          fi
+          export PS1="\[\033[01;32m\]\h \[\033[01;34m\]\w \$ \[\033[00m\]"
+          alias ls='ls -ap --color=auto'
     command:
       - /bin/bash
 
@@ -192,7 +197,7 @@ mounts               | Dict[str, str]  | Extra mountpoints                      
 capabilities         | Dict[str, bool] | List of capabilities                     |
 provides             | Dict[str, str]  | List of objects the environment provides |
 requires             | Dict[str, str]  | List of objects the environment requires |
-overlays             | List[str]       | List of overlay to copy in runtime directory |
+overlays             | List[Overlay]   | List of overlay to copy in runtime directory |
 home                 | str             | Container home path mount                |
 shmsize              | str             | The shm-size value string                |
 
