@@ -258,9 +258,6 @@ class PodmanRuntime(Runtime):
     def __repr__(self) -> str:
         return self.name
 
-    def getExecName(self) -> ExecArgs:
-        return [self.name]
-
     def setSystemType(self, systemType: str) -> None:
         # Backward compat
         if systemType == "rpm":
@@ -299,7 +296,7 @@ class PodmanRuntime(Runtime):
             for config in ["--author='%s'" % os.environ["USER"],
                            "--created-by podenv"]:
                 self.applyConfig(buildId, config)
-            self.commit(buildId, self.name)
+            self.commit(buildId)
         self.updateInfo(dict(created=now(),
                              updated="1970-01-01T00:00:00",
                              packages=[],
@@ -318,7 +315,7 @@ class PodmanRuntime(Runtime):
                         shlex.split(self.commands["update"]), live=True)
                     if "Nothing to do." in updateOutput:
                         break
-                    self.commit(buildId, self.name)
+                    self.commit(buildId)
                     break
             except RuntimeError:
                 if retry == 2:
@@ -331,7 +328,7 @@ class PodmanRuntime(Runtime):
             systemType = self.getSystemType(buildId)
             self.runCommand(
                 buildId, self.commands["install"] + " ".join(packages))
-            self.commit(buildId, self.name)
+            self.commit(buildId)
         self.updateInfo(dict(system=systemType, packages=list(packages.union(
                 self.info["packages"]))))
 
@@ -342,8 +339,12 @@ class PodmanRuntime(Runtime):
                 execute(self.runCommandArgs(buildId) +
                         ["/bin/bash", "-c", command])
                 knownHash.add(commandHash)
-            self.commit(buildId, self.name)
+            self.commit(buildId)
         self.updateInfo(dict(customHash=list(knownHash)))
+
+    @abstractmethod
+    def getExecName(self) -> ExecArgs:
+        ...
 
     @abstractmethod
     def getSession(self, create: bool = False) -> BuildSession:
@@ -362,20 +363,27 @@ class PodmanRuntime(Runtime):
         ...
 
     @abstractmethod
-    def commit(self, buildId: BuildId, name: str) -> None:
+    def commit(self, buildId: BuildId) -> None:
         ...
 
 
 class ContainerImage(PodmanRuntime):
     def __init__(
             self, cacheDir: Path, fromRef: str, localName: str = "") -> None:
+        self.localName: str = "localhost/podenv/" + fromRef.split(
+            '/', 1)[-1].replace(':', '-')
         super().__init__(cacheDir,
-                         localName if localName else fromRef.replace(
-                             ':', '-').replace('/', '_'),
+                         fromRef.replace(':', '-').replace('/', '_'),
                          fromRef)
 
+    def __repr__(self) -> str:
+        return self.localName
+
+    def getExecName(self) -> ExecArgs:
+        return [self.localName]
+
     def getSession(self, create: bool = False) -> BuildSession:
-        return buildah(self.fromRef if create else self.name)
+        return buildah(self.fromRef if create else self.localName)
 
     def runCommand(self, buildId: BuildId, command: str) -> None:
         buildahRun(buildId, command)
@@ -386,10 +394,10 @@ class ContainerImage(PodmanRuntime):
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         buildahConfig(buildId, config)
 
-    def commit(self, buildId: BuildId, name: str) -> None:
-        tagRef = "%s:%s" % (name, now().replace(':', '-'))
+    def commit(self, buildId: BuildId) -> None:
+        tagRef = "%s:%s" % (self.localName, now().replace(':', '-'))
         buildahCommit(buildId, tagRef)
-        execute(["podman", "tag", tagRef, f"{name}:latest"])
+        execute(["podman", "tag", tagRef, f"{self.localName}:latest"])
 
 
 def extractUrl(url: str, target: Path) -> None:
@@ -449,7 +457,7 @@ class RootfsDirectory(PodmanRuntime):
         # Rootfs doesn't have metadata
         pass
 
-    def commit(self, buildId: BuildId, name: str) -> None:
+    def commit(self, buildId: BuildId) -> None:
         # Rootfs doesn't have layer
         pass
 
