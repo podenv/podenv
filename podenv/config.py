@@ -119,8 +119,8 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
             raise RuntimeError("Circular dependencies detected %s in %s" % (
                 parent, history))
         parentEnv = conf.envs[parent]
-        resolvParents(parentEnv.parent, history + [parent])
         env.applyParent(parentEnv)
+        resolvParents(parentEnv.parent, history + [parent])
 
     try:
         variant = envName.split(".")
