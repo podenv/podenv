@@ -423,7 +423,8 @@ def validateEnv(env: Env) -> None:
             if hostPath.exists() and \
                selinux.getfilecon(str(hostPath))[1].split(':')[2] != label:
                 warn(f"SELinux is disabled because {hostPath} doesn't have "
-                     f"the {label} label.")
+                     f"the {label} label. To set the label run: "
+                     f"chcon -Rt {label} {hostPath}")
                 selinuxCap(False, env.ctx, env)
 
     # Check mount points permissions
