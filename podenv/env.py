@@ -272,7 +272,7 @@ def x11Cap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share x11 socket"
     if active:
         ctx.mounts[Path("/tmp/.X11-unix")] = Path("/tmp/.X11-unix")
-        ctx.environ["DISPLAY"] = ":0"
+        ctx.environ["DISPLAY"] = os.environ["DISPLAY"]
 
 
 def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -281,6 +281,9 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
         ctx.mounts[ctx.xdgDir / "pulse"] = \
             Path(os.environ["XDG_RUNTIME_DIR"]) / "pulse"
+        # Force PULSE_SERVER environment so that when there are more than
+        # one running, pulse client aren't confused by different uid
+        ctx.environ["PULSE_SERVER"] = str(ctx.xdgDir / "pulse" / "native")
 
 
 def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
