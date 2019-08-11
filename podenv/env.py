@@ -210,8 +210,8 @@ def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
         ctx.xdgDir = Path("/run/user/0")
     else:
         ctx.home = Path("/home/user")
-        ctx.xdgDir = Path("/run/user/1000")
-        ctx.args("--user", "1000")
+        ctx.xdgDir = Path("/run/user/{uid}".format(uid=os.geteuid()))
+        ctx.args("--user", "{uid}".format(uid=os.geteuid()))
     ctx.environ["XDG_RUNTIME_DIR"] = str(ctx.xdgDir)
     ctx.environ["HOME"] = str(ctx.home)
 

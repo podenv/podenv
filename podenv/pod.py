@@ -189,8 +189,9 @@ class ContainerImage(Runtime):
         with buildah(self.fromRef) as buildId:
             systemType = self.getSystemType(buildId)
             for command in ["useradd -u 1000 -m user",
-                            "mkdir -p /run/user/1000",
-                            "chown 1000:1000 /run/user/1000",
+                            "mkdir -p /run/user/{uid}".format(uid=os.geteuid()),
+                            "chown {uid}:{uid} /run/user/{uid}".format(
+                                uid=os.geteuid()),
                             "mkdir -p /run/user/0",
                             "chown 0:0 /run/user/0"]:
                 buildahRun(buildId, command)
