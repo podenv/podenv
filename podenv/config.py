@@ -42,6 +42,9 @@ class Config:
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
+        distConfig = Path("/usr/share/podenv/config.yaml")
+        if distConfig.exists():
+            self.loadEnvs(safe_load(distConfig.read_text()), distConfig)
         for extraConfig in schema.get('system', {}).get('extraConfigs', []):
             extraConfigFile = Path(extraConfig)
             if not extraConfigFile.exists() and extraConfig.startswith("http"):
