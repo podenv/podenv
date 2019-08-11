@@ -176,12 +176,8 @@ def buildah(fromRef: str) -> Generator[BuildId, None, None]:
         execute(["buildah", "delete", ctr], textOutput=True)
 
 
-def buildahRunCommand(buildId: BuildId) -> ExecArgs:
-    return ["buildah", "run", "--network", "host", "--user", "0:0", buildId]
-
-
-def buildahRun(buildId: BuildId, command: str) -> None:
-    execute(buildahRunCommand(buildId) + shlex.split(command))
+def buildahRunCommand() -> ExecArgs:
+    return ["buildah", "run", "--network", "host", "--user", "0:0"]
 
 
 def buildahConfig(buildId: BuildId, config: str) -> None:
@@ -198,6 +194,9 @@ class PodmanRuntime(Runtime):
             "commands": {
                 "install": "dnf install -y ",
                 "update": "dnf update -y ",
+            },
+            "mounts": {
+                "/var/cache/dnf": "~/.cache/podenv/dnf"
             }
         },
         "apt-get": {
@@ -284,6 +283,20 @@ class PodmanRuntime(Runtime):
             raise RuntimeError("Invalid systemType")
         self.setSystemType(systemType)
         return systemType
+
+    def getSystemMounts(self) -> ExecArgs:
+        """Mount points needed to manage the runtime image"""
+        mounts = []
+        for containerDir, hostDir in self.mounts.items():
+            hostPath = Path(hostDir).expanduser().resolve()
+            if not hostPath.exists():
+                hostPath.mkdir(parents=True, exist_ok=True)
+                if isSelinux():
+                    selinux.chcon(
+                        str(hostPath), "system_u:object_r:container_file_t:s0")
+            mounts.extend(["-v", "%s:%s" % (
+                hostPath, Path(containerDir).expanduser().resolve())])
+        return mounts
 
     def create(self) -> None:
         with self.getSession(create=True) as buildId:
@@ -387,10 +400,10 @@ class ContainerImage(PodmanRuntime):
         return buildah(self.fromRef if create else self.localName)
 
     def runCommand(self, buildId: BuildId, command: str) -> None:
-        buildahRun(buildId, command)
+        execute(self.runCommandArgs(buildId) + shlex.split(command))
 
     def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
-        return buildahRunCommand(buildId)
+        return buildahRunCommand() + self.getSystemMounts() + [buildId]
 
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         buildahConfig(buildId, config)
@@ -440,17 +453,7 @@ class RootfsDirectory(PodmanRuntime):
             cacheDir, os.path.basename(fromRefPath), str(self.rootfs))
 
     def getExecName(self) -> ExecArgs:
-        mounts = []
-        for containerDir, hostDir in self.mounts.items():
-            hostPath = Path(hostDir).expanduser().resolve()
-            if not hostPath.exists():
-                hostPath.mkdir(parents=True, exist_ok=True)
-                if isSelinux():
-                    selinux.chcon(
-                        str(hostPath), "system_u:object_r:container_file_t:s0")
-            mounts.extend(["-v", "%s:%s" % (
-                hostPath, Path(containerDir).expanduser().resolve())])
-        return mounts + ["--rootfs", self.fromRef]
+        return ["--rootfs", self.fromRef]
 
     def getSession(self, create: bool = False) -> BuildSession:
         @contextmanager
@@ -467,7 +470,8 @@ class RootfsDirectory(PodmanRuntime):
         execute(self.runCommandArgs(_) + shlex.split(command))
 
     def runCommandArgs(self, _: BuildId) -> ExecArgs:
-        return ["podman", "run", "--rm", "-t"] + self.getExecName()
+        return ["podman", "run", "--rm", "-t"] + \
+            self.getSystemMounts() + self.getExecName()
 
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         # Rootfs doesn't have metadata
