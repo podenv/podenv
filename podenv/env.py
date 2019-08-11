@@ -280,7 +280,7 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
     if active:
         ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
         ctx.mounts[ctx.xdgDir / "pulse"] = \
-            Path(ctx.environ["XDG_RUNTIME_DIR"]) / "pulse"
+            Path(os.environ["XDG_RUNTIME_DIR"]) / "pulse"
 
 
 def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
