@@ -159,6 +159,8 @@ class Env:
     """The user provided container representation"""
     name: str = field(default="", metadata=dict(
         doc="The name of the environment"))
+    description: Optional[str] = field(default="", metadata=dict(
+        doc="Environment description"))
     parent: str = field(default="", metadata=dict(
         doc="A parent environment name to inherit attributes from."))
     desktop: Optional[DesktopEntry] = field(default=None, metadata=dict(
