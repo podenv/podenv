@@ -32,7 +32,16 @@ class Config:
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
-        for envName, envSchema in schema.get('environments', {}).items():
+        for extraConfig in schema.get('system', {}).get('extraConfigs', []):
+            extraConfigFile = Path(extraConfig)
+            if extraConfigFile.exists():
+                self.loadEnvs(
+                    safe_load(extraConfigFile.read_text()), extraConfigFile)
+
+        self.loadEnvs(schema.get('environments', {}), configFile)
+
+    def loadEnvs(self, schema: Dict[str, Any], configFile: Path) -> None:
+        for envName, envSchema in schema.items():
             self.envs[envName] = Env(
                 envName, configFile=configFile, **envSchema)
 
