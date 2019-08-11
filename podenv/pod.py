@@ -39,6 +39,7 @@ log = logging.getLogger("podenv")
 BuildId = str
 BuildSession = ContextManager[BuildId]
 TZFormat = "%Y-%m-%dT%H:%M:%S"
+DAY = 3600 * 24
 
 
 class AlreadyRunning(Exception):
@@ -154,7 +155,7 @@ def canUpdate() -> bool:
     return False
 
 
-def updated(lastUpdate: str, maxAge: int = 3600 * 24) -> bool:
+def updated(lastUpdate: str, maxAge: int = DAY) -> bool:
     return age(lastUpdate) < maxAge
 
 
@@ -226,7 +227,7 @@ class PodmanRuntime(Runtime):
         self.metadataPath = Path(
             str(cacheDir / self.name).rstrip('/') + '.json')
 
-    def exists(self) -> bool:
+    def exists(self, autoUpdate: bool) -> bool:
         return self.metadataPath.exists()
 
     def loadInfo(self) -> None:
@@ -399,6 +400,21 @@ class ContainerImage(PodmanRuntime):
         buildahCommit(buildId, tagRef)
         execute(["podman", "tag", tagRef, f"{self.localName}:latest"])
 
+    def exists(self, autoUpdate: bool) -> bool:
+        if super().exists(autoUpdate):
+            self.loadInfo()
+            if not autoUpdate:
+                return True
+            if not isinstance(self.info["created"], str):
+                raise RuntimeError("Invalid created metadata")
+            if age(self.info["created"]) > DAY * 21 and self.needUpdate():
+                log.info("Re-creating base layer because it is too old")
+                execute(["podman", "pull", self.fromRef])
+                self.info.clear()
+                return False
+            return True
+        return False
+
 
 def extractUrl(url: str, target: Path) -> None:
     log.info(f"Downloading {url} to memory...")
@@ -480,7 +496,7 @@ def setupRuntime(env: Env, cacheDir: Path) -> ExecArgs:
     if not env.runtime:
         raise NotImplementedError()
 
-    if not env.runtime.exists():
+    if not env.runtime.exists(env.autoUpdate):
         log.info(f"Creating {env.runtime}")
         env.runtime.create()
     else:

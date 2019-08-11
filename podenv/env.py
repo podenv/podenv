@@ -33,7 +33,7 @@ Overlay = Union[str, Dict[str, str]]
 
 class Runtime(ABC):
     @abstractmethod
-    def exists(self) -> bool:
+    def exists(self, autoUpdate: bool) -> bool:
         ...
 
     @abstractmethod
