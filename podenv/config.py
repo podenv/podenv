@@ -24,6 +24,7 @@ from yaml import safe_load
 
 from podenv.pod import downloadUrl, outdated
 from podenv.env import Env
+from podenv import defaults
 
 
 def isGithubProject(url: str) -> bool:
@@ -42,6 +43,7 @@ class Config:
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
+        self.loadEnvs(defaults.environments, Path(defaults.__file__))
         distConfig = Path("/usr/share/podenv/config.yaml")
         if distConfig.exists():
             self.loadEnvs(safe_load(distConfig.read_text()), distConfig)
