@@ -22,7 +22,17 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional
 from yaml import safe_load
 
+from podenv.pod import downloadUrl, outdated
 from podenv.env import Env
+
+
+def isGithubProject(url: str) -> bool:
+    return len(url.strip('/').split('/')) == 5
+
+
+def urlToFilename(url: str) -> str:
+    return url.replace('https://', '').replace('http://', '').replace(
+        '/', ':').replace('.', '-')
 
 
 class Config:
@@ -34,9 +44,20 @@ class Config:
         self.overlaysDir: Optional[Path] = None
         for extraConfig in schema.get('system', {}).get('extraConfigs', []):
             extraConfigFile = Path(extraConfig)
-            if extraConfigFile.exists():
-                self.loadEnvs(
-                    safe_load(extraConfigFile.read_text()), extraConfigFile)
+            if not extraConfigFile.exists() and extraConfig.startswith("http"):
+                if isGithubProject(extraConfig):
+                    rawUrl = "https://raw.githubusercontent.com/"
+                    rawUrl += extraConfig.strip('/').split('/', 3)[-1]
+                    rawUrl = rawUrl + "/master/config.yaml"
+                else:
+                    rawUrl = extraConfig
+                extraConfigFile = (
+                    configFile.parent / "extras" /
+                    urlToFilename(extraConfig)).with_suffix(".yaml")
+                if not extraConfigFile.exists() or outdated(extraConfigFile):
+                    downloadUrl(rawUrl, extraConfigFile)
+            self.loadEnvs(
+                safe_load(extraConfigFile.read_text()), extraConfigFile)
 
         self.loadEnvs(schema.get('environments', {}), configFile)
 

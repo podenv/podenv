@@ -160,6 +160,10 @@ def updated(lastUpdate: str, maxAge: int = DAY) -> bool:
     return age(lastUpdate) < maxAge
 
 
+def outdated(path: Path, maxAge: int = DAY * 7) -> bool:
+    return os.stat(path).st_mtime > (time.time() - maxAge)
+
+
 def isSelinux() -> bool:
     return HAS_SELINUX and Path("/sys/fs/selinux/").exists()
 
@@ -438,6 +442,13 @@ def extractUrl(url: str, target: Path) -> None:
         selinux.chcon(str(target), "system_u:object_r:container_file_t:s0")
     pwrite(["tar", "-C", str(target),
             "--exclude", "dev/*", "-xJf", "-"], req.read())
+
+
+def downloadUrl(url: str, target: Path) -> None:
+    log.info(f"Downloading {url} to {target}...")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    req = urllib.request.urlopen(url)
+    target.write_bytes(req.read())
 
 
 class RootfsDirectory(PodmanRuntime):
