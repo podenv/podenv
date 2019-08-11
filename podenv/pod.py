@@ -59,6 +59,7 @@ def execute(
     except KeyboardInterrupt:
         proc.terminate()
         proc.kill()
+        raise
     if proc.wait():
         raise RuntimeError("Failed to run %s" % " ".join(args))
     if textOutput:
@@ -625,3 +626,7 @@ def executePod(
     execute(
         ["podman", "run", "--rm", "--name", name] + args + image + envArgs,
         cwd=Path('/'))
+
+
+def killPod(name: str) -> None:
+    pread(["podman", "kill", name])

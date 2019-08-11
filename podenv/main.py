@@ -17,7 +17,7 @@ import logging
 import sys
 
 from podenv.config import loadConfig, loadEnv
-from podenv.pod import setupPod, executePod
+from podenv.pod import killPod, setupPod, executePod
 from podenv.env import Capabilities, Env, prepareEnv, cleanupEnv
 
 log = logging.getLogger("podenv")
@@ -84,6 +84,9 @@ def run() -> None:
     try:
         executePod(containerName, containerArgs, imageName, envArgs)
         podResult = 0
+    except KeyboardInterrupt:
+        killPod(containerName)
+        podResult = 1
     except RuntimeError:
         podResult = 1
 
