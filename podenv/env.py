@@ -451,11 +451,12 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     env.ctx.syscaps.extend(env.syscaps)
     env.ctx.environ.update(env.environ)
 
-    for containerPath, hostPath in env.mounts.items():
+    for containerPath, hostPathStr in env.mounts.items():
+        hostPath = Path(hostPathStr).expanduser()
         if containerPath.startswith("~/"):
-            env.ctx.mounts[env.ctx.home / containerPath[2:]] = Path(hostPath)
+            env.ctx.mounts[env.ctx.home / containerPath[2:]] = hostPath
         else:
-            env.ctx.mounts[Path(containerPath)] = Path(hostPath)
+            env.ctx.mounts[Path(containerPath)] = hostPath
 
     # Look for file argument requirement
     fileArg: Optional[Path] = None
