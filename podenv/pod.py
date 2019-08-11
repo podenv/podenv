@@ -398,7 +398,7 @@ class ContainerImage(PodmanRuntime):
     def commit(self, buildId: BuildId) -> None:
         tagRef = "%s:%s" % (self.localName, now().replace(':', '-'))
         buildahCommit(buildId, tagRef)
-        execute(["podman", "tag", tagRef, f"{self.localName}:latest"])
+        execute(["buildah", "tag", tagRef, f"{self.localName}:latest"])
 
     def exists(self, autoUpdate: bool) -> bool:
         if super().exists(autoUpdate):
