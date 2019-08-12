@@ -17,6 +17,7 @@ This module handles configuration schema.
 """
 
 from __future__ import annotations
+from logging import getLogger
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,9 @@ from yaml import safe_load
 from podenv.pod import downloadUrl, outdated
 from podenv.env import Env
 from podenv import defaults
+
+
+log = getLogger("podenv")
 
 
 def isGithubProject(url: str) -> bool:
@@ -153,6 +157,9 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
         if parent in history:
             raise RuntimeError("Circular dependencies detected %s in %s" % (
                 parent, history))
+        if parent not in conf.envs:
+            log.error(
+                "%s: parent does not exist (history: %s)", parent, history)
         parentEnv = conf.envs[parent]
         env.applyParent(parentEnv)
         resolvParents(parentEnv.parent, history + [parent])
@@ -167,7 +174,7 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
             env.name = f"{variantName}-{envName}"
         resolvParents(env.parent, [])
     except KeyError:
-        raise RuntimeError(f"{envName}: couldn't find environment")
+        raise RuntimeError(f"{envName}: couldn't load the environment")
 
     env.overlaysDir = conf.overlaysDir
     env.runDir = Path("/tmp/podenv") / env.name
