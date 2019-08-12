@@ -106,6 +106,25 @@ environments = dict(
         parent="emacsNox",
         capabilities=dict(x11)),
 
+    codium=dict(
+        parent="fedora",
+        imageCustomizations=[
+            """cat << EOF > /etc/yum.repos.d/vscodium.repo
+[gitlab.com_paulcarroty_vscodium_repo]
+name=gitlab.com_paulcarroty_vscodium_repo
+baseurl=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/repos/rpms/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+EOF"""],
+        capabilities=dict(x11),
+        packages=["which", "codium"],
+        home="~/.config/podhome/codium",
+        command=[
+            # TODO: add support for application which pre-fork
+            "bash", "-c", "codium; echo 'press ctrl-c to quit'; sleep Inf"]),
+
     # Browser
     firefoxLight=dict(
         parent="fedora",
