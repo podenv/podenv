@@ -136,6 +136,14 @@ def podmanInspect(objType: str, name: str) -> Dict[str, Any]:
     return info
 
 
+def podmanExists(objType: str, name: str) -> bool:
+    try:
+        execute(["podman", objType, "exists", name])
+        return True
+    except RuntimeError:
+        return False
+
+
 def hash(message: str) -> str:
     return md5(message.encode('utf-8')).hexdigest()
 
@@ -420,9 +428,12 @@ class ContainerImage(PodmanRuntime):
 
     def exists(self, autoUpdate: bool) -> bool:
         if super().exists(autoUpdate):
-            self.loadInfo()
+            if not podmanExists("image", self.localName):
+                return False
             if not autoUpdate:
                 return True
+            # Check if image needs to be rebuilt from scratch
+            self.loadInfo()
             if not isinstance(self.info["created"], str):
                 raise RuntimeError("Invalid created metadata")
             if age(self.info["created"]) > DAY * 21 and self.needUpdate():
