@@ -439,12 +439,13 @@ def validateEnv(env: Env) -> None:
 
     # Check if SELinux will block socket access
     if env.capabilities.get("selinux"):
-        for cap in ("x11", "tun"):
+        for cap in ("x11", "tun", "pulseaudio"):
             if env.capabilities.get(cap):
                 warn(
                     f"SELinux is disabled because capability '{cap}' need "
                     "extra type enforcement that are not currently supported.")
                 selinuxCap(False, env.ctx, env)
+                env.capabilities["selinux"] = False
 
     # Check for uid permissions
     if not env.capabilities.get("root") and not env.capabilities.get("uidmap"):
