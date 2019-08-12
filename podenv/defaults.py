@@ -60,7 +60,7 @@ environments = dict(
         command=["xeyes"]),
 
     # File viewer/editor
-    pdf=dict(
+    mupdf=dict(
         description="Display a pdf file",
         parent="fedora",
         capabilities=dict(x11),
@@ -91,6 +91,20 @@ environments = dict(
         home="~/.config/podhome/mumble",
         packages=["mumble"],
         command=["mumble"]),
+
+    # IDE
+    emacsNox=dict(
+        description="Extensible text editor (terminal mode)",
+        parent="fedora",
+        capabilities=dict(on("terminal")),
+        home="~/.config/podhome/emacs",
+        packages=["emacs"],
+        command=["emacs"]),
+
+    emacs=dict(
+        description="Extensible text editor",
+        parent="emacsNox",
+        capabilities=dict(x11)),
 
     # Browser
     firefoxLight=dict(
