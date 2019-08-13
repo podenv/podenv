@@ -204,6 +204,7 @@ requires             | Dict[str, str]  | List of objects the environment require
 overlays             | List[Overlay]   | List of overlay to copy in runtime directory |
 home                 | str             | Container home path mount                |
 shmsize              | str             | The shm-size value string                |
+ports                | List[str]       | List of port to expose on the host       |
 
 
 The available capabilities are:
@@ -216,6 +217,7 @@ terminal             | interactive mode                                         
 ipc                  | share host ipc                                               |
 x11                  | share x11 socket                                             |
 pulseaudio           | share pulseaudio socket                                      |
+git                  | share .gitconfig and excludesfile                            |
 ssh                  | share ssh agent and keys                                     |
 gpg                  | share gpg agent                                              |
 webcam               | share webcam device                                          |
@@ -239,10 +241,10 @@ $ podenv --help
 usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
               [--privileged] [--no-privileged] [--terminal] [--no-terminal]
               [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
-              [--no-pulseaudio] [--ssh] [--no-ssh] [--gpg] [--no-gpg]
-              [--webcam] [--no-webcam] [--dri] [--no-dri] [--tun] [--no-tun]
-              [--seccomp] [--no-seccomp] [--selinux] [--no-selinux] [--setuid]
-              [--no-setuid] [--ptrace] [--no-ptrace] [--network]
+              [--no-pulseaudio] [--git] [--no-git] [--ssh] [--no-ssh] [--gpg]
+              [--no-gpg] [--webcam] [--no-webcam] [--dri] [--no-dri] [--tun]
+              [--no-tun] [--seccomp] [--no-seccomp] [--selinux] [--no-selinux]
+              [--setuid] [--no-setuid] [--ptrace] [--no-ptrace] [--network]
               [--no-network] [--mountCwd] [--no-mountCwd] [--mountRun]
               [--no-mountRun] [--autoUpdate] [--no-autoUpdate] [--uidmap]
               [--no-uidmap]
@@ -272,6 +274,8 @@ optional arguments:
   --no-x11              Disable x11 capibility
   --pulseaudio          Enable capability: share pulseaudio socket
   --no-pulseaudio       Disable pulseaudio capibility
+  --git                 Enable capability: share .gitconfig and excludesfile
+  --no-git              Disable git capibility
   --ssh                 Enable capability: share ssh agent and keys
   --no-ssh              Disable ssh capibility
   --gpg                 Enable capability: share gpg agent

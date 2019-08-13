@@ -347,6 +347,30 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.environ["PULSE_SERVER"] = str(ctx.xdgDir / "pulse" / "native")
 
 
+def gitCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share .gitconfig and excludesfile"
+    if active:
+        gitconfigFile = Path("~/.gitconfig").expanduser().resolve()
+        if gitconfigFile.is_file():
+            ctx.mounts[ctx.home / ".gitconfig"] = gitconfigFile
+            for line in gitconfigFile.read_text().split('\n'):
+                line = line.strip()
+                if line.startswith("excludesfile"):
+                    excludeFileName = line.split('=')[1].strip()
+                    excludeFile = Path(
+                        excludeFileName).expanduser().resolve()
+                    if excludeFile.is_file():
+                        ctx.mounts[ctx.home / excludeFileName.replace(
+                            '~/', '')] = excludeFile
+                # TODO: improve git crential file discovery
+                elif "store --file" in line:
+                    storeFileName = line.split()[-1]
+                    storeFile = Path(storeFileName).expanduser().resolve()
+                    if storeFile.is_file():
+                        ctx.mounts[ctx.home / storeFileName.replace(
+                            '~/', '')] = storeFile
+
+
 def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share ssh agent and keys"
     if active:
@@ -422,6 +446,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         ipcCap,
         x11Cap,
         pulseaudioCap,
+        gitCap,
         sshCap,
         gpgCap,
         webcamCap,
