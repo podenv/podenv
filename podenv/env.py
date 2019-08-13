@@ -206,6 +206,8 @@ class Env:
         doc="Container home path mount"))
     shmsize: str = field(default="", metadata=dict(
         doc="The shm-size value string"))
+    ports: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of port to expose on the host"))
 
     # Internal attribute
     runtime: Optional[Runtime] = field(default=None, metadata=dict(
@@ -507,6 +509,9 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
         args.append(f"--shm-size={env.shmsize}")
     if env.home:
         env.ctx.mounts[env.ctx.home] = Path(env.home).expanduser().resolve()
+    if env.ports:
+        for port in env.ports:
+            args.append(f"--publish={port}")
 
     env.ctx.syscaps.extend(env.syscaps)
     env.ctx.environ.update(env.environ)
