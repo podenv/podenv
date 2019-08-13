@@ -611,6 +611,7 @@ def setupPod(
         setupDesktopFile(env.desktop)
 
     for containerPath, hostPath in sorted(env.ctx.mounts.items()):
+        hostPath = hostPath.expanduser().resolve()
         if not hostPath.exists() and str(hostPath).startswith(str(env.runDir)):
             setupRunDir(env)
             if hostPath.name == "tmp":

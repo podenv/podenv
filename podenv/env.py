@@ -512,7 +512,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     env.ctx.environ.update(env.environ)
 
     for containerPath, hostPathStr in env.mounts.items():
-        hostPath = Path(hostPathStr).expanduser()
+        hostPath = Path(hostPathStr).expanduser().resolve()
         if containerPath.startswith("~/"):
             env.ctx.mounts[env.ctx.home / containerPath[2:]] = hostPath
         else:
