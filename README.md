@@ -218,6 +218,7 @@ ipc                  | share host ipc                                           
 x11                  | share x11 socket                                             |
 pulseaudio           | share pulseaudio socket                                      |
 git                  | share .gitconfig and excludesfile                            |
+editor               | setup editor env                                             |
 ssh                  | share ssh agent and keys                                     |
 gpg                  | share gpg agent                                              |
 webcam               | share webcam device                                          |
@@ -241,13 +242,13 @@ $ podenv --help
 usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
               [--privileged] [--no-privileged] [--terminal] [--no-terminal]
               [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
-              [--no-pulseaudio] [--git] [--no-git] [--ssh] [--no-ssh] [--gpg]
-              [--no-gpg] [--webcam] [--no-webcam] [--dri] [--no-dri] [--tun]
-              [--no-tun] [--seccomp] [--no-seccomp] [--selinux] [--no-selinux]
-              [--setuid] [--no-setuid] [--ptrace] [--no-ptrace] [--network]
-              [--no-network] [--mountCwd] [--no-mountCwd] [--mountRun]
-              [--no-mountRun] [--autoUpdate] [--no-autoUpdate] [--uidmap]
-              [--no-uidmap]
+              [--no-pulseaudio] [--git] [--no-git] [--editor] [--no-editor]
+              [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam] [--no-webcam]
+              [--dri] [--no-dri] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
+              [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
+              [--no-ptrace] [--network] [--no-network] [--mountCwd]
+              [--no-mountCwd] [--mountRun] [--no-mountRun] [--autoUpdate]
+              [--no-autoUpdate] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -276,6 +277,8 @@ optional arguments:
   --no-pulseaudio       Disable pulseaudio capibility
   --git                 Enable capability: share .gitconfig and excludesfile
   --no-git              Disable git capibility
+  --editor              Enable capability: setup editor env
+  --no-editor           Disable editor capibility
   --ssh                 Enable capability: share ssh agent and keys
   --no-ssh              Disable ssh capibility
   --gpg                 Enable capability: share gpg agent
