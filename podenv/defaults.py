@@ -93,21 +93,29 @@ environments = {
         command=["mumble"]),
 
     # Devel
+    "git": dict(
+        description="Git command line",
+        parent="fedora",
+        capabilities=dict(on("git") + on("editor") + on("terminal")
+                          + on("mountCwd") + on("uidmap") + off("selinux")),
+        packages=["git"],
+        command=["git"]),
+
     "git-pull-request": dict(
         description="Submit github/pagure PR",
-        parent="fedora",
-        capabilities=dict(on("ssh") + on("network") + on("mountCwd")
-                          + on("uidmap") + off("selinux")),
+        parent="git",
+        capabilities=dict(on("ssh") + on("network")),
+        # TODO: drop this mounts when fedora update g-p-r version
         mounts={"~/.netrc": "~/.netrc"},
-        packages=["git", "git-pull-request"],
-        command=["git-pull-request"]),
+        packages=["git-pull-request"],
+        # TODO: drop the no comment argument when fedora update g-p-r version
+        command=["git-pull-request", "--no-comment-on-update"]),
 
     "git-review": dict(
         description="Submit gerrit CR",
-        parent="fedora",
-        capabilities=dict(on("ssh") + on("network") + on("mountCwd")
-                          + on("uidmap") + off("selinux")),
-        packages=["git", "git-review"],
+        parent="git",
+        capabilities=dict(on("ssh") + on("network")),
+        packages=["git-review"],
         command=["git-review"]),
 
     # IDE
