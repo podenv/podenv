@@ -38,13 +38,13 @@ def off(cap: str) -> Cap:
     return [(cap, False)]
 
 
-environments = dict(
-    fedora=dict(
+environments = {
+    "fedora": dict(
         image="registry.fedoraproject.org/fedora:30",
     ),
 
     # Basic desktop applications
-    pavucontrol=dict(
+    "pavucontrol": dict(
         description="Adjust audio volumes",
         parent="fedora",
         capabilities=dict(x11 + on("pulseaudio")),
@@ -52,7 +52,7 @@ environments = dict(
         packages=["pavucontrol"],
         command=["pavucontrol"]),
 
-    xeyes=dict(
+    "xeyes": dict(
         description="Test graphical setup",
         parent="fedora",
         capabilities=dict(x11),
@@ -60,21 +60,21 @@ environments = dict(
         command=["xeyes"]),
 
     # File viewer/editor
-    mupdf=dict(
+    "mupdf": dict(
         description="Display a pdf file",
         parent="fedora",
         capabilities=dict(x11),
         packages=["mupdf"],
         command=["mupdf", "$1"]),
 
-    feh=dict(
+    "feh": dict(
         description="Display an image file",
         parent="fedora",
         capabilities=dict(x11),
         packages=["feh"],
         command=["feh", "$1"]),
 
-    inkscape=dict(
+    "inkscape": dict(
         description="Edit a svg file",
         parent="fedora",
         capabilities=dict(x11),
@@ -82,7 +82,7 @@ environments = dict(
         command=["inkscape", "$1"]),
 
     # Communication
-    mumble=dict(
+    "mumble": dict(
         description="VoIP solution",
         parent="fedora",
         # TODO: figure out why host ipc is needed
@@ -93,7 +93,7 @@ environments = dict(
         command=["mumble"]),
 
     # IDE
-    emacsNox=dict(
+    "emacs-nox": dict(
         description="Extensible text editor (terminal mode)",
         parent="fedora",
         capabilities=dict(on("terminal")),
@@ -101,12 +101,12 @@ environments = dict(
         packages=["emacs"],
         command=["emacs"]),
 
-    emacs=dict(
+    "emacs": dict(
         description="Extensible text editor",
-        parent="emacsNox",
+        parent="emacs-nox",
         capabilities=dict(x11)),
 
-    codium=dict(
+    "codium": dict(
         parent="fedora",
         imageCustomizations=[
             """cat << EOF > /etc/yum.repos.d/vscodium.repo
@@ -126,7 +126,7 @@ EOF"""],
             "bash", "-c", "codium; echo 'press ctrl-c to quit'; sleep Inf"]),
 
     # Browser
-    firefoxLight=dict(
+    "firefox-light": dict(
         parent="fedora",
         shmsize="4g",
         capabilities=dict(x11 + on("pulseaudio") + on("network")),
@@ -134,8 +134,8 @@ EOF"""],
         home="~/.config/podhome/firefoxLight",
         command=["firefox"]),
 
-    firefox=dict(
-        parent="firefoxLight",
+    "firefox": dict(
+        parent="firefox-light",
         # Add rpmfusion for ffmpeg
         imageCustomizations=[
             "dnf install -y "
@@ -148,4 +148,4 @@ EOF"""],
                   "libvdpau-va-gl", "mesa-dri-drivers",
                   "libva-intel-driver", "libva-intel-hybrid-driver"],
         home="~/.config/podhome/firefox"),
-)
+}
