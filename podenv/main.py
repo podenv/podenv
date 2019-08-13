@@ -73,15 +73,22 @@ def run() -> None:
     setupLogging(args.verbose)
 
     try:
+        # Load config and prepare the environment, no IO are performed here
         conf = loadConfig()
         env = loadEnv(conf, args.env)
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs = prepareEnv(env, args.args)
+    except RuntimeError as e:
+        fail(str(e))
+
+    try:
+        # Prepare the image and create needed host directories
         imageName = setupPod(env, args.package)
     except RuntimeError as e:
         fail(str(e))
 
     try:
+        # Run the environment
         executePod(containerName, containerArgs, imageName, envArgs)
         podResult = 0
     except KeyboardInterrupt:
@@ -91,6 +98,7 @@ def run() -> None:
         podResult = 1
 
     try:
+        # Cleanup left-over
         cleanupEnv(env)
     except RuntimeError as e:
         fail(str(e))
