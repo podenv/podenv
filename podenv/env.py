@@ -91,6 +91,12 @@ class ExecContext:
     def args(self, *args: str) -> None:
         self.execArgs.extend(args)
 
+    def hasNetwork(self) -> bool:
+        return not self.networkNamespace or self.networkNamespace != "none"
+
+    def hasDirectNetwork(self) -> bool:
+        return not self.networkNamespace or self.networkNamespace == "host"
+
     def getArgs(self) -> ExecArgs:
         args = []
 
@@ -98,6 +104,9 @@ class ExecContext:
             args.extend(["--security-opt", f"label={self.seLinuxLabel}"])
         if self.seccomp:
             args.extend(["--security-opt", f"seccomp={self.seccomp}"])
+
+        if self.networkNamespace:
+            args.extend(["--network", self.networkNamespace])
 
         if self.cwd == Path():
             self.cwd = self.home
@@ -292,9 +301,6 @@ def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
 
     if not active and not ctx.networkNamespace:
         ctx.networkNamespace = "none"
-
-    if ctx.networkNamespace:
-        ctx.args("--network", ctx.networkNamespace)
 
 
 def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -495,7 +501,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
 
     # Apply extra settings from the environment definition:
     args = ["--hostname", env.name]
-    if env.dns and "--network" not in env.ctx.execArgs:
+    if env.dns and env.ctx.hasDirectNetwork():
         args.append(f"--dns={env.dns}")
     if env.shmsize:
         args.append(f"--shm-size={env.shmsize}")
