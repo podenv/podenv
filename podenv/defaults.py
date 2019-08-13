@@ -92,6 +92,24 @@ environments = {
         packages=["mumble"],
         command=["mumble"]),
 
+    # Devel
+    "git-pull-request": dict(
+        description="Submit github/pagure PR",
+        parent="fedora",
+        capabilities=dict(on("ssh") + on("network") + on("mountCwd")
+                          + on("uidmap") + off("selinux")),
+        mounts={"~/.netrc": "~/.netrc"},
+        packages=["git", "git-pull-request"],
+        command=["git-pull-request"]),
+
+    "git-review": dict(
+        description="Submit gerrit CR",
+        parent="fedora",
+        capabilities=dict(on("ssh") + on("network") + on("mountCwd")
+                          + on("uidmap") + off("selinux")),
+        packages=["git", "git-review"],
+        command=["git-review"]),
+
     # IDE
     "emacs-nox": dict(
         description="Extensible text editor (terminal mode)",
