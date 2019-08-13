@@ -148,4 +148,15 @@ EOF"""],
                   "libvdpau-va-gl", "mesa-dri-drivers",
                   "libva-intel-driver", "libva-intel-hybrid-driver"],
         home="~/.config/podhome/firefox"),
+
+    sshServer=dict(
+        parent="fedora",
+        capabilities=dict(on("network") + on("root")),
+        packages=["openssh-server"],
+        ports=[
+            "127.0.0.1:2022:22"
+        ],
+        command=[
+            "bash", "-c",
+            "/usr/libexec/openssh/sshd-keygen rsa && /usr/sbin/sshd -D"])
 )
