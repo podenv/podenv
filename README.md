@@ -96,7 +96,7 @@ environments:
       - https://review.opendev.org
     home: ~/.cache/firefox-review.opendev.org
 
-  bluejeans:
+  video-conf:
     parent: firefox-webgl
     packages:
       - chromium
@@ -105,7 +105,7 @@ environments:
       seccomp: False
     command:
       - chromium-browser
-      - https://redhat.bluejeans.com
+      - https://jitsi.org/
 ```
 
 
@@ -325,13 +325,12 @@ while the `podenv.pod` module does all the IO.
 
 ## Roadmap
 
-Here are some features missing for completness:
+Future goals include:
 
-* Automatic squash of old layers.
+* Automatic squash of old layers: (depends on https://github.com/containers/buildah/issues/1778)
 * Proper documentation and integration tests.
 * Cleanup runDir.
 * Support packages from pypi, hackage, ...
-* Support rootfs.
 * Expose image tag version to support rollback.
-* Post actions, for example to backup container volumes.
-* Automatic start of required container, for example to start pulseaudio on demand.
+* Pre and post actions, possibly using ansible tasks.
+* Automatic start and stop of required container.
