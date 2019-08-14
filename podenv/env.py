@@ -416,6 +416,12 @@ def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.args("--device", "/dev/net/tun")
 
 
+def soundCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share sound device"
+    if active:
+        ctx.args("--device", "/dev/snd")
+
+
 def selinuxCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable SELinux"
     if not active:
@@ -463,6 +469,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         webcamCap,
         driCap,
         tunCap,
+        soundCap,
         seccompCap,
         selinuxCap,
         setuidCap,
