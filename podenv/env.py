@@ -545,6 +545,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
         env.ctx.mounts[env.ctx.home] = Path(env.home).expanduser().resolve()
     if env.ports:
         for port in env.ports:
+            port = port.format(**env.environ)
             args.append(f"--publish={port}")
 
     env.ctx.syscaps.extend(env.syscaps)
