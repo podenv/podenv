@@ -81,6 +81,20 @@ environments = {
         packages=["inkscape"],
         command=["inkscape", "$1"]),
 
+    # Network service
+    "python-http-server": dict(
+        description="Expose current directory over HTTP",
+        parent="fedora",
+        capabilities=dict(on("network") + on("mountCwd")),
+        packages=["python3"],
+        environ=dict(
+            PORT="8080",
+            PYTHONUNBUFFERED="1"
+        ),
+        ports=["{PORT}:8000"],
+        command=["python3", "-m", "http.server"],
+    ),
+
     # Communication
     "mumble": dict(
         description="VoIP solution",
