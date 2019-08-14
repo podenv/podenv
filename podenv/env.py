@@ -399,7 +399,9 @@ def gpgCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share webcam device"
     if active:
-        ctx.args("--device", "/dev/video0")
+        for device in list(filter(lambda x: x.startswith("video"),
+                                  os.listdir("/dev"))):
+            ctx.args("--device", str(Path("/dev") / device))
 
 
 def driCap(active: bool, ctx: ExecContext, env: Env) -> None:
