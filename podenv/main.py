@@ -15,10 +15,12 @@
 import argparse
 import logging
 import sys
+from os import environ
+from pathlib import Path
 
 from podenv.config import loadConfig, loadEnv
-from podenv.pod import killPod, setupPod, executePod
-from podenv.env import Capabilities, Env, prepareEnv, cleanupEnv
+from podenv.pod import killPod, setupPod, executePod, desktopNotification
+from podenv.env import Capabilities, Env, UserNotif, prepareEnv, cleanupEnv
 
 log = logging.getLogger("podenv")
 
@@ -63,14 +65,30 @@ def setupLogging(debug: bool) -> None:
         level=loglevel)
 
 
-def fail(msg: str, code: int = 1) -> None:
-    print(f"\33[91m{msg}\033[m", file=sys.stderr)
+def fail(userNotif: UserNotif, msg: str, code: int = 1) -> None:
+    if userNotif == desktopNotification:
+        userNotif(msg)
+    else:
+        print(f"\033[91m{msg}\033[m")
     exit(code)
+
+
+def getUserNotificationProc(verbose: bool) -> UserNotif:
+    if not sys.stdout.isatty():
+        if environ.get("DBUS_SESSION_BUS_ADDRESS") or (
+                environ.get("XDG_RUNTIME_DIR") and (
+                    Path(environ["XDG_RUNTIME_DIR"]) / "bus").exists()):
+            return desktopNotification
+    elif verbose:
+        return lambda msg: log.info(msg)
+    return lambda msg: print(
+        f"\033[92m{msg}\033[m", file=sys.stderr)
 
 
 def run() -> None:
     args = usage()
     setupLogging(args.verbose)
+    notifyUserProc = getUserNotificationProc(args.verbose)
 
     try:
         # Load config and prepare the environment, no IO are performed here
@@ -79,13 +97,13 @@ def run() -> None:
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs = prepareEnv(env, args.args)
     except RuntimeError as e:
-        fail(str(e))
+        fail(notifyUserProc, str(e))
 
     try:
         # Prepare the image and create needed host directories
-        imageName = setupPod(env, args.package)
+        imageName = setupPod(notifyUserProc, env, args.package)
     except RuntimeError as e:
-        fail(str(e))
+        fail(notifyUserProc, str(e))
 
     try:
         # Run the environment
@@ -101,7 +119,7 @@ def run() -> None:
         # Cleanup left-over
         cleanupEnv(env)
     except RuntimeError as e:
-        fail(str(e))
+        fail(notifyUserProc, str(e))
 
     log.debug("Complete")
     exit(podResult)

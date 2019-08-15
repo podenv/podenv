@@ -30,6 +30,7 @@ ExecArgs = List[str]
 Requirements = List[str]
 Info = Dict[str, Union[str, Requirements]]
 Overlay = Union[str, Dict[str, str]]
+UserNotif = Callable[[str], None]
 
 
 class Runtime(ABC):

@@ -33,7 +33,8 @@ try:
 except ImportError:
     HAS_SELINUX = False
 
-from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap
+from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
+    UserNotif
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -66,6 +67,11 @@ def execute(
         output: str = stdout.decode('utf-8')
         return output
     return None
+
+
+def desktopNotification(msg: str, color: str = "92") -> None:
+    if Popen(["notify-send", msg]).wait():
+        log.warning("Couldn't send notification")
 
 
 def pwrite(args: ExecArgs, stdin: bytes) -> None:
@@ -505,7 +511,7 @@ class RootfsDirectory(PodmanRuntime):
         pass
 
 
-def setupRuntime(env: Env, cacheDir: Path) -> ExecArgs:
+def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
     """Ensure image is ready."""
     cacheDir = cacheDir.expanduser()
     if not cacheDir.exists():
@@ -524,7 +530,7 @@ def setupRuntime(env: Env, cacheDir: Path) -> ExecArgs:
         raise NotImplementedError()
 
     if not env.runtime.exists(env.autoUpdate):
-        log.info(f"Creating {env.runtime}")
+        userNotif(f"Creating {env.runtime}")
         env.runtime.create()
     else:
         env.runtime.loadInfo()
@@ -532,7 +538,8 @@ def setupRuntime(env: Env, cacheDir: Path) -> ExecArgs:
     return env.runtime.getExecName()
 
 
-def configureRuntime(env: Env, packages: List[str]) -> None:
+def configureRuntime(
+        userNotif: UserNotif, env: Env, packages: List[str]) -> None:
     if not env.runtime:
         raise RuntimeError("Env has no metadata")
 
@@ -542,11 +549,11 @@ def configureRuntime(env: Env, packages: List[str]) -> None:
         if customCommandHash not in env.runtime.getCustomizations():
             needCustomCommands.append((customCommandHash, customCommand))
     if needCustomCommands:
-        log.info(f"Customizing image {needCustomCommands}")
+        userNotif(f"Customizing image {needCustomCommands}")
         env.runtime.customize(needCustomCommands)
 
     if env.autoUpdate and env.runtime.needUpdate():
-        log.info(f"Updating {env.runtime}")
+        userNotif(f"Updating {env.runtime}")
         env.runtime.update()
 
     imagePackages = env.runtime.getInstalledPackages()
@@ -557,7 +564,7 @@ def configureRuntime(env: Env, packages: List[str]) -> None:
 
     need = envPackages.difference(imagePackages)
     if need:
-        log.info(f"Installing {need}")
+        userNotif(f"Installing {need}")
         env.runtime.install(need)
 
 
@@ -599,11 +606,12 @@ def setupRunDir(env: Env) -> None:
 
 
 def setupPod(
+        userNotif: UserNotif,
         env: Env,
         packages: List[str],
         cacheDir: Path = Path("~/.cache/podenv")) -> ExecArgs:
-    imageName = setupRuntime(env, cacheDir)
-    configureRuntime(env, packages)
+    imageName = setupRuntime(userNotif, env, cacheDir)
+    configureRuntime(userNotif, env, packages)
     if env.provides.get("network"):
         setupInfraNetwork(env.provides["network"], imageName, env)
 
