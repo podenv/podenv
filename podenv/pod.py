@@ -218,6 +218,15 @@ class PodmanRuntime(Runtime):
                 "/var/cache/dnf": "~/.cache/podenv/dnf"
             }
         },
+        "yum": {
+            "commands": {
+                "install": "yum install -y ",
+                "update": "yum update -y ",
+            },
+            "mounts": {
+                "/var/cache/yum": "~/.cache/podenv/yum"
+            }
+        },
         "apt-get": {
             "commands": {
                 "install": "apt-get install -y ",
