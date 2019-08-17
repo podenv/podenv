@@ -32,6 +32,7 @@ Requirements = List[str]
 Info = Dict[str, Union[str, Requirements]]
 Overlay = Union[str, Dict[str, str]]
 UserNotif = Callable[[str], None]
+Task = Dict[str, Union[str, Dict[str, str]]]
 
 
 class Runtime(ABC):
@@ -188,6 +189,8 @@ class Env:
         doc="A custom DNS server"))
     imageCustomizations: List[str] = field(default_factory=list, metadata=dict(
         doc="List of shell commands to execute and commit in the image"))
+    imageTasks: List[Task] = field(default_factory=list, metadata=dict(
+        doc="List of ansible like command to commit to the image"))
     packages: List[str] = field(default_factory=list, metadata=dict(
         doc="List of packages to be installed in the image"))
     command: ExecArgs = field(default_factory=list, metadata=dict(

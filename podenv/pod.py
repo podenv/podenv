@@ -34,7 +34,7 @@ except ImportError:
     HAS_SELINUX = False
 
 from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
-    UserNotif
+    UserNotif, Task
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -130,6 +130,24 @@ def readProcessJson(args: ExecArgs) -> Any:
     if proc.wait():
         return None
     return json.loads(stdout)
+
+
+def taskToCommand(task: Task) -> str:
+    """Convert ansible like task to shell string"""
+    command = []
+    if task.get("name"):
+        if "'" in task["name"]:
+            raise RuntimeError(f"Task name can't have ': {task['name']}")
+        command.append("echo '%s'" % task.pop("name"))
+    if task.get("command"):
+        command.append(str(task.pop("command")))
+    elif task.get("shell"):
+        command.append(str(task.pop("shell")))
+    else:
+        raise RuntimeError(f"Unsupported task: {task}")
+    if task:
+        raise RuntimeError(f"Unsupported task attribute: {task}")
+    return "; ".join(command)
 
 
 def podmanInspect(objType: str, name: str) -> Dict[str, Any]:
@@ -552,14 +570,17 @@ def configureRuntime(
     if not env.runtime:
         raise RuntimeError("Env has no metadata")
 
-    needCustomCommands: List[Tuple[str, str]] = []
-    for customCommand in env.imageCustomizations:
-        customCommandHash = hash(customCommand)
-        if customCommandHash not in env.runtime.getCustomizations():
-            needCustomCommands.append((customCommandHash, customCommand))
-    if needCustomCommands:
-        userNotif(f"Customizing image {needCustomCommands}")
-        env.runtime.customize(needCustomCommands)
+    imageCustomizations = env.runtime.getCustomizations()
+    envCustomizations: Dict[str, str] = {}
+    for envCustomization in env.imageCustomizations + list(map(
+            taskToCommand, env.imageTasks)):
+        envCustomizations[hash(envCustomization)] = envCustomization
+    needCustomizations: List[Tuple[str, str]] = [
+        (hash, command) for hash, command in envCustomizations.items()
+        if hash not in imageCustomizations]
+    if needCustomizations:
+        userNotif(f"Customizing image {needCustomizations}")
+        env.runtime.customize(needCustomizations)
 
     if env.autoUpdate and env.runtime.needUpdate():
         userNotif(f"Updating {env.runtime}")

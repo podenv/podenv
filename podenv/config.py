@@ -42,7 +42,7 @@ def urlToFilename(url: str) -> str:
 
 def attributesToCamelCase(envSchema: Dict[Any, Any]) -> Dict[Any, Any]:
     """Convert attribute from yaml to dataclass camelCase"""
-    for hyphenKey in ("image-customizations",):
+    for hyphenKey in ("image-customizations", "image-tasks"):
         if hyphenKey in envSchema:
             words = hyphenKey.split('-')
             camelCase = words[0] + words[1].capitalize()

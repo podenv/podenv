@@ -49,8 +49,9 @@ environments:
           alias ls='ls -ap --color=auto'
     command:
       - /bin/bash
-    image-customizations:
-      - sed -e 's/nodocs//' -i /etc/dnf/dnf.conf
+    image-tasks:
+      - name: Install packages documentation
+        command: sed -e 's/nodocs//' -i /etc/dnf/dnf.conf
 
   ansible:
     parent: shell
@@ -64,8 +65,9 @@ environments:
       ~/.config/openstack: ~/.config/openstack
 
   firefox:
-    image-customizations:
-      - dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(grep ^VERSION_ID= /etc/os-release | cut -d= -f2).noarch.rpm
+    image-tasks:
+      - name: Install rpmfusion repository
+        shell: dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(grep ^VERSION_ID= /etc/os-release | cut -d= -f2).noarch.rpm
     packages:
       - firefox
       - ffmpeg
@@ -192,6 +194,7 @@ image                | str             | The container image reference          
 rootfs               | str             | The path of a rootfs                     |
 dns                  | str             | A custom DNS server                      |
 image-customizations | List[str]       | List of shell commands to execute and commit in the image |
+image-tasks          | List[Task]      | List of ansible like command to commit to the image |
 packages             | List[str]       | List of packages to be installed in the image |
 command              | ExecArgs        | Container starting command               |
 args                 | ExecArgs        | Optional arguments to append to the command |
