@@ -226,6 +226,7 @@ ssh                  | share ssh agent and keys                                 
 gpg                  | share gpg agent                                              |
 webcam               | share webcam device                                          |
 dri                  | share graphic device                                         |
+kvm                  | share kvm device                                             |
 tun                  | share tun device                                             |
 seccomp              | enable seccomp                                               |
 selinux              | enable SELinux                                               |
@@ -248,12 +249,12 @@ usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
               [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
               [--no-pulseaudio] [--git] [--no-git] [--editor] [--no-editor]
               [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam] [--no-webcam]
-              [--dri] [--no-dri] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
-              [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
-              [--no-ptrace] [--network] [--no-network] [--mount-cwd]
-              [--no-mount-cwd] [--mount-run] [--no-mount-run] [--mount-cache]
-              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
-              [--no-uidmap]
+              [--dri] [--no-dri] [--kvm] [--no-kvm] [--tun] [--no-tun]
+              [--seccomp] [--no-seccomp] [--selinux] [--no-selinux] [--setuid]
+              [--no-setuid] [--ptrace] [--no-ptrace] [--network]
+              [--no-network] [--mount-cwd] [--no-mount-cwd] [--mount-run]
+              [--no-mount-run] [--mount-cache] [--no-mount-cache]
+              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -292,6 +293,8 @@ optional arguments:
   --no-webcam           Disable webcam capibility
   --dri                 Enable capability: share graphic device
   --no-dri              Disable dri capibility
+  --kvm                 Enable capability: share kvm device
+  --no-kvm              Disable kvm capibility
   --tun                 Enable capability: share tun device
   --no-tun              Disable tun capibility
   --seccomp             Enable capability: enable seccomp

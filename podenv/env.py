@@ -434,6 +434,12 @@ def driCap(active: bool, ctx: ExecContext, env: Env) -> None:
         ctx.args("--device", "/dev/dri")
 
 
+def kvmCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share kvm device"
+    if active:
+        ctx.args("--device", "/dev/kvm")
+
+
 def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share tun device"
     if active:
@@ -490,6 +496,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         gpgCap,
         webcamCap,
         driCap,
+        kvmCap,
         tunCap,
         seccompCap,
         selinuxCap,
