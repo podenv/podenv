@@ -52,6 +52,10 @@ class Runtime(ABC):
         ...
 
     @abstractmethod
+    def getSystemMounts(self) -> ExecArgs:
+        ...
+
+    @abstractmethod
     def needUpdate(self) -> bool:
         ...
 
@@ -222,6 +226,8 @@ class Env:
         internal=True))
     autoUpdate: bool = field(default=False, metadata=dict(
         internal=True))
+    mountCache: bool = field(default=False, metadata=dict(
+        internal=True))
     configFile: Optional[Path] = field(default=None, metadata=dict(
         internal=True))
 
@@ -330,6 +336,12 @@ def mountRunCap(active: bool, ctx: ExecContext, env: Env) -> None:
             ctx.mounts[ctx.home] = env.runDir / "home"
         if not ctx.mounts.get(Path("/tmp")):
             ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
+
+
+def mountCacheCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "mount image build cache"
+    if active:
+        env.mountCache = True
 
 
 def ipcCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -483,6 +495,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         networkCap,
         mountCwdCap,
         mountRunCap,
+        mountCacheCap,
         autoUpdateCap,
         uidmapCap,
     ]]

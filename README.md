@@ -231,6 +231,7 @@ ptrace               | enable ptrace                                            
 network              | enable network                                               |
 mount-cwd            | mount cwd to /data                                           |
 mount-run            | mount home and tmp to host tmpfs                             |
+mount-cache          | mount image build cache                                      |
 auto-update          | keep environment updated                                     |
 uidmap               | map host uid                                                 |
 
@@ -247,8 +248,9 @@ usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
               [--dri] [--no-dri] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
               [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
               [--no-ptrace] [--network] [--no-network] [--mount-cwd]
-              [--no-mount-cwd] [--mount-run] [--no-mount-run] [--auto-update]
-              [--no-auto-update] [--uidmap] [--no-uidmap]
+              [--no-mount-cwd] [--mount-run] [--no-mount-run] [--mount-cache]
+              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
+              [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -303,6 +305,8 @@ optional arguments:
   --no-mount-cwd        Disable mount-cwd capibility
   --mount-run           Enable capability: mount home and tmp to host tmpfs
   --no-mount-run        Disable mount-run capibility
+  --mount-cache         Enable capability: mount image build cache
+  --no-mount-cache      Disable mount-cache capibility
   --auto-update         Enable capability: keep environment updated
   --no-auto-update      Disable auto-update capibility
   --uidmap              Enable capability: map host uid

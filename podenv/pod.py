@@ -624,6 +624,12 @@ def setupPod(
     if env.provides.get("network"):
         setupInfraNetwork(env.provides["network"], imageName, env)
 
+    if env.capabilities.get("mount-cache"):
+        # Inject runtime volumes
+        if not env.runtime:
+            raise RuntimeError("Env has no runtime")
+        imageName = env.runtime.getSystemMounts() + imageName
+
     if env.desktop:
         setupDesktopFile(env.desktop)
 
