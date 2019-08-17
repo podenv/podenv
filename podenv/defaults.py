@@ -39,8 +39,14 @@ def off(cap: str) -> Cap:
 
 
 environments = {
+    # System
     "fedora": dict(
         image="registry.fedoraproject.org/fedora:30",
+    ),
+    "fedora-admin": dict(
+        description="Fedora admin shell",
+        capabilities=dict(
+            on("root") + on("network") + on("mount-cache") + on("terminal")),
     ),
 
     # Basic desktop applications
