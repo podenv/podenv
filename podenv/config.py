@@ -40,6 +40,16 @@ def urlToFilename(url: str) -> str:
         '/', ':').replace('.', '-')
 
 
+def attributesToCamelCase(envSchema: Dict[Any, Any]) -> Dict[Any, Any]:
+    """Convert attribute from yaml to dataclass camelCase"""
+    for hyphenKey in ("image-customizations",):
+        if hyphenKey in envSchema:
+            words = hyphenKey.split('-')
+            camelCase = words[0] + words[1].capitalize()
+            envSchema[camelCase] = envSchema.pop(hyphenKey)
+    return envSchema
+
+
 class Config:
     def __init__(self, configFile: Path) -> None:
         schema: Dict[str, Any] = safe_load(configFile.read_text())
@@ -73,7 +83,9 @@ class Config:
     def loadEnvs(self, schema: Dict[str, Any], configFile: Path) -> None:
         for envName, envSchema in schema.items():
             self.envs[envName] = Env(
-                envName, configFile=configFile, **envSchema)
+                envName,
+                configFile=configFile,
+                **attributesToCamelCase(envSchema))
 
 
 def initConfig(configDir: Path, configFile: Path) -> None:
@@ -137,7 +149,9 @@ def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
         # Create profile name
         envName = Path().resolve().name
         conf.envs[envName] = Env(
-            envName, configFile=localConf, **safe_load(localConf.read_text()))
+            envName,
+            configFile=localConf,
+            **attributesToCamelCase(safe_load(localConf.read_text())))
         conf.default = envName
     return conf
 

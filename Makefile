@@ -28,11 +28,14 @@ capblockstart = doc.index( \
 capblockend = doc[capblockstart:].index('') + capblockstart; \
 usageblockstart = doc.index('$$ podenv --help') + 1; \
 usageblockend = doc[usageblockstart:].index('\`\`\`') + usageblockstart; \
+import re; \
+camelFix = lambda s: re.sub('([A-Z]+)', r'-\1', s).lower(); \
 '# Generate sections'; \
 from dataclasses import fields; \
 from podenv.env import Env, Capabilities; \
 envblock = ['{name:20s} | {type:15s} | {doc:40s} |'.format( \
-                name=f.name, type=f.type, doc=f.metadata.get('doc', '')) \
+                name=camelFix(f.name), \
+                type=f.type, doc=f.metadata.get('doc', '')) \
             for f in fields(Env) \
             if not f.metadata.get('internal', False)]; \
 capblock = ['{name:20s} | {doc:60s} |'.format( \

@@ -49,7 +49,7 @@ environments:
           alias ls='ls -ap --color=auto'
     command:
       - /bin/bash
-    imageCustomizations:
+    image-customizations:
       - sed -e 's/nodocs//' -i /etc/dnf/dnf.conf
 
   ansible:
@@ -64,7 +64,7 @@ environments:
       ~/.config/openstack: ~/.config/openstack
 
   firefox:
-    imageCustomizations:
+    image-customizations:
       - dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(grep ^VERSION_ID= /etc/os-release | cut -d= -f2).noarch.rpm
     packages:
       - firefox
@@ -191,7 +191,7 @@ desktop              | Optional[DesktopEntry] | A desktop launcher entry file de
 image                | str             | The container image reference            |
 rootfs               | str             | The path of a rootfs                     |
 dns                  | str             | A custom DNS server                      |
-imageCustomizations  | List[str]       | List of shell commands to execute and commit in the image |
+image-customizations | List[str]       | List of shell commands to execute and commit in the image |
 packages             | List[str]       | List of packages to be installed in the image |
 command              | ExecArgs        | Container starting command               |
 args                 | ExecArgs        | Optional arguments to append to the command |
