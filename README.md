@@ -28,7 +28,7 @@ environments:
   base:
     image: registry.fedoraproject.org/fedora:30
     capabilities:
-      autoUpdate: True
+      auto-update: True
       seccomp: True
       selinux: True
     environ:
@@ -39,7 +39,7 @@ environments:
   shell:
     capabilities:
       terminal: True
-      mountRun: True
+      mount-run: True
     overlays:
       - .bashrc: |
           if [ -f /etc/bashrc ]; then
@@ -119,7 +119,7 @@ mount a file argument inside the container, for examples:
       - youtube-dl
     capabilities:
       network: True
-      mountCwd: True
+      mount-cwd: True
     command:
       - youtube-dl
       - $@
@@ -167,7 +167,7 @@ as the one from this project:
 ```bash
 $ cat ./default.podenv
 capabilities:
-  mountCwd: True
+  mount-cwd: True
   uidmap: True
 packages:
   - python3-mypy
@@ -229,9 +229,9 @@ selinux              | enable SELinux                                           
 setuid               | enable setuid                                                |
 ptrace               | enable ptrace                                                |
 network              | enable network                                               |
-mountCwd             | mount cwd to /data                                           |
-mountRun             | mount home and tmp to host tmpfs                             |
-autoUpdate           | keep environment updated                                     |
+mount-cwd            | mount cwd to /data                                           |
+mount-run            | mount home and tmp to host tmpfs                             |
+auto-update          | keep environment updated                                     |
 uidmap               | map host uid                                                 |
 
 ## Install and usage
@@ -246,9 +246,9 @@ usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
               [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam] [--no-webcam]
               [--dri] [--no-dri] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
               [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
-              [--no-ptrace] [--network] [--no-network] [--mountCwd]
-              [--no-mountCwd] [--mountRun] [--no-mountRun] [--autoUpdate]
-              [--no-autoUpdate] [--uidmap] [--no-uidmap]
+              [--no-ptrace] [--network] [--no-network] [--mount-cwd]
+              [--no-mount-cwd] [--mount-run] [--no-mount-run] [--auto-update]
+              [--no-auto-update] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -299,12 +299,12 @@ optional arguments:
   --no-ptrace           Disable ptrace capibility
   --network             Enable capability: enable network
   --no-network          Disable network capibility
-  --mountCwd            Enable capability: mount cwd to /data
-  --no-mountCwd         Disable mountCwd capibility
-  --mountRun            Enable capability: mount home and tmp to host tmpfs
-  --no-mountRun         Disable mountRun capibility
-  --autoUpdate          Enable capability: keep environment updated
-  --no-autoUpdate       Disable autoUpdate capibility
+  --mount-cwd           Enable capability: mount cwd to /data
+  --no-mount-cwd        Disable mount-cwd capibility
+  --mount-run           Enable capability: mount home and tmp to host tmpfs
+  --no-mount-run        Disable mount-run capibility
+  --auto-update         Enable capability: keep environment updated
+  --no-auto-update      Disable auto-update capibility
   --uidmap              Enable capability: map host uid
   --no-uidmap           Disable uidmap capibility
 ```

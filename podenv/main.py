@@ -48,9 +48,10 @@ def usage() -> argparse.Namespace:
 
 def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
     for name, _, _ in Capabilities:
-        if getattr(args, f"{name}"):
+        argName = name.replace('-', '_')
+        if getattr(args, f"{argName}"):
             env.capabilities[name] = True
-        if getattr(args, f"no_{name}"):
+        if getattr(args, f"no_{argName}"):
             env.capabilities[name] = False
     if args.shell:
         env.capabilities["terminal"] = True

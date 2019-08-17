@@ -1,7 +1,7 @@
 # This file is a local podenv configuration
 ---
 capabilities:
-  mountCwd: True
+  mount-cwd: True
   uidmap: True
 packages:
   - python3-mypy

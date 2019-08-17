@@ -85,7 +85,7 @@ environments = {
     "python-http-server": dict(
         description="Expose current directory over HTTP",
         parent="fedora",
-        capabilities=dict(on("network") + on("mountCwd")),
+        capabilities=dict(on("network") + on("mount-cwd")),
         packages=["python3"],
         environ=dict(
             PORT="8080",
@@ -111,7 +111,7 @@ environments = {
         description="Git command line",
         parent="fedora",
         capabilities=dict(on("git") + on("editor") + on("terminal")
-                          + on("mountCwd") + on("uidmap") + off("selinux")),
+                          + on("mount-cwd") + on("uidmap") + off("selinux")),
         packages=["git"],
         command=["git"]),
 

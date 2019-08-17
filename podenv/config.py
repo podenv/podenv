@@ -101,7 +101,7 @@ def initConfig(configDir: Path, configFile: Path) -> None:
             command: ["/bin/bash"]
             capabilities:
               terminal: True
-              mountRun: True
+              mount-run: True
             overlays:
               - bash
         """)

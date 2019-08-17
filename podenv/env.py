@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 import os
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -253,9 +254,16 @@ class Env:
                 terminal=self.capabilities.get("terminal", False),
                 relPath=self.configFile.parent,
                 **self.desktop)
-        for cap in self.capabilities:
+        # Support retro cap name written in camelCase
+        retroCap = {}
+        for cap, value in self.capabilities.items():
+            if cap in ("mountCwd", "mountRun", "autoUpdate"):
+                cap = re.sub('([CRU])', r'-\1', cap).lower()
+                retroCap[cap] = value
+
             if cap not in ValidCap:
                 raise RuntimeError(f"{self.name}: unknown cap {cap}")
+        self.capabilities.update(retroCap)
 
 
 def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -448,9 +456,13 @@ def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
         env.autoUpdate = True
 
 
+def camelCaseToHyphen(name: str) -> str:
+    return re.sub('([A-Z]+)', r'-\1', name).lower()
+
+
 Capability = Callable[[bool, ExecContext, Env], None]
 Capabilities: List[Tuple[str, Optional[str], Capability]] = [
-    (func.__name__[:-3], func.__doc__, func) for func in [
+    (camelCaseToHyphen(func.__name__[:-3]), func.__doc__, func) for func in [
         rootCap,
         privilegedCap,
         terminalCap,
