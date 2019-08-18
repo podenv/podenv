@@ -93,7 +93,7 @@ def run() -> None:
 
     try:
         # Load config and prepare the environment, no IO are performed here
-        conf = loadConfig()
+        conf = loadConfig(notifyUserProc)
         env = loadEnv(conf, args.env)
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs = prepareEnv(env, args.args)

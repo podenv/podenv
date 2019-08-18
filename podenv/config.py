@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 from yaml import safe_load
 
 from podenv.pod import downloadUrl, outdated
-from podenv.env import Env
+from podenv.env import Env, UserNotif
 from podenv import defaults
 
 
@@ -134,7 +134,9 @@ def initOverlays(overlayDir: Path) -> None:
     """))
 
 
-def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
+def loadConfig(
+        userNotif: UserNotif,
+        configDir: Path = Path("~/.config/podenv")) -> Config:
     configDir = configDir.expanduser()
     configFile = configDir / "config.yaml"
     if not configDir.exists():
@@ -153,6 +155,7 @@ def loadConfig(configDir: Path = Path("~/.config/podenv")) -> Config:
             configFile=localConf,
             **attributesToCamelCase(safe_load(localConf.read_text())))
         conf.default = envName
+        userNotif(f"Using ./{localConf} for {envName}")
     return conf
 
 
