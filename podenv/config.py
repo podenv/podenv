@@ -105,6 +105,8 @@ def initConfig(configDir: Path, configFile: Path) -> None:
             capabilities:
               seccomp: True
               selinux: True
+              manage-image: True
+              auto-update: True
             environ:
               LC_ALL: en_US.UTF-8
               SHLVL: 3

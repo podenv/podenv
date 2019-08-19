@@ -429,9 +429,12 @@ class PodmanRuntime(Runtime):
 
 class ContainerImage(PodmanRuntime):
     def __init__(
-            self, cacheDir: Path, fromRef: str, localName: str = "") -> None:
-        self.localName: str = "localhost/podenv/" + fromRef.split(
-            '/', 1)[-1].replace(':', '-')
+            self, cacheDir: Path, fromRef: str, manage: bool) -> None:
+        self.localName: str = fromRef
+        self.manage: bool = manage
+        if manage:
+            self.localName = "localhost/podenv/" + fromRef.split(
+                '/', 1)[-1].replace(':', '-')
         super().__init__(cacheDir,
                          fromRef.replace(':', '-').replace('/', '_'),
                          fromRef)
@@ -441,6 +444,22 @@ class ContainerImage(PodmanRuntime):
 
     def getExecName(self) -> ExecArgs:
         return [self.localName]
+
+    def create(self) -> None:
+        if self.manage:
+            super().create()
+        else:
+            self.pull()
+
+    def update(self) -> None:
+        if self.manage:
+            super().update()
+        else:
+            self.pull()
+
+    def pull(self) -> None:
+        execute(["podman", "pull", self.fromRef])
+        self.updateInfo({"updated": now()})
 
     def getSession(self, create: bool = False) -> BuildSession:
         return buildah(self.fromRef if create else self.localName)
@@ -471,7 +490,7 @@ class ContainerImage(PodmanRuntime):
                 raise RuntimeError("Invalid created metadata")
             if age(self.info["created"]) > DAY * 21 and self.needUpdate():
                 log.info("Re-creating base layer because it is too old")
-                execute(["podman", "pull", self.fromRef])
+                self.pull()
                 self.info.clear()
                 return False
             return True
@@ -551,7 +570,7 @@ def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
     if env.rootfs:
         env.runtime = RootfsDirectory(cacheDir, env.rootfs)
     elif env.image:
-        env.runtime = ContainerImage(cacheDir, env.image)
+        env.runtime = ContainerImage(cacheDir, env.image, env.manageImage)
 
     if not env.runtime:
         raise NotImplementedError()

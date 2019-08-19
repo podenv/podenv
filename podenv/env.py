@@ -227,6 +227,8 @@ class Env:
         internal=True))
     overlaysDir: Optional[Path] = field(default=None, metadata=dict(
         internal=True))
+    manageImage: bool = field(default=True, metadata=dict(
+        internal=True))
     autoUpdate: bool = field(default=False, metadata=dict(
         internal=True))
     mountCache: bool = field(default=False, metadata=dict(
@@ -321,6 +323,11 @@ def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
 
     if not active and not ctx.networkNamespace:
         ctx.networkNamespace = "none"
+
+
+def manageImageCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "manage the image with buildah"
+    env.manageImage = active
 
 
 def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -484,6 +491,7 @@ def camelCaseToHyphen(name: str) -> str:
 Capability = Callable[[bool, ExecContext, Env], None]
 Capabilities: List[Tuple[str, Optional[str], Capability]] = [
     (camelCaseToHyphen(func.__name__[:-3]), func.__doc__, func) for func in [
+        manageImageCap,
         rootCap,
         privilegedCap,
         terminalCap,
@@ -565,6 +573,15 @@ def validateEnv(env: Env) -> None:
         warn(f"overlay needs a home mount point, "
              "mountRun capability is enabled.")
         mountRunCap(True, env.ctx, env)
+
+    # Check for image management
+    if not env.manageImage:
+        if env.packages:
+            warn("manage-image capability is required for packages")
+            manageImageCap(True, env.ctx, env)
+        if env.imageCustomizations or env.imageTasks:
+            warn("manage-image capability is required for image tasks")
+            manageImageCap(True, env.ctx, env)
 
 
 def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
