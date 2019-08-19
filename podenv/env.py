@@ -33,6 +33,13 @@ Info = Dict[str, Union[str, Requirements]]
 Overlay = Union[str, Dict[str, str]]
 UserNotif = Callable[[str], None]
 Task = Dict[str, Union[str, Dict[str, str]]]
+StrOrList = Union[str, List[str]]
+
+
+def asList(param: StrOrList = []) -> StrOrList:
+    if isinstance(param, list):
+        return param
+    return param.split()
 
 
 class Runtime(ABC):
@@ -205,10 +212,10 @@ class Env:
         doc="Extra mountpoints"))
     capabilities: Dict[str, bool] = field(default_factory=dict, metadata=dict(
         doc="List of capabilities"))
-    provides: Dict[str, str] = field(default_factory=dict, metadata=dict(
-        doc="List of objects the environment provides"))
-    requires: Dict[str, str] = field(default_factory=dict, metadata=dict(
-        doc="List of objects the environment requires"))
+    network: str = field(default="", metadata=dict(
+        doc="Name of a network to be shared by multiple environment"))
+    requires: StrOrList = field(default_factory=asList, metadata=dict(
+        doc="List of required environments"))
     overlays: List[Overlay] = field(default_factory=list, metadata=dict(
         doc="List of overlay to copy in runtime directory"))
     home: str = field(default="", metadata=dict(
@@ -275,6 +282,8 @@ class Env:
             if cap not in ValidCap:
                 raise RuntimeError(f"{self.name}: unknown cap {cap}")
         self.capabilities.update(retroCap)
+        # Convert str to list
+        self.requires = asList(self.requires)
 
 
 def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -316,12 +325,10 @@ def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
 
 def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable network"
-    if env.requires.get("network"):
-        ctx.networkNamespace = "container:net-" + env.requires["network"]
-    elif env.provides.get("network"):
-        ctx.networkNamespace = "container:net-" + env.provides["network"]
+    if env.network:
+        ctx.networkNamespace = f"container:net-{env.network}"
 
-    if not active and not ctx.networkNamespace:
+    if not active and not env.network:
         ctx.networkNamespace = "none"
 
 

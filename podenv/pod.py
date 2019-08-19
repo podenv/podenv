@@ -661,8 +661,10 @@ def setupPod(
         cacheDir: Path = Path("~/.cache/podenv")) -> ExecArgs:
     imageName = setupRuntime(userNotif, env, cacheDir)
     configureRuntime(userNotif, env, packages)
-    if env.provides.get("network"):
-        setupInfraNetwork(env.provides["network"], imageName, env)
+    if env.network:
+        setupInfraNetwork(env.network, imageName, env)
+
+    # TODO: check for environment requires list
 
     if env.capabilities.get("mount-cache"):
         # Inject runtime volumes

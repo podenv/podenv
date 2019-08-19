@@ -141,8 +141,7 @@ Network can be shared:
 
 ```yaml
   corpvpn:
-    provides:
-      network: corpvpn
+    network: corpvpn
     packages: ["openvpn"]
     capabilities:
       network: True
@@ -158,8 +157,7 @@ Network can be shared:
       - corp.config
 
   corpbrowser:
-    requires:
-      network: corpvpn
+    network: corpvpn
     parent: firefox
 ```
 
@@ -202,8 +200,8 @@ environ              | Dict[str, str]  | User environ(7)                        
 syscaps              | List[str]       | List of system capabilities(7)           |
 mounts               | Dict[str, str]  | Extra mountpoints                        |
 capabilities         | Dict[str, bool] | List of capabilities                     |
-provides             | Dict[str, str]  | List of objects the environment provides |
-requires             | Dict[str, str]  | List of objects the environment requires |
+network              | str             | Name of a network to be shared by multiple environment |
+requires             | StrOrList       | List of required environments            |
 overlays             | List[Overlay]   | List of overlay to copy in runtime directory |
 home                 | str             | Container home path mount                |
 shmsize              | str             | The shm-size value string                |
