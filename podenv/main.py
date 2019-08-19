@@ -20,7 +20,8 @@ from pathlib import Path
 
 from podenv.config import loadConfig, loadEnv
 from podenv.pod import killPod, setupPod, executePod, desktopNotification
-from podenv.env import Capabilities, Env, UserNotif, prepareEnv, cleanupEnv
+from podenv.env import Capabilities, Env, ExecArgs, UserNotif, prepareEnv, \
+    cleanupEnv
 
 log = logging.getLogger("podenv")
 
@@ -42,8 +43,8 @@ def usageParser() -> argparse.ArgumentParser:
     return parser
 
 
-def usage() -> argparse.Namespace:
-    return usageParser().parse_args()
+def usage(args: ExecArgs) -> argparse.Namespace:
+    return usageParser().parse_args(args)
 
 
 def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
@@ -86,8 +87,8 @@ def getUserNotificationProc(verbose: bool) -> UserNotif:
         f"\033[92m{msg}\033[m", file=sys.stderr)
 
 
-def run() -> None:
-    args = usage()
+def run(argv: ExecArgs = sys.argv[1:]) -> None:
+    args = usage(argv)
     setupLogging(args.verbose)
     notifyUserProc = getUserNotificationProc(args.verbose)
 

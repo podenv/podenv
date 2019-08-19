@@ -50,7 +50,10 @@ newdoc = doc[:envblockstart] + envblock + doc[envblockend:capblockstart] + \
 exit(0) if newdoc == doc else open('README.md', 'w').write('\n'.join( \
   newdoc)); print('README.md updated!');")
 
-test: test-type test-lint
+test: test-type test-unit test-lint
+
+test-unit:
+	@(PYTHONPATH=. python3 -m unittest -v tests/*.py)
 
 test-lint:
 	flake8
