@@ -244,14 +244,14 @@ uidmap               | map host uid                                             
 ```bash
 $ python3 -mpip install --user .
 $ podenv --help
-usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [--root] [--no-root]
-              [--privileged] [--no-privileged] [--terminal] [--no-terminal]
-              [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
-              [--no-pulseaudio] [--git] [--no-git] [--editor] [--no-editor]
-              [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam] [--no-webcam]
-              [--dri] [--no-dri] [--kvm] [--no-kvm] [--tun] [--no-tun]
-              [--seccomp] [--no-seccomp] [--selinux] [--no-selinux] [--setuid]
-              [--no-setuid] [--ptrace] [--no-ptrace] [--network]
+usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [-e ENVIRON] [--root]
+              [--no-root] [--privileged] [--no-privileged] [--terminal]
+              [--no-terminal] [--ipc] [--no-ipc] [--x11] [--no-x11]
+              [--pulseaudio] [--no-pulseaudio] [--git] [--no-git] [--editor]
+              [--no-editor] [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam]
+              [--no-webcam] [--dri] [--no-dri] [--kvm] [--no-kvm] [--tun]
+              [--no-tun] [--seccomp] [--no-seccomp] [--selinux] [--no-selinux]
+              [--setuid] [--no-setuid] [--ptrace] [--no-ptrace] [--network]
               [--no-network] [--mount-cwd] [--no-mount-cwd] [--mount-run]
               [--no-mount-run] [--mount-cache] [--no-mount-cache]
               [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
@@ -269,6 +269,8 @@ optional arguments:
   --shell               Run bash instead of the profile command
   -p PACKAGE, --package PACKAGE
                         Add a package to the environment
+  -e ENVIRON, --environ ENVIRON
+                        Set an environ variable
   --root                Enable capability: run as root
   --no-root             Disable root capibility
   --privileged          Enable capability: run as privileged container

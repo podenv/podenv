@@ -35,6 +35,10 @@ class TestCommandLineInterface(unittest.TestCase):
         self.assertEqual(env.image, environments["fedora"]["image"],
                          "fedora env is loaded")
 
+    def test_override_environ(self):
+        env = getEnv(["-e", "PORT=4242", "python-http-server"])
+        self.assertEqual(env.environ["PORT"], "4242")
+
 
 if __name__ == '__main__':
     unittest.main()

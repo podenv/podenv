@@ -33,6 +33,8 @@ def usageParser() -> argparse.ArgumentParser:
                         help="Run bash instead of the profile command")
     parser.add_argument("-p", "--package", action='append',
                         help="Add a package to the environment")
+    parser.add_argument("-e", "--environ", action='append',
+                        help="Set an environ variable")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capability: {doc}")
@@ -54,6 +56,10 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
             env.capabilities[name] = True
         if getattr(args, f"no_{argName}"):
             env.capabilities[name] = False
+    if args.environ:
+        for argsEnviron in args.environ:
+            key, val = argsEnviron.split("=", 1)
+            env.environ[key] = val
     if args.shell:
         env.capabilities["terminal"] = True
         env.command = ["/bin/bash"]
