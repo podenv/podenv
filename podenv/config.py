@@ -23,16 +23,12 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional
 from yaml import safe_load
 
-from podenv.pod import downloadUrl, outdated
+from podenv.pod import canUpdate, execute, outdated
 from podenv.env import Env, UserNotif
 from podenv import defaults
 
 
 log = getLogger("podenv")
-
-
-def isGithubProject(url: str) -> bool:
-    return len(url.strip('/').split('/')) == 5
 
 
 def urlToFilename(url: str) -> str:
@@ -50,6 +46,35 @@ def attributesToCamelCase(envSchema: Dict[Any, Any]) -> Dict[Any, Any]:
     return envSchema
 
 
+def askConfirmation(msg: str) -> bool:
+    print(msg + " [Yn]: ", end='')
+    try:
+        return input().strip().lower() in ("", "y", "yes")
+    except KeyboardInterrupt:
+        print()
+        return False
+
+
+def syncRegistry(url: str, localPath: Path) -> None:
+    if not any(map(lambda scheme: url.startswith(f"{scheme}://"),
+                   ("https", "file"))):
+        raise RuntimeError(f"Can't sync registry over insecure channel {url}")
+    try:
+        if not (localPath / ".git").exists():
+            if url.startswith("https://") and not askConfirmation(
+                    f"Press enter to sync registry {url}"):
+                return
+            localPath.mkdir(parents=True, exist_ok=True)
+            log.info("Cloning %s", url)
+            execute(["git", "clone", url, str(localPath)])
+        else:
+            log.info("Updating %s", url)
+            execute(["git", "pull"], cwd=localPath)
+        # TODO: Validate signature
+    except RuntimeError:
+        log.warning(f"Couldn't update {url}")
+
+
 class Config:
     def __init__(self, configFile: Path) -> None:
         schema: Dict[str, Any] = safe_load(configFile.read_text())
@@ -61,22 +86,16 @@ class Config:
         distConfig = Path("/usr/share/podenv/config.yaml")
         if distConfig.exists():
             self.loadEnvs(safe_load(distConfig.read_text()), distConfig)
-        for extraConfig in schema.get('system', {}).get('extraConfigs', []):
-            extraConfigFile = Path(extraConfig)
-            if not extraConfigFile.exists() and extraConfig.startswith("http"):
-                if isGithubProject(extraConfig):
-                    rawUrl = "https://raw.githubusercontent.com/"
-                    rawUrl += extraConfig.strip('/').split('/', 3)[-1]
-                    rawUrl = rawUrl + "/master/config.yaml"
-                else:
-                    rawUrl = extraConfig
-                extraConfigFile = (
-                    configFile.parent / "extras" /
-                    urlToFilename(extraConfig)).with_suffix(".yaml")
-                if not extraConfigFile.exists() or outdated(extraConfigFile):
-                    downloadUrl(rawUrl, extraConfigFile)
-            self.loadEnvs(
-                safe_load(extraConfigFile.read_text()), extraConfigFile)
+        for registry in schema.get("system", {}).get("registries", []):
+            localPath = (configFile.parent / "registries" /
+                         urlToFilename(registry))
+            extraConfigFile = localPath / "config.yaml"
+            if canUpdate() and (not extraConfigFile.exists() or
+                                outdated(localPath / ".git")):
+                syncRegistry(registry, localPath)
+            if extraConfigFile.exists():
+                self.loadEnvs(
+                    safe_load(extraConfigFile.read_text()), extraConfigFile)
 
         self.loadEnvs(schema.get('environments', {}), configFile)
 

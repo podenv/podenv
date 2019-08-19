@@ -196,8 +196,8 @@ def updated(lastUpdate: str, maxAge: int = DAY) -> bool:
     return age(lastUpdate) < maxAge
 
 
-def outdated(path: Path, maxAge: int = DAY * 7) -> bool:
-    return os.stat(path).st_mtime > (time.time() - maxAge)
+def outdated(path: Path, maxAge: int = DAY) -> bool:
+    return not path.exists() or os.stat(path).st_mtime < (time.time() - maxAge)
 
 
 def isSelinux() -> bool:
