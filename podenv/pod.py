@@ -41,6 +41,7 @@ BuildId = str
 BuildSession = ContextManager[BuildId]
 TZFormat = "%Y-%m-%dT%H:%M:%S"
 DAY = 3600 * 24
+HasRoute: Optional[bool] = None
 
 
 class AlreadyRunning(Exception):
@@ -181,11 +182,14 @@ def age(date: str) -> float:
 
 
 def canUpdate() -> bool:
-    try:
-        return "via" in pread(["ip", "route", "get", "1.1.1.1"])
-    except RuntimeError:
-        log.warning("Skipping update because host is not online")
-    return False
+    global HasRoute
+    if HasRoute is None:
+        try:
+            HasRoute = "via" in pread(["ip", "route", "get", "1.1.1.1"])
+        except RuntimeError:
+            log.warning("Skipping update because host is not online")
+            HasRoute = False
+    return HasRoute
 
 
 def updated(lastUpdate: str, maxAge: int = DAY) -> bool:
