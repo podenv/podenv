@@ -12,6 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""
+This module is the command line interface entrypoint.
+"""
+
 import argparse
 import logging
 import sys
@@ -53,6 +57,7 @@ def usage(args: ExecArgs) -> argparse.Namespace:
 
 
 def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
+    """Mutate the environment with the command line override"""
     for name, _, _ in Capabilities:
         argName = name.replace('-', '_')
         if getattr(args, f"{argName}"):
@@ -85,6 +90,7 @@ def fail(userNotif: UserNotif, msg: str, code: int = 1) -> None:
 
 
 def getUserNotificationProc(verbose: bool) -> UserNotif:
+    """Return a callable to notify the user"""
     if not sys.stdout.isatty():
         if environ.get("DBUS_SESSION_BUS_ADDRESS") or (
                 environ.get("XDG_RUNTIME_DIR") and (

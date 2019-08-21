@@ -14,6 +14,18 @@
 
 all: test doc
 
+test: test-type test-unit test-lint
+
+test-type:
+	mypy --strict podenv
+
+test-unit:
+	@(PYTHONPATH=. python3 -m unittest -v tests/*.py)
+
+test-lint:
+	flake8
+
+# Generate README.md content manually... to be replaced by sphinx autoclass?
 doc:
 	@(python3 -c "'Poor man autodoc generator'; \
 '# Get README.md indexes'; \
@@ -49,14 +61,3 @@ newdoc = doc[:envblockstart] + envblock + doc[envblockend:capblockstart] + \
          usage + doc[usageblockend:]; \
 exit(0) if newdoc == doc else open('README.md', 'w').write('\n'.join( \
   newdoc)); print('README.md updated!');")
-
-test: test-type test-unit test-lint
-
-test-unit:
-	@(PYTHONPATH=. python3 -m unittest -v tests/*.py)
-
-test-lint:
-	flake8
-
-test-type:
-	mypy --strict podenv

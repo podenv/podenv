@@ -13,7 +13,7 @@
 # under the License.
 
 """
-This module handles configuration schema.
+This module handles the configuration schema.
 """
 
 from __future__ import annotations

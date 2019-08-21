@@ -12,6 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+"""
+This module handles environment definitions.
+"""
+
 from __future__ import annotations
 import os
 import re
