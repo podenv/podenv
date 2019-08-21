@@ -243,7 +243,7 @@ uidmap               | map host uid                                             
 ```bash
 $ python3 -mpip install --user .
 $ podenv --help
-usage: podenv [-h] [--verbose] [--shell] [-p PACKAGE] [-e ENVIRON]
+usage: podenv [-h] [--verbose] [--list] [--shell] [-p PACKAGE] [-e ENVIRON]
               [--manage-image] [--no-manage-image] [--root] [--no-root]
               [--privileged] [--no-privileged] [--terminal] [--no-terminal]
               [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
@@ -266,6 +266,7 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   --verbose
+  --list                List available environments
   --shell               Run bash instead of the profile command
   -p PACKAGE, --package PACKAGE
                         Add a package to the environment

@@ -82,10 +82,12 @@ class Config:
         self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
-        self.loadEnvs(defaults.environments, Path(defaults.__file__))
+        self.loadEnvs(
+            defaults.environments, Path(defaults.__file__), "internal")
         distConfig = Path("/usr/share/podenv/config.yaml")
         if distConfig.exists():
-            self.loadEnvs(safe_load(distConfig.read_text()), distConfig)
+            self.loadEnvs(safe_load(
+                distConfig.read_text()), distConfig, "included")
         for registry in schema.get("system", {}).get("registries", []):
             localPath = (configFile.parent / "registries" /
                          urlToFilename(registry))
@@ -95,15 +97,22 @@ class Config:
                 syncRegistry(registry, localPath)
             if extraConfigFile.exists():
                 self.loadEnvs(
-                    safe_load(extraConfigFile.read_text()), extraConfigFile)
+                    safe_load(extraConfigFile.read_text()),
+                    extraConfigFile,
+                    registry)
 
-        self.loadEnvs(schema.get('environments', {}), configFile)
+        self.loadEnvs(schema.get('environments', {}), configFile, "local")
 
-    def loadEnvs(self, schema: Dict[str, Any], configFile: Path) -> None:
+    def loadEnvs(
+            self,
+            schema: Dict[str, Any],
+            configFile: Path,
+            registryName: str) -> None:
         for envName, envSchema in schema.items():
             self.envs[envName] = Env(
                 envName,
                 configFile=configFile,
+                registryName=registryName,
                 **attributesToCamelCase(envSchema))
 
 
@@ -157,6 +166,7 @@ def initOverlays(overlayDir: Path) -> None:
 
 def loadConfig(
         userNotif: UserNotif,
+        skipLocal: bool = False,
         configDir: Path = Path("~/.config/podenv")) -> Config:
     configDir = configDir.expanduser()
     configFile = configDir / "config.yaml"
@@ -168,12 +178,13 @@ def loadConfig(
         initOverlays(conf.overlaysDir)
     # Look for local conf
     localConf = Path("default.podenv")
-    if localConf.exists():
+    if not skipLocal and localConf.exists():
         # Create profile name
         envName = Path().resolve().name
         conf.envs[envName] = Env(
             envName,
             configFile=localConf,
+            registryName="local-file",
             **attributesToCamelCase(safe_load(localConf.read_text())))
         conf.default = envName
         userNotif(f"Using ./{localConf} for {envName}")

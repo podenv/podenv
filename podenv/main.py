@@ -17,6 +17,7 @@ import logging
 import sys
 from os import environ
 from pathlib import Path
+from typing import Dict
 
 from podenv.config import loadConfig, loadEnv
 from podenv.pod import killPod, setupPod, executePod, desktopNotification
@@ -29,6 +30,8 @@ log = logging.getLogger("podenv")
 def usageParser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
+    parser.add_argument("--list", action='store_true',
+                        help="List available environments")
     parser.add_argument("--shell", action='store_true',
                         help="Run bash instead of the profile command")
     parser.add_argument("-p", "--package", action='append',
@@ -93,6 +96,22 @@ def getUserNotificationProc(verbose: bool) -> UserNotif:
         f"\033[92m{msg}\033[m", file=sys.stderr)
 
 
+def listEnv(envs: Dict[str, Env]) -> None:
+    maxEnvNameLen = max(map(len, envs.keys())) + 3
+    maxParentNameLen = max(map(lambda x: len(x.parent), envs.values())) + 3
+    maxRegistryNameLen = max(
+        map(lambda x: len(x.registryShortName), envs.values())) + 3
+    lineFmt = "{:<%ds}{:<%ds}{:<%ds}{}" % (
+        maxEnvNameLen, maxParentNameLen, maxRegistryNameLen)
+    print(lineFmt.format("NAME", "PARENT", "REGISTRY", "DESCRIPTION"))
+    for _, env in sorted(envs.items()):
+        print(lineFmt.format(
+            env.name,
+            env.parent if env.parent else "",
+            env.registryShortName,
+            env.description))
+
+
 def run(argv: ExecArgs = sys.argv[1:]) -> None:
     args = usage(argv)
     setupLogging(args.verbose)
@@ -100,7 +119,9 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         # Load config and prepare the environment, no IO are performed here
-        conf = loadConfig(notifyUserProc)
+        conf = loadConfig(notifyUserProc, skipLocal=args.list)
+        if args.list:
+            return listEnv(conf.envs)
         env = loadEnv(conf, args.env)
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs = prepareEnv(env, args.args)

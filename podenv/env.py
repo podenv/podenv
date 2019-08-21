@@ -242,6 +242,8 @@ class Env:
         internal=True))
     configFile: Optional[Path] = field(default=None, metadata=dict(
         internal=True))
+    registryName: str = field(default="", metadata=dict(internal=True))
+    registryShortName: str = field(default="", metadata=dict(internal=True))
 
     def applyParent(self, parentEnv: Env) -> None:
         for attr in fields(Env):
@@ -284,6 +286,12 @@ class Env:
         self.capabilities.update(retroCap)
         # Convert str to list
         self.requires = asList(self.requires)
+        # Minify registry name
+        self.registryShortName = "/".join(
+            self.registryName.rstrip('/').split('/')[-3:])
+        # Ensure parent is a str
+        if not self.parent:
+            self.parent = ""
 
 
 def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
