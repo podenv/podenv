@@ -25,7 +25,7 @@ In a `~/.config/podenv/config.yaml`file, define desktop application:
 
 ```yaml
 environments:
-  base:
+  fedora:
     image: registry.fedoraproject.org/fedora:30
     capabilities:
       auto-update: True
@@ -37,6 +37,7 @@ environments:
       TERM: xterm
 
   shell:
+    parent: fedora
     capabilities:
       terminal: True
       mount-run: True
@@ -65,6 +66,7 @@ environments:
       ~/.config/openstack: ~/.config/openstack
 
   firefox:
+    parent: fedora
     image-tasks:
       - name: Install rpmfusion repository
         shell: dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(grep ^VERSION_ID= /etc/os-release | cut -d= -f2).noarch.rpm
@@ -117,6 +119,7 @@ mount a file argument inside the container, for examples:
 ```yaml
   # podenv youtube-dl $url  # download file to local directory
   youtube-dl:
+    parent: fedora
     packages:
       - youtube-dl
     capabilities:
@@ -128,6 +131,7 @@ mount a file argument inside the container, for examples:
 
   # podenv pdf $filepath  # open local file
   pdf:
+    parent: fedora
     packages:
       - mupdf
     capabilities:
@@ -141,6 +145,7 @@ Network can be shared:
 
 ```yaml
   corpvpn:
+    parent: fedora
     network: corpvpn
     packages: ["openvpn"]
     capabilities:
@@ -166,6 +171,8 @@ as the one from this project:
 
 ```bash
 $ cat ./default.podenv
+description: 'Run podenv unittest'
+parent: fedora
 capabilities:
   mount-cwd: True
   uidmap: True

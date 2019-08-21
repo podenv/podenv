@@ -78,8 +78,11 @@ def syncRegistry(url: str, localPath: Path) -> None:
 class Config:
     def __init__(self, configFile: Path) -> None:
         schema: Dict[str, Any] = safe_load(configFile.read_text())
-        self.dns: Optional[str] = schema.get('system', {}).get('dns')
-        self.default: str = schema.get('system', {}).get('defaultEnv', 'shell')
+        schema.setdefault('system', {})
+        self.dns: Optional[str] = schema['system'].get('dns')
+        self.default: str = schema['system'].get('default-env', 'shell')
+        self.defaultCap: Dict[str, bool] = schema['system'].get(
+            'default-capabilities', dict(selinux=True, seccomp=True))
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
         self.loadEnvs(
@@ -114,6 +117,9 @@ class Config:
                 configFile=configFile,
                 registryName=registryName,
                 **attributesToCamelCase(envSchema))
+            for capName, capValue in self.defaultCap.items():
+                if capName not in self.envs[envName].capabilities:
+                    self.envs[envName].capabilities[capName] = capValue
 
 
 def initConfig(configDir: Path, configFile: Path) -> None:
@@ -124,26 +130,22 @@ def initConfig(configDir: Path, configFile: Path) -> None:
         system:
           # Set IP of local resolver when using dnsmasq
           dns: null
-          defaultEnv: shell
+          default-env: shell
+          default-capabilities:
+            seccomp: True
+            selinux: True
 
         environments:
-          # Default environment
-          base:
-            image: registry.fedoraproject.org/fedora:30
-            capabilities:
-              seccomp: True
-              selinux: True
-              manage-image: True
-              auto-update: True
-            environ:
-              LC_ALL: en_US.UTF-8
-              SHLVL: 3
-              TERM: xterm
+          # Local environments
           shell:
             command: ["/bin/bash"]
+            parent: fedora
             capabilities:
               terminal: True
               mount-run: True
+            environ:
+              SHLVL: 3
+              TERM: xterm
             overlays:
               - bash
         """)
@@ -196,13 +198,8 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
         envName = conf.default
 
     def resolvParents(parent: Optional[str], history: List[str]) -> None:
-        if parent is None:
-            # Environment is a parent, no need to load base
+        if not parent:
             return
-        elif parent == "":
-            if "base" in history:
-                return
-            parent = "base"
         if parent in history:
             raise RuntimeError("Circular dependencies detected %s in %s" % (
                 parent, history))

@@ -42,8 +42,11 @@ environments = {
     # System
     "fedora": dict(
         image="registry.fedoraproject.org/fedora:30",
+        capabilities=dict(
+            on("manage-image") + on("auto-update")),
     ),
     "fedora-admin": dict(
+        parent="fedora",
         description="Fedora admin shell",
         capabilities=dict(
             on("root") + on("network") + on("mount-cache") + on("terminal")),

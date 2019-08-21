@@ -577,7 +577,7 @@ def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
         env.runtime = ContainerImage(cacheDir, env.image, env.manageImage)
 
     if not env.runtime:
-        raise NotImplementedError()
+        raise NotImplementedError("No runtime is defined")
 
     if not env.runtime.exists(env.autoUpdate):
         userNotif(f"Creating {env.runtime}")

@@ -1,5 +1,7 @@
 # This file is a local podenv configuration
 ---
+description: 'Run podenv unittest'
+parent: fedora
 capabilities:
   mount-cwd: True
   uidmap: True
