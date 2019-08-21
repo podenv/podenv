@@ -117,9 +117,6 @@ class Config:
                 configFile=configFile,
                 registryName=registryName,
                 **attributesToCamelCase(envSchema))
-            for capName, capValue in self.defaultCap.items():
-                if capName not in self.envs[envName].capabilities:
-                    self.envs[envName].capabilities[capName] = capValue
 
 
 def initConfig(configDir: Path, configFile: Path) -> None:
@@ -221,6 +218,11 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
         resolvParents(env.parent, [])
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't load the environment")
+
+    # Apply default cap
+    for capName, capValue in conf.defaultCap.items():
+        if capName not in env.capabilities:
+            env.capabilities[capName] = capValue
 
     env.overlaysDir = conf.overlaysDir
     env.runDir = Path("/tmp/podenv") / env.name
