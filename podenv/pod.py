@@ -257,6 +257,9 @@ class PodmanRuntime(Runtime):
             "commands": {
                 "install": "apt-get install -y ",
                 "update": "apt-get update -y "
+            },
+            "mounts": {
+                "/var/cache/apt": "~/.cache/podenv/apt"
             }
         },
         "emerge": {

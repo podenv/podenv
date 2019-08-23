@@ -51,6 +51,21 @@ environments = {
         capabilities=dict(
             on("root") + on("network") + on("mount-cache") + on("terminal")),
     ),
+    "debian": dict(
+        image="docker.io/debian:stretch",
+        capabilities=dict(
+            on("manage-image") + on("auto-update")),
+        imageTasks=[
+            dict(name="Remove docker customization",
+                 shell="rm -f /etc/apt/apt.conf.d/docker-*"),
+        ]
+    ),
+    "debian-admin": dict(
+        parent="debian",
+        description="Debian admin shell",
+        capabilities=dict(
+            on("root") + on("network") + on("mount-cache") + on("terminal")),
+    ),
 
     # Basic desktop applications
     "pavucontrol": dict(
