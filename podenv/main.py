@@ -42,6 +42,8 @@ def usageParser() -> argparse.ArgumentParser:
                         help="Add a package to the environment")
     parser.add_argument("-e", "--environ", action='append',
                         help="Set an environ variable")
+    parser.add_argument("-i", "--image",
+                        help="Override the image name")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capability: {doc}")
@@ -71,6 +73,8 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
     if args.shell:
         env.capabilities["terminal"] = True
         env.command = ["/bin/bash"]
+    if args.image:
+        env.image = args.image
 
 
 def setupLogging(debug: bool) -> None:
