@@ -24,7 +24,8 @@ from pathlib import Path
 from typing import Dict
 
 from podenv.config import loadConfig, loadEnv
-from podenv.pod import killPod, setupPod, executePod, desktopNotification
+from podenv.pod import killPod, setupPod, executePod, desktopNotification, \
+    podmanExists
 from podenv.env import Capabilities, Env, ExecArgs, UserNotif, prepareEnv, \
     cleanupEnv
 
@@ -46,6 +47,8 @@ def usageParser() -> argparse.ArgumentParser:
                         help="Override the image name")
     parser.add_argument("-b", "--base",
                         help="Override the base environment name")
+    parser.add_argument("-t", "--tag",
+                        help="Set the image tag")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capability: {doc}")
@@ -148,6 +151,12 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         # Run the environment
+        if args.tag:
+            # This is a bit of a hack, tag should be passed to the env and used
+            # by the runtime.getExecName procedure
+            imageName[-1] += ":" + args.tag
+            if not podmanExists("image", imageName[-1]):
+                fail(notifyUserProc, f"Unknown tag {imageName[-1]}")
         executePod(containerName, containerArgs, imageName, envArgs)
         podResult = 0
     except KeyboardInterrupt:
