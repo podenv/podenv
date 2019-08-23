@@ -260,7 +260,10 @@ class PodmanRuntime(Runtime):
             },
             "mounts": {
                 "/var/cache/apt": "~/.cache/podenv/apt"
-            }
+            },
+            "packagesMap": {
+                "vi": "vim"
+            },
         },
         "emerge": {
             "mounts": {
@@ -277,6 +280,7 @@ class PodmanRuntime(Runtime):
     def __init__(self, cacheDir: Path, name: str, fromRef: str):
         self.commands: Dict[str, str] = {}
         self.mounts: Dict[str, str] = {}
+        self.packagesMap: Dict[str, str] = {}
         self.info: Info = {}
         self.fromRef: str = fromRef
         self.name: str = name
@@ -323,6 +327,7 @@ class PodmanRuntime(Runtime):
             systemType = "apt-get"
         self.commands = self.System[systemType]["commands"]
         self.mounts = self.System[systemType].get("mounts", {})
+        self.packagesMap = self.System[systemType].get("packagesMap", {})
 
     def getSystemType(self, buildId: BuildId) -> str:
         systemType = self.info.get("system")
@@ -397,8 +402,10 @@ class PodmanRuntime(Runtime):
     def install(self, packages: Set[str]) -> None:
         with self.getSession() as buildId:
             systemType = self.getSystemType(buildId)
+            packagesMapped = map(lambda x: self.packagesMap.get(x, x),
+                                 packages)
             self.runCommand(
-                buildId, self.commands["install"] + " ".join(packages))
+                buildId, self.commands["install"] + " ".join(packagesMapped))
             self.commit(buildId)
         self.updateInfo(dict(system=systemType, packages=list(packages.union(
                 self.info["packages"]))))

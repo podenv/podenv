@@ -425,7 +425,6 @@ def editorCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "setup editor env"
     if active:
         ctx.environ["EDITOR"] = os.environ.get("EDITOR", "vi")
-        # TODO: manage package name translation based on system type.
         env.packages.append("vi")
 
 
