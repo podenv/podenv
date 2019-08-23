@@ -251,17 +251,18 @@ uidmap               | map host uid                                             
 $ python3 -mpip install --user .
 $ podenv --help
 usage: podenv [-h] [--verbose] [--list] [--shell] [-p PACKAGE] [-e ENVIRON]
-              [-i IMAGE] [--manage-image] [--no-manage-image] [--root]
-              [--no-root] [--privileged] [--no-privileged] [--terminal]
-              [--no-terminal] [--ipc] [--no-ipc] [--x11] [--no-x11]
-              [--pulseaudio] [--no-pulseaudio] [--git] [--no-git] [--editor]
-              [--no-editor] [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam]
-              [--no-webcam] [--dri] [--no-dri] [--kvm] [--no-kvm] [--tun]
-              [--no-tun] [--seccomp] [--no-seccomp] [--selinux] [--no-selinux]
-              [--setuid] [--no-setuid] [--ptrace] [--no-ptrace] [--network]
-              [--no-network] [--mount-cwd] [--no-mount-cwd] [--mount-run]
-              [--no-mount-run] [--mount-cache] [--no-mount-cache]
-              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
+              [-i IMAGE] [-b BASE] [--manage-image] [--no-manage-image]
+              [--root] [--no-root] [--privileged] [--no-privileged]
+              [--terminal] [--no-terminal] [--ipc] [--no-ipc] [--x11]
+              [--no-x11] [--pulseaudio] [--no-pulseaudio] [--git] [--no-git]
+              [--editor] [--no-editor] [--ssh] [--no-ssh] [--gpg] [--no-gpg]
+              [--webcam] [--no-webcam] [--dri] [--no-dri] [--kvm] [--no-kvm]
+              [--tun] [--no-tun] [--seccomp] [--no-seccomp] [--selinux]
+              [--no-selinux] [--setuid] [--no-setuid] [--ptrace] [--no-ptrace]
+              [--network] [--no-network] [--mount-cwd] [--no-mount-cwd]
+              [--mount-run] [--no-mount-run] [--mount-cache]
+              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
+              [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -281,6 +282,7 @@ optional arguments:
                         Set an environ variable
   -i IMAGE, --image IMAGE
                         Override the image name
+  -b BASE, --base BASE  Override the base environment name
   --manage-image        Enable capability: manage the image with buildah
   --no-manage-image     Disable manage-image capibility
   --root                Enable capability: run as root

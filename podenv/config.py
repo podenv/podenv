@@ -190,7 +190,8 @@ def loadConfig(
     return conf
 
 
-def loadEnv(conf: Config, envName: Optional[str]) -> Env:
+def loadEnv(
+        conf: Config, envName: Optional[str], baseName: Optional[str]) -> Env:
     if not envName:
         envName = conf.default
 
@@ -204,6 +205,11 @@ def loadEnv(conf: Config, envName: Optional[str]) -> Env:
             log.error(
                 "%s: parent does not exist (history: %s)", parent, history)
         parentEnv = conf.envs[parent]
+        if not parentEnv.parent and baseName:
+            # Override last parent with base
+            if baseName not in conf.envs:
+                log.error("%s: parent does not exist", baseName)
+            parentEnv = conf.envs[baseName]
         env.applyParent(parentEnv)
         resolvParents(parentEnv.parent, history + [parent])
 

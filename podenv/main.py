@@ -44,6 +44,8 @@ def usageParser() -> argparse.ArgumentParser:
                         help="Set an environ variable")
     parser.add_argument("-i", "--image",
                         help="Override the image name")
+    parser.add_argument("-b", "--base",
+                        help="Override the base environment name")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capability: {doc}")
@@ -132,7 +134,7 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         conf = loadConfig(notifyUserProc, skipLocal=args.list or args.env)
         if args.list:
             return listEnv(conf.envs)
-        env = loadEnv(conf, args.env)
+        env = loadEnv(conf, args.env, args.base)
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs = prepareEnv(env, args.args)
     except RuntimeError as e:
