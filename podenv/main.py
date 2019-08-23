@@ -125,7 +125,7 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         # Load config and prepare the environment, no IO are performed here
-        conf = loadConfig(notifyUserProc, skipLocal=args.list)
+        conf = loadConfig(notifyUserProc, skipLocal=args.list or args.env)
         if args.list:
             return listEnv(conf.envs)
         env = loadEnv(conf, args.env)
