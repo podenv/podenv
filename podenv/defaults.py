@@ -66,6 +66,22 @@ environments = {
         capabilities=dict(
             on("root") + on("network") + on("mount-cache") + on("terminal")),
     ),
+    "gentoo": dict(
+        image="docker.io/gentoo/stage3-x86:latest",
+        capabilities=dict(
+            on("manage-image") + on("auto-update")),
+        imageTasks=[
+            dict(name="Fix emerge in rootless",
+                 shell='echo FEATURES="-sandbox" >> /etc/portage/make.conf;'
+                 'echo USE="-filecaps" >> /etc/portage/make.conf')
+        ]
+    ),
+    "gentoo-admin": dict(
+        parent="gentoo",
+        description="Gentoo admin shell",
+        capabilities=dict(
+            on("root") + on("network") + on("mount-cache") + on("terminal")),
+    ),
 
     # Basic desktop applications
     "pavucontrol": dict(

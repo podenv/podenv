@@ -268,11 +268,18 @@ class PodmanRuntime(Runtime):
         "emerge": {
             "mounts": {
                 "/var/db/repos/gentoo": "~/.cache/podenv/portage",
+                "/usr/portage": "~/.cache/podenv/portage",
+                "/var/cache/distfiles": "~/.cache/podenv/distfiles",
+                "/var/cache/eix": "~/.cache/podenv/eix",
             },
             "commands": {
-                "install": "emerge -vaDNt --verbose-conflicts ",
-                "update": "emerge -uvaDNt ",
+                "install": "emerge -vDNt --verbose-conflicts ",
+                "update": "emerge -uvDNt @world",
                 "pre-update": "emerge --sync --quiet",
+            },
+            "packagesMap": {
+                "git": "dev-vcs/git",
+                "vi": "app-editors/vim",
             }
         },
     }
