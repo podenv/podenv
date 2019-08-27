@@ -39,6 +39,7 @@ def usageParser() -> argparse.ArgumentParser:
                         help="List available environments")
     parser.add_argument("--shell", action='store_true',
                         help="Run bash instead of the profile command")
+    parser.add_argument("--net", help="Set the network (host or env name)")
     parser.add_argument("-p", "--package", action='append',
                         help="Add a package to the environment")
     parser.add_argument("-e", "--environ", action='append',
@@ -80,6 +81,8 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
         env.command = ["/bin/bash"]
     if args.image:
         env.image = args.image
+    if args.network:
+        env.network = args.network
 
 
 def setupLogging(debug: bool) -> None:

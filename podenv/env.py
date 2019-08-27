@@ -338,7 +338,10 @@ def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
 def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable network"
     if env.network:
-        ctx.networkNamespace = f"container:net-{env.network}"
+        if env.network == "host":
+            ctx.networkNamespace = "host"
+        else:
+            ctx.networkNamespace = f"container:net-{env.network}"
 
     if not active and not env.network:
         ctx.networkNamespace = "none"
