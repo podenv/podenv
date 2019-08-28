@@ -196,6 +196,8 @@ def loadEnv(
         envName = conf.default
 
     def resolvParents(parent: Optional[str], history: List[str]) -> None:
+        if not parent and (baseName and baseName not in history):
+            parent = baseName
         if not parent:
             return
         if parent in history:
