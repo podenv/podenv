@@ -319,7 +319,8 @@ def getUidMap(_: Env) -> ExecArgs:
 def uidmapCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "map host uid"
     if active:
-        ctx.execArgs.extend(getUidMap(env))
+        if "--uidmap" not in ctx.execArgs:
+            ctx.execArgs.extend(getUidMap(env))
 
 
 def privilegedCap(active: bool, ctx: ExecContext, _: Env) -> None:
