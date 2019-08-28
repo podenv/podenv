@@ -240,6 +240,7 @@ setuid               | enable setuid                                            
 ptrace               | enable ptrace                                                |
 network              | enable network                                               |
 mount-cwd            | mount cwd to /data                                           |
+mount-home           | mount home to host home                                      |
 mount-run            | mount home and tmp to host tmpfs                             |
 mount-cache          | mount image build cache                                      |
 auto-update          | keep environment updated                                     |
@@ -260,9 +261,9 @@ usage: podenv [-h] [--verbose] [--list] [--shell] [--net NET] [-p PACKAGE]
               [--kvm] [--no-kvm] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
               [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
               [--no-ptrace] [--network] [--no-network] [--mount-cwd]
-              [--no-mount-cwd] [--mount-run] [--no-mount-run] [--mount-cache]
-              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
-              [--no-uidmap]
+              [--no-mount-cwd] [--mount-home] [--no-mount-home] [--mount-run]
+              [--no-mount-run] [--mount-cache] [--no-mount-cache]
+              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -327,6 +328,8 @@ optional arguments:
   --no-network          Disable network capibility
   --mount-cwd           Enable capability: mount cwd to /data
   --no-mount-cwd        Disable mount-cwd capibility
+  --mount-home          Enable capability: mount home to host home
+  --no-mount-home       Disable mount-home capibility
   --mount-run           Enable capability: mount home and tmp to host tmpfs
   --no-mount-run        Disable mount-run capibility
   --mount-cache         Enable capability: mount image build cache

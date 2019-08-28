@@ -371,6 +371,12 @@ def mountRunCap(active: bool, ctx: ExecContext, env: Env) -> None:
             ctx.mounts[Path("/tmp")] = env.runDir / "tmp"
 
 
+def mountHomeCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "mount home to host home"
+    if active:
+        ctx.mounts[ctx.home] = Path("~/").expanduser()
+
+
 def mountCacheCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "mount image build cache"
     if active:
@@ -534,6 +540,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         ptraceCap,
         networkCap,
         mountCwdCap,
+        mountHomeCap,
         mountRunCap,
         mountCacheCap,
         autoUpdateCap,
@@ -595,6 +602,11 @@ def validateEnv(env: Env) -> None:
         warn(f"overlay needs a home mount point, "
              "mountRun capability is enabled.")
         mountRunCap(True, env.ctx, env)
+
+    if env.capabilities.get("mount-home") and not env.capabilities.get(
+            "uidmap"):
+        warn("UIDMap is required for mount-home")
+        uidmapCap(True, env.ctx, env)
 
     # Check for image management
     if not env.manageImage:
