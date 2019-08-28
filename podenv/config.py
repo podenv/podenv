@@ -120,6 +120,7 @@ class Config:
 
 
 def initConfig(configDir: Path, configFile: Path) -> None:
+    ps1 = "\\[\\033[01;32m\\]\\h \\[\\033[01;34m\\]\\w \\$ \\[\\033[00m\\]"
     defaultConfig = dedent("""\
         # Podenv configuration file
         ---
@@ -144,9 +145,14 @@ def initConfig(configDir: Path, configFile: Path) -> None:
               SHLVL: 3
               TERM: xterm
             overlays:
-              - bash
-        """)
-    configDir.mkdir(parents=True)
+              - .bashrc: |
+                  if [ -f /etc/bashrc ]; then
+                    . /etc/bashrc
+                  fi
+                  export PS1="{ps1}"
+                  alias ls='ls -ap --color=auto'
+        """.format(ps1=ps1))
+    configDir.mkdir(parents=True, exist_ok=True)
     configFile.write_text(defaultConfig)
 
 
@@ -154,7 +160,7 @@ def initOverlays(overlayDir: Path) -> None:
     overlayDir.mkdir()
     bashOverlay = overlayDir / "bash"
     bashOverlay.mkdir()
-    (bashOverlay / ".bashrc").write_text(dedent(r"""\
+    (bashOverlay / ".bashrc").write_text(dedent(r"""
         if [ -f /etc/bashrc ]; then
             . /etc/bashrc
         fi
@@ -169,7 +175,7 @@ def loadConfig(
         configDir: Path = Path("~/.config/podenv")) -> Config:
     configDir = configDir.expanduser()
     configFile = configDir / "config.yaml"
-    if not configDir.exists():
+    if not configFile.exists():
         initConfig(configDir, configFile)
     conf = Config(configFile)
     conf.overlaysDir = configDir / "overlay"

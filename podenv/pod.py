@@ -734,13 +734,15 @@ def setupPod(
                 if not overlayDir.exists():
                     raise RuntimeError(f"{overlay} does not exists")
                 execute(["rsync", "--copy-links", "-a", str(overlayDir) + "/",
-                         str(homeDir)])
+                         str(homeDir) + "/"])
             else:
                 for containerHomePath, content in overlay.items():
                     hostPath = homeDir / containerHomePath
-                    if not hostPath.exists() or \
-                       hostPath.read_text() != content:
+                    if not hostPath.exists():
                         hostPath.write_text(content)
+                    elif hostPath.read_text() != content:
+                        log.info(
+                            f"Overlay skipped for {hostPath}: already exists")
 
     return imageName
 
