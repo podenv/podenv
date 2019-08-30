@@ -64,6 +64,10 @@ class Runtime(ABC):
         ...
 
     @abstractmethod
+    def getSystemEnvironments(self) -> ExecArgs:
+        ...
+
+    @abstractmethod
     def getSystemMounts(self) -> ExecArgs:
         ...
 

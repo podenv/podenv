@@ -288,6 +288,7 @@ class PodmanRuntime(Runtime):
         self.commands: Dict[str, str] = {}
         self.mounts: Dict[str, str] = {}
         self.packagesMap: Dict[str, str] = {}
+        self.environments: Dict[str, str] = {}
         self.info: Info = {}
         self.fromRef: str = fromRef
         self.name: str = name
@@ -335,6 +336,7 @@ class PodmanRuntime(Runtime):
         self.commands = self.System[systemType]["commands"]
         self.mounts = self.System[systemType].get("mounts", {})
         self.packagesMap = self.System[systemType].get("packagesMap", {})
+        self.environments = self.System[systemType].get("environment", {})
 
     def getSystemType(self, buildId: BuildId) -> str:
         systemType = self.info.get("system")
@@ -366,6 +368,15 @@ class PodmanRuntime(Runtime):
             mounts.extend(["-v", "%s:%s" % (
                 hostPath, Path(containerDir).expanduser().resolve())])
         return mounts
+
+    def getSystemEnvironments(self) -> ExecArgs:
+        envs = []
+        for key, value in self.environments:
+            envs.extend(["-e", f"{key}={value}"])
+        return envs
+
+    def getSystemArgs(self) -> ExecArgs:
+        return self.getSystemMounts() + self.getSystemEnvironments()
 
     def create(self) -> None:
         with self.getSession(create=True) as buildId:
@@ -498,7 +509,7 @@ class ContainerImage(PodmanRuntime):
         execute(self.runCommandArgs(buildId) + shlex.split(command))
 
     def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
-        return buildahRunCommand() + self.getSystemMounts() + [buildId]
+        return buildahRunCommand() + self.getSystemArgs() + [buildId]
 
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         buildahConfig(buildId, config)
@@ -576,7 +587,7 @@ class RootfsDirectory(PodmanRuntime):
 
     def runCommandArgs(self, _: BuildId) -> ExecArgs:
         return ["podman", "run", "--rm", "-t"] + \
-            self.getSystemMounts() + self.getExecName()
+            self.getSystemArgs() + self.getExecName()
 
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         # Rootfs doesn't have metadata
@@ -698,10 +709,11 @@ def setupPod(
 
     # TODO: check for environment requires list
 
+    if not env.runtime:
+        raise RuntimeError("Env has no runtime")
+    imageName = env.runtime.getSystemEnvironments() + imageName
     if env.capabilities.get("mount-cache"):
         # Inject runtime volumes
-        if not env.runtime:
-            raise RuntimeError("Env has no runtime")
         imageName = env.runtime.getSystemMounts() + imageName
 
     if env.desktop:
