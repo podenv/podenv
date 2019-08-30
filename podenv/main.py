@@ -163,7 +163,10 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         executePod(containerName, containerArgs, imageName, envArgs)
         podResult = 0
     except KeyboardInterrupt:
-        killPod(containerName)
+        try:
+            killPod(containerName)
+        except RuntimeError:
+            pass
         podResult = 1
     except RuntimeError:
         podResult = 1
