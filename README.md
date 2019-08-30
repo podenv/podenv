@@ -220,6 +220,7 @@ The available capabilities are:
 Name                 | Doc                                                        |
 -------------------- | ---------------------------------------------------------- |
 manage-image         | manage the image with buildah                                |
+branch-image         | branch the image for this environment                        |
 root                 | run as root                                                  |
 privileged           | run as privileged container                                  |
 terminal             | interactive mode                                             |
@@ -253,17 +254,18 @@ $ python3 -mpip install --user .
 $ podenv --help
 usage: podenv [-h] [--verbose] [--list] [--shell] [--net NET] [-p PACKAGE]
               [-e ENVIRON] [-i IMAGE] [-b BASE] [-t TAG] [--manage-image]
-              [--no-manage-image] [--root] [--no-root] [--privileged]
-              [--no-privileged] [--terminal] [--no-terminal] [--ipc]
-              [--no-ipc] [--x11] [--no-x11] [--pulseaudio] [--no-pulseaudio]
-              [--git] [--no-git] [--editor] [--no-editor] [--ssh] [--no-ssh]
-              [--gpg] [--no-gpg] [--webcam] [--no-webcam] [--dri] [--no-dri]
-              [--kvm] [--no-kvm] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
-              [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
-              [--no-ptrace] [--network] [--no-network] [--mount-cwd]
-              [--no-mount-cwd] [--mount-home] [--no-mount-home] [--mount-run]
-              [--no-mount-run] [--mount-cache] [--no-mount-cache]
-              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
+              [--no-manage-image] [--branch-image] [--no-branch-image]
+              [--root] [--no-root] [--privileged] [--no-privileged]
+              [--terminal] [--no-terminal] [--ipc] [--no-ipc] [--x11]
+              [--no-x11] [--pulseaudio] [--no-pulseaudio] [--git] [--no-git]
+              [--editor] [--no-editor] [--ssh] [--no-ssh] [--gpg] [--no-gpg]
+              [--webcam] [--no-webcam] [--dri] [--no-dri] [--kvm] [--no-kvm]
+              [--tun] [--no-tun] [--seccomp] [--no-seccomp] [--selinux]
+              [--no-selinux] [--setuid] [--no-setuid] [--ptrace] [--no-ptrace]
+              [--network] [--no-network] [--mount-cwd] [--no-mount-cwd]
+              [--mount-home] [--no-mount-home] [--mount-run] [--no-mount-run]
+              [--mount-cache] [--no-mount-cache] [--auto-update]
+              [--no-auto-update] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -288,6 +290,9 @@ optional arguments:
   -t TAG, --tag TAG     Set the image tag
   --manage-image        Enable capability: manage the image with buildah
   --no-manage-image     Disable manage-image capibility
+  --branch-image        Enable capability: branch the image for this
+                        environment
+  --no-branch-image     Disable branch-image capibility
   --root                Enable capability: run as root
   --no-root             Disable root capibility
   --privileged          Enable capability: run as privileged container

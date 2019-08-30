@@ -454,12 +454,17 @@ class PodmanRuntime(Runtime):
 
 class ContainerImage(PodmanRuntime):
     def __init__(
-            self, cacheDir: Path, fromRef: str, manage: bool) -> None:
+            self,
+            cacheDir: Path,
+            fromRef: str,
+            manage: bool,
+            localName: str) -> None:
         self.localName: str = fromRef
         self.manage: bool = manage
         if manage:
-            self.localName = "localhost/podenv/" + fromRef.split(
-                '/', 1)[-1].replace(':', '-')
+            if not localName:
+                localName = fromRef.split('/', 1)[-1].replace(':', '-')
+            self.localName = "localhost/podenv/" + localName
         super().__init__(cacheDir,
                          fromRef.replace(':', '-').replace('/', '_'),
                          fromRef)
@@ -590,12 +595,14 @@ def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
 
     if env.image and env.rootfs:
         raise RuntimeError(
-            f"{env.name}: both image and rootfs can't be defined")
+            f"{env.envName}: both image and rootfs can't be defined")
 
     if env.rootfs:
         env.runtime = RootfsDirectory(cacheDir, env.rootfs)
     elif env.image:
-        env.runtime = ContainerImage(cacheDir, env.image, env.manageImage)
+        env.runtime = ContainerImage(
+            cacheDir, env.image, env.manageImage,
+            env.envName if env.branchImage else "")
 
     if not env.runtime:
         raise NotImplementedError("No runtime is defined")

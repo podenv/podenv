@@ -230,6 +230,8 @@ class Env:
         doc="List of port to expose on the host"))
 
     # Internal attribute
+    envName: str = field(default="", metadata=dict(
+        internal=True))
     runtime: Optional[Runtime] = field(default=None, metadata=dict(
         internal=True))
     ctx: ExecContext = field(default_factory=ExecContext, metadata=dict(
@@ -239,6 +241,8 @@ class Env:
     overlaysDir: Optional[Path] = field(default=None, metadata=dict(
         internal=True))
     manageImage: bool = field(default=True, metadata=dict(
+        internal=True))
+    branchImage: bool = field(default=True, metadata=dict(
         internal=True))
     autoUpdate: bool = field(default=False, metadata=dict(
         internal=True))
@@ -296,6 +300,8 @@ class Env:
         # Ensure parent is a str
         if not self.parent:
             self.parent = ""
+        # Record envName (e.g. without any variant names)
+        self.envName = self.name
 
 
 def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -351,6 +357,11 @@ def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def manageImageCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "manage the image with buildah"
     env.manageImage = active
+
+
+def branchImageCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "branch the image for this environment"
+    env.branchImage = active
 
 
 def mountCwdCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -520,6 +531,7 @@ Capability = Callable[[bool, ExecContext, Env], None]
 Capabilities: List[Tuple[str, Optional[str], Capability]] = [
     (camelCaseToHyphen(func.__name__[:-3]), func.__doc__, func) for func in [
         manageImageCap,
+        branchImageCap,
         rootCap,
         privilegedCap,
         terminalCap,
@@ -616,6 +628,8 @@ def validateEnv(env: Env) -> None:
         if env.imageCustomizations or env.imageTasks:
             warn("manage-image capability is required for image tasks")
             manageImageCap(True, env.ctx, env)
+        if env.branchImage:
+            warn("branch-image capability is incompatible with manage-image")
 
 
 def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:

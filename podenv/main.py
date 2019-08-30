@@ -124,7 +124,7 @@ def listEnv(envs: Dict[str, Env]) -> None:
     print(lineFmt.format("NAME", "PARENT", "REGISTRY", "DESCRIPTION"))
     for _, env in sorted(envs.items()):
         print(lineFmt.format(
-            env.name,
+            env.envName,
             env.parent if env.parent else "",
             env.registryShortName,
             env.description))
