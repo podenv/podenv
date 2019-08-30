@@ -46,6 +46,8 @@ BuildSession = ContextManager[BuildId]
 TZFormat = "%Y-%m-%dT%H:%M:%S"
 DAY = 3600 * 24
 HasRoute: Optional[bool] = None
+GuixBuilder = "bash -c 'guix-daemon --build-users-group=guix-builder " \
+    "--disable-chroot & "
 
 
 class AlreadyRunning(Exception):
@@ -286,6 +288,25 @@ class PodmanRuntime(Runtime):
                 "vi": "app-editors/vim",
             }
         },
+        "guix": {
+            "mounts": {
+                "/gnu": "~/.cache/podenv/guix/gnu",
+                "/var/guix": "~/.cache/podenv/guix/var/guix",
+            },
+            "commands": {
+                "install": GuixBuilder + "guix install ",
+                "pre-update": GuixBuilder + "rm -f "
+                "/var/guix/profiles/default/current-guix; "
+                "guix pull'",
+                "update": GuixBuilder + "guix package -u'",
+            },
+            "environments": {
+                "GUIX_PROFILE": "/root/.config/guix/current",
+                "PATH": ("/var/guix/profiles/per-user/root/current-guix/bin/:"
+                         "/bin:/sbin:/usr/bin:/usr/sbin:"
+                         "/usr/local/bin:/usr/local/sbin")
+            },
+        },
     }
 
     def __init__(self, cacheDir: Path, name: str, fromRef: str):
@@ -432,7 +453,8 @@ class PodmanRuntime(Runtime):
             packagesMapped = map(lambda x: self.packagesMap.get(x, x),
                                  packages)
             self.runCommand(
-                buildId, self.commands["install"] + " ".join(packagesMapped))
+                buildId, self.commands["install"] + " ".join(packagesMapped) +
+                "'" if "bash -c '" in self.commands["install"] else "")
             self.commit(buildId)
         self.updateInfo(dict(system=systemType, packages=list(packages.union(
                 self.info["packages"]))))

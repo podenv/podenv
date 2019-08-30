@@ -19,9 +19,13 @@ Schema definition is subject to changes. Once the schema is stable,
 this should be moved to a separate repo, e.g. podhub.
 """
 
+from os.path import basename
+from textwrap import dedent
 from typing import List, Tuple
 
 
+GUIX_URL = "https://ftp.gnu.org/gnu/guix/guix-binary-1.0.1.x86_64-linux.tar.xz"
+GUIX_KEY = "3CE464558A84FDC69DB40CFB090B11993D9AEBB5"
 Cap = List[Tuple[str, bool]]
 
 
@@ -81,6 +85,69 @@ environments = {
         description="Gentoo admin shell",
         capabilities=dict(
             on("root") + on("network") + on("mount-cache") + on("terminal")),
+    ),
+    "guix": {
+        "parent": "fedora",
+        "description": "Guix packages",
+        "system-type": "guix",
+        "mounts": {
+            "/gnu": "~/.cache/podenv/guix/gnu",
+            "/var/guix": "~/.cache/podenv/guix/var/guix",
+        },
+        "image-tasks": [{
+            "name": "Setup guix binary install",
+            "delegate_to": "host",
+            "shell": dedent("""
+              set -e;
+              if [ ! -d ~/.cache/podenv/guix/var/guix/profiles ]; then
+              mkdir -p ~/.cache/podenv/guix;
+              chcon -R system_u:object_r:container_file_t:s0 \
+              ~/.cache/podenv/guix;
+              pushd ~/.cache/podenv/guix;
+                curl -O {guix_url};
+                curl -O {guix_url}.sig;
+                gpg --keyserver pool.sks-keyservers.net --recv-keys {guix_key};
+                gpg --verify {guix_file}.sig;
+                tar xf {guix_file};
+              fi
+            """.format(guix_url=GUIX_URL,
+                       guix_key=GUIX_KEY,
+                       guix_file=basename(GUIX_URL)))
+        }, {
+            "name": "Setup guix users",
+            "shell": dedent("""
+              groupadd guix-builder;
+              for i in $(seq 1 10);
+              do adduser -G guix-builder guix-builder$i; done;
+              for i in guix guix-daemon;
+              do ln -sf /var/guix/profiles/per-user/root/current-guix/bin/$i \
+                     /usr/bin/$i; done;
+              mkdir -p /root/.config/guix;
+              ln -sf /var/guix/profiles/per-user/root/current-guix \
+                     /root/.config/guix/current
+            """)
+        }, {
+            "name": "Authorize guix.gnu.org substitutes",
+            "shell": "guix archive --authorize < "
+            "/root/.config/guix/current/share/guix/ci.guix.gnu.org.pub"
+        }, {
+            "name": "Do initial pull",
+            "shell": "rm -f /var/guix/profiles/default/current-guix;"
+            "guix-daemon --build-users-group=guix-builder "
+            "--disable-chroot & guix pull",
+        }]
+    },
+    "guix-admin": dict(
+        parent="guix",
+        description="Guix packages admin shell",
+        capabilities=dict(
+            on("root") + on("network") + on("terminal")),
+        command=["/bin/bash", "-c",
+                 "guix-daemon --build-users-group=guix-builder "
+                 "--disable-chroot & "
+                 "source /var/guix/profiles/default/guix-profile/etc/profile;"
+                 "source /var/guix/profiles/per-user/root/"
+                 "current-guix/etc/profile; exec /bin/bash"]
     ),
 
     # Basic desktop applications
