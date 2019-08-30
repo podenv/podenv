@@ -140,6 +140,10 @@ def readProcessJson(args: ExecArgs) -> Any:
 def taskToCommand(task: Task) -> str:
     """Convert ansible like task to shell string"""
     command = []
+    if task.get("delegate_to"):
+        if task["delegate_to"] != "host":
+            raise RuntimeError(f"Task delegate_to is incorrect: {task}")
+        command.append("run_local_%s" % task.pop("delegate_to"))
     if task.get("name"):
         if "'" in task["name"]:
             raise RuntimeError(f"Task name can't have ': {task['name']}")
@@ -437,8 +441,13 @@ class PodmanRuntime(Runtime):
         knownHash: Set[str] = set(self.info.get("customHash", []))
         with self.getSession() as buildId:
             for commandHash, command in commands:
-                execute(self.runCommandArgs(buildId) +
-                        ["/bin/bash", "-c", command])
+                commandArgs: ExecArgs = []
+                if not command.startswith("run_local_host; "):
+                    commandArgs = self.runCommandArgs(buildId)
+                else:
+                    command = command.split('; ', 1)[1]
+                commandArgs += ["/bin/bash", "-c", command]
+                execute(commandArgs)
                 knownHash.add(commandHash)
             self.commit(buildId)
         self.updateInfo(dict(customHash=list(knownHash)))
