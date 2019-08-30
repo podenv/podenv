@@ -290,6 +290,7 @@ class PodmanRuntime(Runtime):
         self.packagesMap: Dict[str, str] = {}
         self.environments: Dict[str, str] = {}
         self.info: Info = {}
+        self.systemType: str = ""
         self.fromRef: str = fromRef
         self.name: str = name
         self.metadataPath = Path(
@@ -328,11 +329,15 @@ class PodmanRuntime(Runtime):
         return self.name
 
     def setSystemType(self, systemType: str) -> None:
+        if self.systemType:
+            # Already set
+            return
         # Backward compat
         if systemType == "rpm":
             systemType = "dnf"
         elif systemType == "apt":
             systemType = "apt-get"
+        self.systemType = systemType
         self.commands = self.System[systemType]["commands"]
         self.mounts = self.System[systemType].get("mounts", {})
         self.packagesMap = self.System[systemType].get("packagesMap", {})
@@ -623,6 +628,9 @@ def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
         env.runtime.create()
     else:
         env.runtime.loadInfo()
+
+    if env.systemType:
+        env.runtime.setSystemType(env.systemType)
 
     return env.runtime.getExecName()
 

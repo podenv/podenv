@@ -72,6 +72,10 @@ class Runtime(ABC):
         ...
 
     @abstractmethod
+    def setSystemType(self, systemType: str) -> None:
+        ...
+
+    @abstractmethod
     def needUpdate(self) -> bool:
         ...
 
@@ -202,6 +206,8 @@ class Env:
         doc="The path of a rootfs"))
     dns: str = field(default="", metadata=dict(
         doc="A custom DNS server"))
+    systemType: str = field(default="", metadata=dict(
+        doc="Set image system type"))
     imageCustomizations: List[str] = field(default_factory=list, metadata=dict(
         doc="List of shell commands to execute and commit in the image"))
     imageTasks: List[Task] = field(default_factory=list, metadata=dict(
