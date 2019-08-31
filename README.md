@@ -193,6 +193,7 @@ Name                 | Type            | Doc                                    
 -------------------- | --------------- | ---------------------------------------- |
 name                 | str             | The name of the environment              |
 description          | Optional[str]   | Environment description                  |
+url                  | Optional[str]   | Application home page                    |
 parent               | str             | A parent environment name to inherit attributes from. |
 desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
 image                | str             | The container image reference            |

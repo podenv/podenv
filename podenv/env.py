@@ -196,6 +196,8 @@ class Env:
         doc="The name of the environment"))
     description: Optional[str] = field(default="", metadata=dict(
         doc="Environment description"))
+    url: Optional[str] = field(default="", metadata=dict(
+        doc="Application home page"))
     parent: str = field(default="", metadata=dict(
         doc="A parent environment name to inherit attributes from."))
     desktop: Optional[DesktopEntry] = field(default=None, metadata=dict(

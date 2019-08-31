@@ -45,6 +45,7 @@ def off(cap: str) -> Cap:
 environments = {
     # System
     "fedora": dict(
+        url="https://fedoraproject.org/",
         image="registry.fedoraproject.org/fedora:30",
         capabilities=dict(
             on("manage-image") + on("auto-update")),
@@ -56,6 +57,7 @@ environments = {
             on("root") + on("network") + on("mount-cache") + on("terminal")),
     ),
     "debian": dict(
+        url="https://www.debian.org",
         image="docker.io/debian:stretch",
         capabilities=dict(
             on("manage-image") + on("auto-update")),
@@ -71,6 +73,7 @@ environments = {
             on("root") + on("network") + on("mount-cache") + on("terminal")),
     ),
     "gentoo": dict(
+        url="https://www.gentoo.org",
         image="docker.io/gentoo/stage3-x86:latest",
         capabilities=dict(
             on("manage-image") + on("auto-update")),
@@ -87,6 +90,7 @@ environments = {
             on("root") + on("network") + on("mount-cache") + on("terminal")),
     ),
     "guix": {
+        "url": "https://guix.gnu.org/",
         "parent": "fedora",
         "description": "Guix packages",
         "system-type": "guix",
