@@ -16,6 +16,7 @@
 This module prepares and executes the runtime.
 """
 
+import copy
 import fcntl
 import logging
 import json
@@ -29,7 +30,7 @@ from contextlib import contextmanager
 from hashlib import md5
 from pathlib import Path
 from typing import Any, ContextManager, Dict, Generator, List, \
-    Optional, Set, Tuple
+    Optional, Set, Tuple, Union
 from subprocess import Popen, PIPE
 try:
     import selinux  # type: ignore
@@ -43,11 +44,12 @@ from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
 log = logging.getLogger("podenv")
 BuildId = str
 BuildSession = ContextManager[BuildId]
+Command = Union[str, List[str]]
 TZFormat = "%Y-%m-%dT%H:%M:%S"
 DAY = 3600 * 24
 HasRoute: Optional[bool] = None
-GuixBuilder = "bash -c 'guix-daemon --build-users-group=guix-builder " \
-    "--disable-chroot & "
+GuixBuilder = "guix-daemon --build-users-group=guix-builder " \
+    "--disable-chroot & true"
 
 
 class AlreadyRunning(Exception):
@@ -161,6 +163,13 @@ def taskToCommand(task: Task) -> str:
     return "; ".join(command)
 
 
+def commandsToExecArgs(commands: Command) -> ExecArgs:
+    if isinstance(commands, list):
+        return ["bash", "-c", "; ".join(["set -e"] + commands)]
+    else:
+        return shlex.split(commands)
+
+
 def podmanInspect(objType: str, name: str) -> Dict[str, Any]:
     infoList = readProcessJson(["podman", objType, "inspect", name])
     if not infoList:
@@ -240,11 +249,11 @@ def buildahCommit(buildId: BuildId, tagRef: str) -> None:
 
 
 class PodmanRuntime(Runtime):
-    System = {
+    System: Dict[str, Dict[str, Any]] = {
         "dnf": {
             "commands": {
-                "install": "dnf install -y ",
-                "update": "dnf update -y ",
+                "install": "dnf install -y",
+                "update": "dnf update -y",
             },
             "mounts": {
                 "/var/cache/dnf": "~/.cache/podenv/dnf"
@@ -252,8 +261,8 @@ class PodmanRuntime(Runtime):
         },
         "yum": {
             "commands": {
-                "install": "yum install -y ",
-                "update": "yum update -y ",
+                "install": "yum install -y",
+                "update": "yum update -y",
             },
             "mounts": {
                 "/var/cache/yum": "~/.cache/podenv/yum"
@@ -261,8 +270,8 @@ class PodmanRuntime(Runtime):
         },
         "apt-get": {
             "commands": {
-                "install": "apt-get install -y ",
-                "update": "apt-get update -y "
+                "install": "apt-get install -y",
+                "update": "apt-get update -y"
             },
             "mounts": {
                 "/var/cache/apt": "~/.cache/podenv/apt"
@@ -279,7 +288,7 @@ class PodmanRuntime(Runtime):
                 "/var/cache/eix": "~/.cache/podenv/eix",
             },
             "commands": {
-                "install": "emerge -vDNt --verbose-conflicts ",
+                "install": "emerge -vDNt --verbose-conflicts",
                 "update": "emerge -uvDNt @world",
                 "pre-update": "emerge --sync --quiet",
             },
@@ -294,11 +303,16 @@ class PodmanRuntime(Runtime):
                 "/var/guix": "~/.cache/podenv/guix/var/guix",
             },
             "commands": {
-                "install": GuixBuilder + "guix install ",
-                "pre-update": GuixBuilder + "rm -f "
-                "/var/guix/profiles/default/current-guix; "
-                "guix pull'",
-                "update": GuixBuilder + "guix package -u'",
+                "install": [
+                    GuixBuilder,
+                    "guix install"],
+                "pre-update": [
+                    GuixBuilder,
+                    "rm -f /var/guix/profiles/default/current-guix",
+                    "guix pull"],
+                "update": [
+                    GuixBuilder,
+                    "guix package -u"],
             },
             "environments": {
                 "GUIX_PROFILE": "/root/.config/guix/current",
@@ -310,7 +324,7 @@ class PodmanRuntime(Runtime):
     }
 
     def __init__(self, cacheDir: Path, name: str, fromRef: str):
-        self.commands: Dict[str, str] = {}
+        self.commands: Dict[str, Command] = {}
         self.mounts: Dict[str, str] = {}
         self.packagesMap: Dict[str, str] = {}
         self.environments: Dict[str, str] = {}
@@ -373,7 +387,8 @@ class PodmanRuntime(Runtime):
         if not systemType:
             for systemType in self.System:
                 try:
-                    self.runCommand(buildId, "sh -c 'type %s'" % systemType)
+                    self.runCommand(
+                        buildId, ["sh", "-c", f"type {systemType}"])
                     break
                 except RuntimeError:
                     pass
@@ -433,10 +448,13 @@ class PodmanRuntime(Runtime):
                 with self.getSession() as buildId:
                     systemType = self.getSystemType(buildId)
                     if self.commands.get("pre-update"):
-                        self.runCommand(buildId, self.commands["pre-update"])
+                        self.runCommand(buildId, commandsToExecArgs(
+                            self.commands["pre-update"]))
+
                     updateOutput = pread(
                         self.runCommandArgs(buildId) +
-                        shlex.split(self.commands["update"]), live=True)
+                        commandsToExecArgs(self.commands["update"]),
+                        live=True)
                     if "Nothing to do." in updateOutput:
                         break
                     self.commit(buildId)
@@ -452,9 +470,14 @@ class PodmanRuntime(Runtime):
             systemType = self.getSystemType(buildId)
             packagesMapped = map(lambda x: self.packagesMap.get(x, x),
                                  packages)
+            command = copy.copy(self.commands["install"])
+            packagesArgs = " " + " ".join(packagesMapped)
+            if isinstance(command, list):
+                command[-1] += packagesArgs
+            else:
+                command += packagesArgs
             self.runCommand(
-                buildId, self.commands["install"] + " ".join(packagesMapped) +
-                "'" if "bash -c '" in self.commands["install"] else "")
+                buildId, commandsToExecArgs(command))
             self.commit(buildId)
         self.updateInfo(dict(system=systemType, packages=list(packages.union(
                 self.info["packages"]))))
@@ -487,7 +510,7 @@ class PodmanRuntime(Runtime):
         ...
 
     @abstractmethod
-    def runCommand(self, buildId: BuildId, command: str) -> None:
+    def runCommand(self, buildId: BuildId, command: Command) -> None:
         ...
 
     @abstractmethod
@@ -541,8 +564,12 @@ class ContainerImage(PodmanRuntime):
     def getSession(self, create: bool = False) -> BuildSession:
         return buildah(self.fromRef if create else self.localName)
 
-    def runCommand(self, buildId: BuildId, command: str) -> None:
-        execute(self.runCommandArgs(buildId) + shlex.split(command))
+    def runCommand(self, buildId: BuildId, command: Command) -> None:
+        if isinstance(command, list):
+            args = command
+        else:
+            args = shlex.split(command)
+        execute(self.runCommandArgs(buildId) + args)
 
     def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
         return buildahRunCommand() + self.getSystemArgs() + [buildId]
@@ -613,13 +640,13 @@ class RootfsDirectory(PodmanRuntime):
             yield "noop"
         return fakeSession()
 
-    def runCommand(self, _: BuildId, command: str) -> None:
+    def runCommand(self, _: BuildId, command: Command) -> None:
         if not self.rootfs.exists():
             if self.url:
                 extractUrl(self.url, self.rootfs)
             else:
                 raise RuntimeError(f"{self.rootfs}: does not exist")
-        execute(self.runCommandArgs(_) + shlex.split(command))
+        execute(self.runCommandArgs(_) + commandsToExecArgs(command))
 
     def runCommandArgs(self, _: BuildId) -> ExecArgs:
         return ["podman", "run", "--rm", "-t"] + \
