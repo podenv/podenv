@@ -201,6 +201,7 @@ rootfs               | str             | The path of a rootfs                   
 dns                  | str             | A custom DNS server                      |
 system-type          | str             | Set image system type                    |
 image-customizations | List[str]       | List of shell commands to execute and commit in the image |
+pre-tasks            | List[Task]      | List of ansible like command to run before the command |
 image-tasks          | List[Task]      | List of ansible like command to commit to the image |
 packages             | List[str]       | List of packages to be installed in the image |
 command              | ExecArgs        | Container starting command               |

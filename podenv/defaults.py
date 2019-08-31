@@ -91,15 +91,24 @@ environments = {
     ),
     "guix": {
         "url": "https://guix.gnu.org/",
-        "parent": "fedora",
+        # Guix package manager is installed on fedora
+        # TODO: create/find a guix image from scratch
+        "image": "registry.fedoraproject.org/fedora:30",
+        "capabilities": dict(
+            on("manage-image") + on("auto-update")),
         "description": "Guix packages",
         "system-type": "guix",
         "mounts": {
             "/gnu": "~/.cache/podenv/guix/gnu",
             "/var/guix": "~/.cache/podenv/guix/var/guix",
         },
+        "pre-tasks": [{
+            "name": "Loading guix-profile",
+            "shell": "source "
+            "/var/guix/profiles/default/guix-profile/etc/profile"
+        }],
         "image-tasks": [{
-            "name": "Setup guix binary install",
+            "name": "Installing guix binary",
             "delegate_to": "host",
             "shell": dedent("""
               set -e;
@@ -118,7 +127,7 @@ environments = {
                        guix_key=GUIX_KEY,
                        guix_file=basename(GUIX_URL)))
         }, {
-            "name": "Setup guix users",
+            "name": "Creating guix users",
             "shell": dedent("""
               groupadd guix-builder;
               for i in $(seq 1 10);
@@ -131,28 +140,32 @@ environments = {
                      /root/.config/guix/current
             """)
         }, {
-            "name": "Authorize guix.gnu.org substitutes",
+            "name": "Authorizing guix.gnu.org substitutes",
             "shell": "guix archive --authorize < "
             "/root/.config/guix/current/share/guix/ci.guix.gnu.org.pub"
         }, {
-            "name": "Do initial pull",
+            "name": "Doing initial pull",
             "shell": "rm -f /var/guix/profiles/default/current-guix;"
             "guix-daemon --build-users-group=guix-builder "
             "--disable-chroot & guix pull",
         }]
     },
-    "guix-admin": dict(
-        parent="guix",
-        description="Guix packages admin shell",
-        capabilities=dict(
+    "guix-admin": {
+        "parent": "guix",
+        "description": "Guix packages admin shell",
+        "capabilities": dict(
             on("root") + on("network") + on("terminal")),
-        command=["/bin/bash", "-c",
-                 "guix-daemon --build-users-group=guix-builder "
-                 "--disable-chroot & "
-                 "source /var/guix/profiles/default/guix-profile/etc/profile;"
-                 "source /var/guix/profiles/per-user/root/"
-                 "current-guix/etc/profile; exec /bin/bash"]
-    ),
+        "pre-tasks": [{
+            "name": "Loading guix root profile",
+            "shell": "source /var/guix/profiles/per-user/root/"
+            "current-guix/etc/profile"
+        }, {
+            "name": "Starting guix-daemon",
+            "shell": "guix-daemon --build-users-group=guix-builder "
+            "--disable-chroot & true"
+        }],
+        "command": ["/bin/bash"],
+    },
 
     # Basic desktop applications
     "pavucontrol": dict(

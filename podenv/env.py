@@ -17,6 +17,7 @@ This module handles environment definitions.
 """
 
 from __future__ import annotations
+import copy
 import os
 import re
 from abc import ABC, abstractmethod
@@ -44,6 +45,30 @@ def asList(param: StrOrList = []) -> StrOrList:
     if isinstance(param, list):
         return param
     return param.split()
+
+
+def taskToCommand(task: Task) -> str:
+    """Convert ansible like task to shell string"""
+    task = copy.copy(task)
+    command = []
+    if task.get("delegate_to"):
+        if task["delegate_to"] != "host":
+            raise RuntimeError(f"Task delegate_to is incorrect: {task}")
+        command.append("run_local_%s" % task.pop("delegate_to"))
+    if task.get("name"):
+        if "'" in task["name"]:
+            raise RuntimeError(f"Task name can't have ': {task['name']}")
+        command.append("echo '%s'" % task.pop("name"))
+    if task.get("command"):
+        command.append(str(task.pop("command")))
+    elif task.get("shell"):
+        command.append(str(task.pop("shell")))
+    else:
+        raise Exception
+        raise RuntimeError(f"Unsupported task: {task}")
+    if task:
+        raise RuntimeError(f"Unsupported task attribute: {task}")
+    return "; ".join(command)
 
 
 class Runtime(ABC):
@@ -233,6 +258,8 @@ class Env:
         doc="Set image system type"))
     imageCustomizations: List[str] = field(default_factory=list, metadata=dict(
         doc="List of shell commands to execute and commit in the image"))
+    preTasks: List[Task] = field(default_factory=list, metadata=dict(
+        doc="List of ansible like command to run before the command"))
     imageTasks: List[Task] = field(default_factory=list, metadata=dict(
         doc="List of ansible like command to commit to the image"))
     packages: List[str] = field(default_factory=list, metadata=dict(
@@ -296,9 +323,13 @@ class Env:
             elif isinstance(attrValue, list):
                 if attr.name == "command":
                     continue
-                # List are extended
-                setattr(self, attr.name, getattr(self, attr.name) +
-                        getattr(parentEnv, attr.name))
+                if attr.name == "preTasks":
+                    # Pre-tasks needs to be kept in order
+                    value = attrValue + getattr(self, attr.name)
+                else:
+                    # List are extended
+                    value = getattr(self, attr.name) + attrValue
+                setattr(self, attr.name, value)
             elif isinstance(attrValue, dict):
                 # Dictionary are updated in reverse
                 mergedDict = getattr(parentEnv, attr.name)
@@ -727,7 +758,16 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
             "network", "").startswith("container:"):
         env.ctx.namespaces["userns"] = env.ctx.namespaces["network"]
 
-    return env.name, args + env.ctx.getArgs(), list(map(str, commandArgs))
+    envArgs = list(map(str, commandArgs))
+    if env.preTasks:
+        if not envArgs:
+            raise RuntimeError("Can't use pre-tasks without a command")
+        # TODO: create a /tmp/start.sh script when preTasks are too long
+        envArgs = ["bash", "-c", "; ".join(["set -e"] + list(
+            map(taskToCommand, env.preTasks))) +
+                   "; exec \"" + "\" \"".join(envArgs) + "\""]
+
+    return env.name, args + env.ctx.getArgs(), envArgs
 
 
 def cleanupEnv(env: Env) -> None:

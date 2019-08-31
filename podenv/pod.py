@@ -39,7 +39,7 @@ except ImportError:
     HAS_SELINUX = False
 
 from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
-    UserNotif, Task
+    UserNotif, taskToCommand
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -139,28 +139,6 @@ def readProcessJson(args: ExecArgs) -> Any:
     if proc.wait():
         return None
     return json.loads(stdout)
-
-
-def taskToCommand(task: Task) -> str:
-    """Convert ansible like task to shell string"""
-    command = []
-    if task.get("delegate_to"):
-        if task["delegate_to"] != "host":
-            raise RuntimeError(f"Task delegate_to is incorrect: {task}")
-        command.append("run_local_%s" % task.pop("delegate_to"))
-    if task.get("name"):
-        if "'" in task["name"]:
-            raise RuntimeError(f"Task name can't have ': {task['name']}")
-        command.append("echo '%s'" % task.pop("name"))
-    if task.get("command"):
-        command.append(str(task.pop("command")))
-    elif task.get("shell"):
-        command.append(str(task.pop("shell")))
-    else:
-        raise RuntimeError(f"Unsupported task: {task}")
-    if task:
-        raise RuntimeError(f"Unsupported task attribute: {task}")
-    return "; ".join(command)
 
 
 def commandsToExecArgs(commands: Command) -> ExecArgs:
@@ -319,6 +297,9 @@ class PodmanRuntime(Runtime):
                 "PATH": ("/var/guix/profiles/per-user/root/current-guix/bin/:"
                          "/bin:/sbin:/usr/bin:/usr/sbin:"
                          "/usr/local/bin:/usr/local/sbin")
+            },
+            "packagesMap": {
+                "vi": "vim"
             },
         },
     }
