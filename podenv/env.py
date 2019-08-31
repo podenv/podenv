@@ -245,27 +245,21 @@ class Env:
     url: Optional[str] = field(default="", metadata=dict(
         doc="Application home page"))
     parent: str = field(default="", metadata=dict(
-        doc="A parent environment name to inherit attributes from."))
+        doc="A parent environment name to inherit attributes from"))
     desktop: Optional[DesktopEntry] = field(default=None, metadata=dict(
         doc="A desktop launcher entry file definition"))
     image: str = field(default="", metadata=dict(
         doc="The container image reference"))
     rootfs: str = field(default="", metadata=dict(
         doc="The path of a rootfs"))
-    dns: str = field(default="", metadata=dict(
-        doc="A custom DNS server"))
-    systemType: str = field(default="", metadata=dict(
-        doc="Set image system type"))
-    imageCustomizations: List[str] = field(default_factory=list, metadata=dict(
-        doc="List of shell commands to execute and commit in the image"))
+    packages: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of packages to be installed in the image"))
+    imageTasks: List[Task] = field(default_factory=list, metadata=dict(
+        doc="List of ansible like command to commit to the image"))
     preTasks: List[Task] = field(default_factory=list, metadata=dict(
         doc="List of ansible like command to run before the command"))
     postTasks: List[Task] = field(default_factory=list, metadata=dict(
         doc="List of ansible like command to run after the pod exited"))
-    imageTasks: List[Task] = field(default_factory=list, metadata=dict(
-        doc="List of ansible like command to commit to the image"))
-    packages: List[str] = field(default_factory=list, metadata=dict(
-        doc="List of packages to be installed in the image"))
     command: ExecArgs = field(default_factory=list, metadata=dict(
         doc="Container starting command"))
     args: ExecArgs = field(default_factory=list, metadata=dict(
@@ -290,6 +284,10 @@ class Env:
         doc="The shm-size value string"))
     ports: List[str] = field(default_factory=list, metadata=dict(
         doc="List of port to expose on the host"))
+    systemType: str = field(default="", metadata=dict(
+        doc="Set image system type"))
+    dns: str = field(default="", metadata=dict(
+        doc="A custom DNS server"))
 
     # Internal attribute
     envName: str = field(default="", metadata=dict(
@@ -314,6 +312,9 @@ class Env:
         internal=True))
     registryName: str = field(default="", metadata=dict(internal=True))
     registryShortName: str = field(default="", metadata=dict(internal=True))
+    # Backward compat attribute
+    imageCustomizations: List[str] = field(default_factory=list, metadata=dict(
+        itnernal=True))
 
     def applyParent(self, parentEnv: Env) -> None:
         for attr in fields(Env):

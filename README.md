@@ -194,17 +194,14 @@ Name                 | Type            | Doc                                    
 name                 | str             | The name of the environment              |
 description          | Optional[str]   | Environment description                  |
 url                  | Optional[str]   | Application home page                    |
-parent               | str             | A parent environment name to inherit attributes from. |
+parent               | str             | A parent environment name to inherit attributes from |
 desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
 image                | str             | The container image reference            |
 rootfs               | str             | The path of a rootfs                     |
-dns                  | str             | A custom DNS server                      |
-system-type          | str             | Set image system type                    |
-image-customizations | List[str]       | List of shell commands to execute and commit in the image |
+packages             | List[str]       | List of packages to be installed in the image |
+image-tasks          | List[Task]      | List of ansible like command to commit to the image |
 pre-tasks            | List[Task]      | List of ansible like command to run before the command |
 post-tasks           | List[Task]      | List of ansible like command to run after the pod exited |
-image-tasks          | List[Task]      | List of ansible like command to commit to the image |
-packages             | List[str]       | List of packages to be installed in the image |
 command              | ExecArgs        | Container starting command               |
 args                 | ExecArgs        | Optional arguments to append to the command |
 environ              | Dict[str, str]  | User environ(7)                          |
@@ -217,6 +214,9 @@ overlays             | List[Overlay]   | List of overlay to copy in runtime dire
 home                 | str             | Container home path mount                |
 shmsize              | str             | The shm-size value string                |
 ports                | List[str]       | List of port to expose on the host       |
+system-type          | str             | Set image system type                    |
+dns                  | str             | A custom DNS server                      |
+image-customizations | List[str]       |                                          |
 
 
 The available capabilities are:
