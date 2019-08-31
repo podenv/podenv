@@ -106,22 +106,26 @@ class ExecContext:
     environ: Dict[str, str] = field(default_factory=dict)
     mounts: Dict[Path, Path] = field(default_factory=dict)
     syscaps: List[str] = field(default_factory=list)
-    execArgs: ExecArgs = field(default_factory=list)
+    devices: List[Path] = field(default_factory=list)
+    uidmaps: List[str] = field(default_factory=list)
     home: Path = field(default_factory=Path)
     cwd: Path = field(default_factory=Path)
     xdgDir: Path = field(default_factory=Path)
+    detachKeys: str = ""
+    interactive: bool = False
+    user: int = 0
+    privileged: bool = False
     seLinuxLabel: str = ""
     seccomp: str = ""
-    networkNamespace: str = ""
-
-    def args(self, *args: str) -> None:
-        self.execArgs.extend(args)
+    namespaces: Dict[str, str] = field(default_factory=dict)
 
     def hasNetwork(self) -> bool:
-        return not self.networkNamespace or self.networkNamespace != "none"
+        return not self.namespaces.get("network") or \
+            self.namespaces["network"] != "none"
 
     def hasDirectNetwork(self) -> bool:
-        return not self.networkNamespace or self.networkNamespace == "host"
+        return not self.namespaces.get("network") or \
+            self.namespaces["network"] == "host"
 
     def getArgs(self) -> ExecArgs:
         args = []
@@ -131,8 +135,8 @@ class ExecContext:
         if self.seccomp:
             args.extend(["--security-opt", f"seccomp={self.seccomp}"])
 
-        if self.networkNamespace:
-            args.extend(["--network", self.networkNamespace])
+        for ns, val in self.namespaces.items():
+            args.extend([f"--{ns}", val])
 
         if self.cwd == Path():
             self.cwd = self.home
@@ -143,13 +147,30 @@ class ExecContext:
                 hostPath=self.mounts[mount].expanduser().resolve(),
                 containerPath=mount)])
 
+        for device in self.devices:
+            args.extend(["--device", str(device)])
+
         for cap in set(self.syscaps):
             args.extend(["--cap-add", cap])
 
         for e, v in sorted(self.environ.items()):
             args.extend(["-e", "%s=%s" % (e, v)])
 
-        return args + self.execArgs
+        if self.user:
+            args.extend(["--user", "%d" % self.user])
+
+        args.extend(self.uidmaps)
+
+        if self.privileged:
+            args.extend(["--privileged"])
+
+        if self.detachKeys:
+            args.extend(["--detach-keys", self.detachKeys])
+
+        if self.interactive:
+            args.extend(["-it"])
+
+        return args
 
 
 @dataclass
@@ -324,7 +345,7 @@ def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
     else:
         ctx.home = Path("/home/user")
         ctx.xdgDir = Path("/run/user/1000")
-        ctx.args("--user", "1000")
+        ctx.user = 1000
     ctx.environ["XDG_RUNTIME_DIR"] = str(ctx.xdgDir)
     ctx.environ["HOME"] = str(ctx.home)
 
@@ -337,33 +358,35 @@ def getUidMap(_: Env) -> ExecArgs:
 def uidmapCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "map host uid"
     if active:
-        if "--uidmap" not in ctx.execArgs:
-            ctx.execArgs.extend(getUidMap(env))
+        ctx.uidmaps = getUidMap(env)
 
 
 def privilegedCap(active: bool, ctx: ExecContext, _: Env) -> None:
     "run as privileged container"
-    if active:
-        ctx.args("--privileged")
+    ctx.privileged = active
 
 
 def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
     "interactive mode"
     if active:
-        ctx.args("-it")
-        ctx.args("--detach-keys", "ctrl-e,e")
+        ctx.interactive = True
+        ctx.detachKeys = "ctrl-e,e"
 
 
 def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "enable network"
+    nsName = ""
     if env.network:
         if env.network == "host":
-            ctx.networkNamespace = "host"
+            nsName = "host"
         else:
-            ctx.networkNamespace = f"container:net-{env.network}"
+            nsName = f"container:net-{env.network}"
 
     if not active and not env.network:
-        ctx.networkNamespace = "none"
+        nsName = "none"
+
+    if nsName:
+        ctx.namespaces["network"] = nsName
 
 
 def manageImageCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -409,7 +432,7 @@ def mountCacheCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def ipcCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share host ipc"
     if active:
-        ctx.args("--ipc=host")
+        ctx.namespaces["ipc"] = "host"
 
 
 def x11Cap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -483,25 +506,25 @@ def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
     if active:
         for device in list(filter(lambda x: x.startswith("video"),
                                   os.listdir("/dev"))):
-            ctx.args("--device", str(Path("/dev") / device))
+            ctx.devices.append(Path("/dev") / device)
 
 
 def driCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share graphic device"
     if active:
-        ctx.args("--device", "/dev/dri")
+        ctx.devices.append(Path("/dev/dri"))
 
 
 def kvmCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share kvm device"
     if active:
-        ctx.args("--device", "/dev/kvm")
+        ctx.devices.append(Path("/dev/kvm"))
 
 
 def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share tun device"
     if active:
-        ctx.args("--device", "/dev/net/tun")
+        ctx.devices.append(Path("/dev/net/tun"))
 
 
 def selinuxCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -700,9 +723,9 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
     validateEnv(env)
 
     # OCI doesn't let you join a netns without the userns when using uidmap...
-    if env.capabilities.get("uidmap") and env.ctx.networkNamespace.startswith(
-            "container:"):
-        env.ctx.args("--userns", env.ctx.networkNamespace)
+    if env.capabilities.get("uidmap") and env.ctx.namespaces.get(
+            "network", "").startswith("container:"):
+        env.ctx.namespaces["userns"] = env.ctx.namespaces["network"]
 
     return env.name, args + env.ctx.getArgs(), list(map(str, commandArgs))
 
