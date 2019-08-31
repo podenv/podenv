@@ -829,7 +829,7 @@ def setupPod(
     return imageName
 
 
-def executePreTasks(commands: List[str]) -> None:
+def executeHostTasks(commands: List[str]) -> None:
     for command in commands:
         execute(["bash", "-c", command])
 

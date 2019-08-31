@@ -260,6 +260,8 @@ class Env:
         doc="List of shell commands to execute and commit in the image"))
     preTasks: List[Task] = field(default_factory=list, metadata=dict(
         doc="List of ansible like command to run before the command"))
+    postTasks: List[Task] = field(default_factory=list, metadata=dict(
+        doc="List of ansible like command to run after the pod exited"))
     imageTasks: List[Task] = field(default_factory=list, metadata=dict(
         doc="List of ansible like command to commit to the image"))
     packages: List[str] = field(default_factory=list, metadata=dict(
@@ -704,9 +706,11 @@ EnvName = str
 PodmanArgs = ExecArgs
 # The environment command
 EnvArgs = ExecArgs
-# List of pre tasks commands to run on the host
-HostArgs = List[str]
-PrepareEnvResults = Tuple[EnvName, PodmanArgs, EnvArgs, HostArgs]
+# List of pre/post tasks commands to run on the host
+HostPreArgs = List[str]
+HostPostArgs = List[str]
+PrepareEnvResults = Tuple[
+    EnvName, PodmanArgs, EnvArgs, HostPreArgs, HostPostArgs]
 
 
 def prepareEnv(env: Env, cliArgs: List[str]) -> PrepareEnvResults:
@@ -786,7 +790,17 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> PrepareEnvResults:
             envArgs = ["bash", "-c", "; ".join(["set -e"] + envPreTasks) +
                        "; exec \"" + "\" \"".join(envArgs) + "\""]
 
-    return env.name, args + env.ctx.getArgs(), envArgs, hostPreTasks
+    hostPostTasks: ExecArgs = []
+    if env.postTasks:
+        for postTask in env.postTasks:
+            command = taskToCommand(postTask)
+            if command.startswith("run_local_host; "):
+                hostPostTasks.append(command.split('; ', 1)[1])
+            else:
+                raise RuntimeError("Only host post-task are supported")
+
+    return env.name, args + env.ctx.getArgs(), envArgs, hostPreTasks, \
+        hostPostTasks
 
 
 def cleanupEnv(env: Env) -> None:
