@@ -350,15 +350,37 @@ class PodmanRuntime(Runtime):
         return customHashes
 
     def getInstalledPackages(self) -> List[str]:
-        packages = self.info.get("packages", [])
+        if self.systemType != self.info.get("system"):
+            packages = self.info.get(f"{self.systemType}Packages", [])
+        else:
+            packages = self.info.get("packages", [])
         if not isinstance(packages, list):
             raise RuntimeError("Invalid packages metadata")
         return packages
 
+    def updateInstalledPackages(self, packages: Set[str]) -> None:
+        installedPackages = list(packages.union(self.getInstalledPackages()))
+        newInfo: Info = {}
+        if self.systemType != self.info.get("system"):
+            newInfo = {f"{self.systemType}Packages": installedPackages}
+        else:
+            newInfo = {"packages": installedPackages}
+        self.updateInfo(newInfo)
+
     def needUpdate(self) -> bool:
-        if self.info.get("updated") and isinstance(self.info["updated"], str):
-            return not updated(self.info["updated"]) and canUpdate()
-        raise RuntimeError("Invalid last updated metadata")
+        key = "updated"
+        if self.systemType != self.info.get("system"):
+            key = f"{self.systemType}Updated"
+        lastUpdate = self.info.get(key, "")
+        if not isinstance(lastUpdate, str):
+            raise RuntimeError(f"Invalid {key} metadata")
+        return not lastUpdate or (not updated(lastUpdate) and canUpdate())
+
+    def setLastUpdated(self) -> None:
+        key = "updated"
+        if self.systemType != self.info.get("system"):
+            key = f"{self.systemType}Updated"
+        self.updateInfo({key: now()})
 
     def updateInfo(self, info: Info) -> None:
         self.info.update(info)
@@ -368,9 +390,6 @@ class PodmanRuntime(Runtime):
         return self.name
 
     def setSystemType(self, systemType: str) -> None:
-        if self.systemType:
-            # Already set
-            return
         # Backward compat
         if systemType == "rpm":
             systemType = "dnf"
@@ -446,7 +465,6 @@ class PodmanRuntime(Runtime):
         for retry in range(3):
             try:
                 with self.getSession() as buildId:
-                    systemType = self.getSystemType(buildId)
                     if self.commands.get("pre-update"):
                         self.runCommand(buildId, commandsToExecArgs(
                             self.commands["pre-update"]))
@@ -463,11 +481,10 @@ class PodmanRuntime(Runtime):
                 if retry == 2:
                     raise
                 log.warning("Retrying failed update...")
-        self.updateInfo(dict(updated=now(), system=systemType))
+        self.setLastUpdated()
 
     def install(self, packages: Set[str]) -> None:
         with self.getSession() as buildId:
-            systemType = self.getSystemType(buildId)
             packagesMapped = map(lambda x: self.packagesMap.get(x, x),
                                  packages)
             command = copy.copy(self.commands["install"])
@@ -479,8 +496,7 @@ class PodmanRuntime(Runtime):
             self.runCommand(
                 buildId, commandsToExecArgs(command))
             self.commit(buildId)
-        self.updateInfo(dict(system=systemType, packages=list(packages.union(
-                self.info["packages"]))))
+        self.updateInstalledPackages(packages)
 
     def customize(self, commands: List[Tuple[str, str]]) -> None:
         knownHash: Set[str] = set(self.info.get("customHash", []))
