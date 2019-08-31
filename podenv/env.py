@@ -698,7 +698,18 @@ def validateEnv(env: Env) -> None:
             warn("branch-image capability is incompatible with manage-image")
 
 
-def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
+# The name of the environment
+EnvName = str
+# The podman run argument
+PodmanArgs = ExecArgs
+# The environment command
+EnvArgs = ExecArgs
+# List of pre tasks commands to run on the host
+HostArgs = List[str]
+PrepareEnvResults = Tuple[EnvName, PodmanArgs, EnvArgs, HostArgs]
+
+
+def prepareEnv(env: Env, cliArgs: List[str]) -> PrepareEnvResults:
     """Generate podman exec args based on capabilities"""
     # Apply capabilities
     for name, _, capability in Capabilities:
@@ -759,15 +770,23 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> Tuple[str, ExecArgs, ExecArgs]:
         env.ctx.namespaces["userns"] = env.ctx.namespaces["network"]
 
     envArgs = list(map(str, commandArgs))
+    hostPreTasks: ExecArgs = []
     if env.preTasks:
         if not envArgs:
             raise RuntimeError("Can't use pre-tasks without a command")
         # TODO: create a /tmp/start.sh script when preTasks are too long
-        envArgs = ["bash", "-c", "; ".join(["set -e"] + list(
-            map(taskToCommand, env.preTasks))) +
-                   "; exec \"" + "\" \"".join(envArgs) + "\""]
+        envPreTasks: ExecArgs = []
+        for preTask in env.preTasks:
+            command = taskToCommand(preTask)
+            if command.startswith("run_local_host; "):
+                hostPreTasks.append(command.split('; ', 1)[1])
+            else:
+                envPreTasks.append(command)
+        if len(envPreTasks):
+            envArgs = ["bash", "-c", "; ".join(["set -e"] + envPreTasks) +
+                       "; exec \"" + "\" \"".join(envArgs) + "\""]
 
-    return env.name, args + env.ctx.getArgs(), envArgs
+    return env.name, args + env.ctx.getArgs(), envArgs, hostPreTasks
 
 
 def cleanupEnv(env: Env) -> None:

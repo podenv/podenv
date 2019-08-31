@@ -829,6 +829,11 @@ def setupPod(
     return imageName
 
 
+def executePreTasks(commands: List[str]) -> None:
+    for command in commands:
+        execute(["bash", "-c", command])
+
+
 def executePod(
         name: str, args: ExecArgs, image: ExecArgs, envArgs: ExecArgs) -> None:
     podInfo = podmanInspect("container", name)

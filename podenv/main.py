@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import Dict
 
 from podenv.config import loadConfig, loadEnv
-from podenv.pod import killPod, setupPod, executePod, desktopNotification, \
-    podmanExists
+from podenv.pod import killPod, setupPod, executePreTasks, executePod, \
+    desktopNotification, podmanExists
 from podenv.env import Capabilities, Env, ExecArgs, UserNotif, prepareEnv, \
     cleanupEnv
 
@@ -142,7 +142,8 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
             return listEnv(conf.envs)
         env = loadEnv(conf, args.env, args.base)
         applyCommandLineOverride(args, env)
-        containerName, containerArgs, envArgs = prepareEnv(env, args.args)
+        containerName, containerArgs, envArgs, hostArgs = prepareEnv(
+            env, args.args)
     except RuntimeError as e:
         fail(notifyUserProc, str(e))
 
@@ -160,6 +161,7 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
             imageName[-1] += ":" + args.tag
             if not podmanExists("image", imageName[-1]):
                 fail(notifyUserProc, f"Unknown tag {imageName[-1]}")
+        executePreTasks(hostArgs)
         executePod(containerName, containerArgs, imageName, envArgs)
         podResult = 0
     except KeyboardInterrupt:
