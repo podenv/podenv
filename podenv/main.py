@@ -81,7 +81,7 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
         env.command = ["/bin/bash"]
     if args.image:
         env.image = args.image
-    if args.network:
+    if args.net:
         env.network = args.network
 
 
