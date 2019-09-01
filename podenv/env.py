@@ -109,7 +109,7 @@ class Runtime(ABC):
         ...
 
     @abstractmethod
-    def getSystemMounts(self) -> ExecArgs:
+    def getSystemMounts(self, withTmp: bool) -> ExecArgs:
         ...
 
     @abstractmethod

@@ -415,12 +415,13 @@ class PodmanRuntime(Runtime):
                 hostPath, containerDir)])
         return mounts
 
-    def getSystemMounts(self) -> ExecArgs:
+    def getSystemMounts(self, withTmp: bool) -> ExecArgs:
         """Mount points needed to manage the runtime image"""
         # Filter out runtimeMounts
+        extra = ["--mount=type=tmpfs,destination=/tmp"] if withTmp else []
         return self.getMounts(dict(filter(
             lambda x: x[0] not in self.runtimeMounts,
-            self.mounts.items())))
+            self.mounts.items()))) + extra
 
     def getSystemEnvironments(self) -> ExecArgs:
         envs = []
@@ -429,7 +430,7 @@ class PodmanRuntime(Runtime):
         return envs
 
     def getSystemArgs(self) -> ExecArgs:
-        return self.getRuntimeArgs() + self.getSystemMounts()
+        return self.getRuntimeArgs() + self.getSystemMounts(withTmp=True)
 
     def getRuntimeArgs(self) -> ExecArgs:
         return self.getRuntimeMounts() + self.getSystemEnvironments()
@@ -902,7 +903,7 @@ def setupPod(
     imageName = env.runtime.getRuntimeArgs() + imageName
     if env.capabilities.get("mount-cache"):
         # Inject runtime volumes
-        imageName = env.runtime.getSystemMounts() + imageName
+        imageName = env.runtime.getSystemMounts(withTmp=False) + imageName
 
     if env.desktop:
         setupDesktopFile(env.desktop)
