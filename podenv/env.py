@@ -573,6 +573,12 @@ def webcamCap(active: bool, ctx: ExecContext, env: Env) -> None:
             ctx.devices.append(Path("/dev") / device)
 
 
+def alsaCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "share alsa device"
+    if active:
+        ctx.devices.append(Path("/dev/snd"))
+
+
 def driCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share graphic device"
     if active:
@@ -642,6 +648,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         sshCap,
         gpgCap,
         webcamCap,
+        alsaCap,
         driCap,
         kvmCap,
         tunCap,

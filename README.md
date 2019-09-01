@@ -236,6 +236,7 @@ editor               | setup editor env                                         
 ssh                  | share ssh agent and keys                                     |
 gpg                  | share gpg agent                                              |
 webcam               | share webcam device                                          |
+alsa                 | share alsa device                                            |
 dri                  | share graphic device                                         |
 kvm                  | share kvm device                                             |
 tun                  | share tun device                                             |
@@ -263,13 +264,13 @@ usage: podenv [-h] [--verbose] [--list] [--shell] [--net NET] [-p PACKAGE]
               [--terminal] [--no-terminal] [--ipc] [--no-ipc] [--x11]
               [--no-x11] [--pulseaudio] [--no-pulseaudio] [--git] [--no-git]
               [--editor] [--no-editor] [--ssh] [--no-ssh] [--gpg] [--no-gpg]
-              [--webcam] [--no-webcam] [--dri] [--no-dri] [--kvm] [--no-kvm]
-              [--tun] [--no-tun] [--seccomp] [--no-seccomp] [--selinux]
-              [--no-selinux] [--setuid] [--no-setuid] [--ptrace] [--no-ptrace]
-              [--network] [--no-network] [--mount-cwd] [--no-mount-cwd]
-              [--mount-home] [--no-mount-home] [--mount-run] [--no-mount-run]
-              [--mount-cache] [--no-mount-cache] [--auto-update]
-              [--no-auto-update] [--uidmap] [--no-uidmap]
+              [--webcam] [--no-webcam] [--alsa] [--no-alsa] [--dri] [--no-dri]
+              [--kvm] [--no-kvm] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
+              [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
+              [--no-ptrace] [--network] [--no-network] [--mount-cwd]
+              [--no-mount-cwd] [--mount-home] [--no-mount-home] [--mount-run]
+              [--no-mount-run] [--mount-cache] [--no-mount-cache]
+              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -319,6 +320,8 @@ optional arguments:
   --no-gpg              Disable gpg capibility
   --webcam              Enable capability: share webcam device
   --no-webcam           Disable webcam capibility
+  --alsa                Enable capability: share alsa device
+  --no-alsa             Disable alsa capibility
   --dri                 Enable capability: share graphic device
   --no-dri              Disable dri capibility
   --kvm                 Enable capability: share kvm device
