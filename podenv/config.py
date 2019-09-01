@@ -224,6 +224,7 @@ def loadEnv(
             if baseName not in conf.envs:
                 log.error("%s: parent does not exist", baseName)
             parentEnv = conf.envs[baseName]
+            parent = baseName
         env.applyParent(parentEnv)
         resolvParents(parentEnv.parent, history + [parent])
 
