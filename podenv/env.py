@@ -47,6 +47,14 @@ def asList(param: StrOrList = []) -> StrOrList:
     return param.split()
 
 
+def pipFilter(packages: Set[str]) -> Set[str]:
+    return set(filter(lambda x: x.startswith("pip:"), packages))
+
+
+def packageFilter(packages: Set[str]) -> Set[str]:
+    return packages.difference(pipFilter(packages))
+
+
 def taskToCommand(task: Task) -> str:
     """Convert ansible like task to shell string"""
     task = copy.copy(task)
@@ -89,7 +97,15 @@ class Runtime(ABC):
         ...
 
     @abstractmethod
-    def getSystemEnvironments(self) -> ExecArgs:
+    def enableExtra(self, extra: str, env: Env) -> None:
+        ...
+
+    @abstractmethod
+    def getInstalledExtra(self, extra: str) -> Set[str]:
+        ...
+
+    @abstractmethod
+    def getRuntimeArgs(self) -> ExecArgs:
         ...
 
     @abstractmethod
@@ -118,6 +134,14 @@ class Runtime(ABC):
 
     @abstractmethod
     def install(self, packages: Set[str]) -> None:
+        ...
+
+    @abstractmethod
+    def updateExtra(self, extra: str) -> None:
+        ...
+
+    @abstractmethod
+    def installExtra(self, extra: str, packages: Set[str]) -> None:
         ...
 
     @abstractmethod
@@ -294,6 +318,10 @@ class Env:
         internal=True))
     runtime: Optional[Runtime] = field(default=None, metadata=dict(
         internal=True))
+    systemPackages: Set[str] = field(default_factory=set, metadata=dict(
+        internal=True))
+    pipPackages: Set[str] = field(default_factory=set, metadata=dict(
+        internal=True))
     ctx: ExecContext = field(default_factory=ExecContext, metadata=dict(
         internal=True))
     runDir: Optional[Path] = field(default=None, metadata=dict(
@@ -333,7 +361,7 @@ class Env:
                     # List are extended
                     value = getattr(self, attr.name) + attrValue
                 setattr(self, attr.name, value)
-            elif isinstance(attrValue, dict):
+            elif isinstance(attrValue, dict) or isinstance(attrValue, set):
                 # Dictionary are updated in reverse
                 mergedDict = getattr(parentEnv, attr.name)
                 mergedDict.update(getattr(self, attr.name))
@@ -369,6 +397,8 @@ class Env:
             self.parent = ""
         # Record envName (e.g. without any variant names)
         self.envName = self.name
+        self.systemPackages = packageFilter(set(self.packages))
+        self.pipPackages = pipFilter(set(self.packages))
 
 
 def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
@@ -773,6 +803,10 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> PrepareEnvResults:
     if env.capabilities.get("uidmap") and env.ctx.namespaces.get(
             "network", "").startswith("container:"):
         env.ctx.namespaces["userns"] = env.ctx.namespaces["network"]
+
+    if env.pipPackages:
+        env.preTasks.append({"name": "Active virtualenv",
+                             "shell": "source /venv/bin/activate"})
 
     envArgs = list(map(str, commandArgs))
     hostPreTasks: ExecArgs = []

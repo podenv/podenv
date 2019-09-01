@@ -370,6 +370,5 @@ Future goals include:
 * Automatic squash of old layers: (depends on https://github.com/containers/buildah/issues/1778)
 * Proper documentation and integration tests.
 * Cleanup runDir.
-* Support packages from pypi, hackage, ...
 * Pre and post actions, possibly using ansible tasks.
 * Automatic start and stop of required container.

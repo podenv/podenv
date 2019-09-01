@@ -39,7 +39,7 @@ except ImportError:
     HAS_SELINUX = False
 
 from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
-    UserNotif, taskToCommand
+    UserNotif, taskToCommand, pipFilter, packageFilter
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -307,8 +307,10 @@ class PodmanRuntime(Runtime):
     def __init__(self, cacheDir: Path, name: str, fromRef: str):
         self.commands: Dict[str, Command] = {}
         self.mounts: Dict[str, str] = {}
+        self.runtimeMounts: Dict[str, str] = {}
         self.packagesMap: Dict[str, str] = {}
         self.environments: Dict[str, str] = {}
+        self.extras: Dict[str, ExtraRuntime] = {}
         self.info: Info = {}
         self.systemType: str = ""
         self.fromRef: str = fromRef
@@ -400,10 +402,9 @@ class PodmanRuntime(Runtime):
         self.setSystemType(systemType)
         return systemType
 
-    def getSystemMounts(self) -> ExecArgs:
-        """Mount points needed to manage the runtime image"""
+    def getMounts(self, mountsDict: Dict[str, str]) -> ExecArgs:
         mounts = []
-        for containerDir, hostDir in self.mounts.items():
+        for containerDir, hostDir in mountsDict.items():
             hostPath = Path(hostDir).expanduser().resolve()
             if not hostPath.exists():
                 hostPath.mkdir(parents=True, exist_ok=True)
@@ -411,8 +412,15 @@ class PodmanRuntime(Runtime):
                     selinux.chcon(
                         str(hostPath), "system_u:object_r:container_file_t:s0")
             mounts.extend(["-v", "%s:%s" % (
-                hostPath, Path(containerDir).expanduser().resolve())])
+                hostPath, containerDir)])
         return mounts
+
+    def getSystemMounts(self) -> ExecArgs:
+        """Mount points needed to manage the runtime image"""
+        # Filter out runtimeMounts
+        return self.getMounts(dict(filter(
+            lambda x: x[0] not in self.runtimeMounts,
+            self.mounts.items())))
 
     def getSystemEnvironments(self) -> ExecArgs:
         envs = []
@@ -421,7 +429,10 @@ class PodmanRuntime(Runtime):
         return envs
 
     def getSystemArgs(self) -> ExecArgs:
-        return self.getSystemMounts() + self.getSystemEnvironments()
+        return self.getRuntimeArgs() + self.getSystemMounts()
+
+    def getRuntimeArgs(self) -> ExecArgs:
+        return self.getRuntimeMounts() + self.getSystemEnvironments()
 
     def create(self) -> None:
         with self.getSession(create=True) as buildId:
@@ -479,6 +490,26 @@ class PodmanRuntime(Runtime):
             self.commit(buildId)
         self.updateInstalledPackages(packages)
 
+    def enableExtra(self, extra: str, env: Env) -> None:
+        if extra == "pip":
+            extraRuntime = PipRuntime(self, env.envName)
+        else:
+            raise NotImplementedError(f"Unknown extra type {extra}")
+        self.extras[extra] = extraRuntime
+        extraRuntime.enable(env)
+
+    def getRuntimeMounts(self) -> ExecArgs:
+        return self.getMounts(self.runtimeMounts)
+
+    def getInstalledExtra(self, extra: str) -> Set[str]:
+        return self.extras[extra].getInstalled()
+
+    def updateExtra(self, extra: str) -> None:
+        self.extras[extra].update()
+
+    def installExtra(self, extra: str, packages: Set[str]) -> None:
+        self.extras[extra].install(packages)
+
     def customize(self, commands: List[Tuple[str, str]]) -> None:
         knownHash: Set[str] = set(self.info.get("customHash", []))
         with self.getSession() as buildId:
@@ -517,6 +548,83 @@ class PodmanRuntime(Runtime):
     @abstractmethod
     def commit(self, buildId: BuildId) -> None:
         ...
+
+
+class ExtraRuntime:
+    def __init__(
+            self, extra: str, runtime: PodmanRuntime, envName: str) -> None:
+        self.extraDir = (Path("~/.cache/podenv") / (
+            runtime.name + "-" + envName + "-pip")).expanduser()
+        self.metadataPath = Path(str(self.extraDir) + ".json")
+        self.packages: Set[str] = set()
+        self.runtime: PodmanRuntime = runtime
+
+    def getInstalled(self) -> Set[str]:
+        return self.packages
+
+    @abstractmethod
+    def update(self) -> None:
+        ...
+
+    @abstractmethod
+    def install(self, packages: Set[str]) -> None:
+        ...
+
+    @abstractmethod
+    def enable(self, env: Env) -> None:
+        ...
+
+
+def createContainerDir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    if isSelinux():
+        selinux.chcon(str(path), "system_u:object_r:container_file_t:s0")
+
+
+class PipRuntime(ExtraRuntime):
+    def __init__(self, runtime: PodmanRuntime, envName: str) -> None:
+        super().__init__("pip", runtime, envName)
+        self.pipCache = Path("~/.cache/podenv/pip-cache").expanduser()
+        if not self.pipCache.exists():
+            createContainerDir(self.pipCache)
+
+    def enable(self, env: Env) -> None:
+        if self.metadataPath.exists():
+            self.packages = set(json.loads(self.metadataPath.read_text())[
+                "packages"])
+            createContainerDir(self.extraDir)
+        self.runtime.mounts["/root/.cache/pip"] = str(self.pipCache)
+        self.runtime.mounts["/venv"] = str(self.extraDir)
+        self.runtime.runtimeMounts["/venv"] = str(self.extraDir)
+
+    def exists(self) -> bool:
+        return (self.extraDir / "bin" / "activate").exists()
+
+    def create(self) -> None:
+        with self.runtime.getSession() as buildId:
+            self.runtime.runCommand(
+                buildId, "python3 -mvenv --system-site-packages /venv")
+
+    def update(self) -> None:
+        if not self.packages:
+            return
+        if not self.exists():
+            self.create()
+        with self.runtime.getSession() as buildId:
+            self.runtime.runCommand(
+                buildId, "/venv/bin/pip install --upgrade " + " ".join(
+                    self.packages))
+
+    def install(self, packages: Set[str]) -> None:
+        if not self.exists():
+            self.create()
+        with self.runtime.getSession() as buildId:
+            self.runtime.runCommand(
+                buildId, "/venv/bin/pip install " + " ".join(map(
+                    lambda x: x.lstrip('pip:'), packages)))
+        self.packages.update(packages)
+        self.metadataPath.write_text(json.dumps(dict(
+            packages=list(self.packages))))
 
 
 class ContainerImage(PodmanRuntime):
@@ -707,20 +815,37 @@ def configureRuntime(
         userNotif(f"Customizing image {needCustomizations}")
         env.runtime.customize(needCustomizations)
 
+    imagePackages = env.runtime.getInstalledPackages()
+    envPackages = env.systemPackages
+    envPipPackages = env.pipPackages
+
+    if packages:
+        # Add user provided extra packages
+        cliPackages = set(packages)
+        envPackages.update(packageFilter(cliPackages))
+        envPipPackages.update(pipFilter(cliPackages))
+
+    if envPipPackages:
+        envPackages.add("python3")
+        env.runtime.enableExtra("pip", env)
+
     if env.autoUpdate and env.runtime.needUpdate():
         userNotif(f"Updating {env.runtime}")
         env.runtime.update()
-
-    imagePackages = env.runtime.getInstalledPackages()
-    envPackages = set(env.packages)
-    if packages:
-        # Add user provided extra packages
-        envPackages.update(packages)
+        if envPipPackages:
+            env.runtime.updateExtra("pip")
 
     need = envPackages.difference(imagePackages)
     if need:
         userNotif(f"Installing {need}")
         env.runtime.install(need)
+
+    if envPipPackages:
+        pipPackages = env.runtime.getInstalledExtra("pip")
+        needPip = envPipPackages.difference(pipPackages)
+        if needPip:
+            userNotif(f"Installing {needPip}")
+            env.runtime.installExtra("pip", needPip)
 
 
 def setupInfraNetwork(networkName: str, imageName: ExecArgs, env: Env) -> None:
@@ -774,7 +899,7 @@ def setupPod(
 
     if not env.runtime:
         raise RuntimeError("Env has no runtime")
-    imageName = env.runtime.getSystemEnvironments() + imageName
+    imageName = env.runtime.getRuntimeArgs() + imageName
     if env.capabilities.get("mount-cache"):
         # Inject runtime volumes
         imageName = env.runtime.getSystemMounts() + imageName
