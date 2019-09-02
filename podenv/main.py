@@ -143,13 +143,14 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         env = loadEnv(conf, args.env, args.base)
         applyCommandLineOverride(args, env)
         containerName, containerArgs, envArgs, \
-            hostPreArgs, hostPostArgs = prepareEnv(env, args.args)
+            hostPreArgs, hostPostArgs = prepareEnv(
+                env, args.args, args.package)
     except RuntimeError as e:
         fail(notifyUserProc, str(e))
 
     try:
         # Prepare the image and create needed host directories
-        imageName = setupPod(notifyUserProc, env, args.package)
+        imageName = setupPod(notifyUserProc, env)
     except RuntimeError as e:
         fail(notifyUserProc, str(e))
 

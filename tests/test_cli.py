@@ -25,7 +25,7 @@ def getEnv(argv):
     conf = podenv.config.loadConfig(lambda msg: msg)
     env = podenv.config.loadEnv(conf, args.env, "")
     podenv.main.applyCommandLineOverride(args, env)
-    podenv.env.prepareEnv(env, args.args)
+    podenv.env.prepareEnv(env, args.args, args.package)
     return env
 
 

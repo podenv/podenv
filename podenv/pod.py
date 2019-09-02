@@ -39,7 +39,7 @@ except ImportError:
     HAS_SELINUX = False
 
 from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
-    UserNotif, taskToCommand, pipFilter, packageFilter
+    UserNotif, taskToCommand
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -799,8 +799,7 @@ def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
     return env.runtime.getExecName()
 
 
-def configureRuntime(
-        userNotif: UserNotif, env: Env, packages: List[str]) -> None:
+def configureRuntime(userNotif: UserNotif, env: Env) -> None:
     if not env.runtime:
         raise RuntimeError("Env has no metadata")
 
@@ -819,12 +818,6 @@ def configureRuntime(
     imagePackages = env.runtime.getInstalledPackages()
     envPackages = env.systemPackages
     envPipPackages = env.pipPackages
-
-    if packages:
-        # Add user provided extra packages
-        cliPackages = set(packages)
-        envPackages.update(packageFilter(cliPackages))
-        envPipPackages.update(pipFilter(cliPackages))
 
     if envPipPackages:
         envPackages.add("python3")
@@ -889,10 +882,9 @@ def setupRunDir(env: Env) -> None:
 def setupPod(
         userNotif: UserNotif,
         env: Env,
-        packages: List[str],
         cacheDir: Path = Path("~/.cache/podenv")) -> ExecArgs:
     imageName = setupRuntime(userNotif, env, cacheDir)
-    configureRuntime(userNotif, env, packages)
+    configureRuntime(userNotif, env)
     if env.network:
         setupInfraNetwork(env.network, imageName, env)
 

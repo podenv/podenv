@@ -751,11 +751,20 @@ PrepareEnvResults = Tuple[
     EnvName, PodmanArgs, EnvArgs, HostPreArgs, HostPostArgs]
 
 
-def prepareEnv(env: Env, cliArgs: List[str]) -> PrepareEnvResults:
+def prepareEnv(
+        env: Env,
+        cliArgs: List[str],
+        packages: List[str]) -> PrepareEnvResults:
     """Generate podman exec args based on capabilities"""
     # Apply capabilities
     for name, _, capability in Capabilities:
         capability(env.capabilities.get(name, False), env.ctx, env)
+
+    if packages:
+        # Add user provided extra packages
+        cliPackages = set(packages)
+        env.systemPackages.update(packageFilter(cliPackages))
+        env.pipPackages.update(pipFilter(cliPackages))
 
     # Apply extra settings from the environment definition:
     args = ["--hostname", env.name]
