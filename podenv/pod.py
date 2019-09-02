@@ -370,6 +370,8 @@ class PodmanRuntime(Runtime):
         self.metadataPath.write_text(json.dumps(self.info))
 
     def __repr__(self) -> str:
+        if self.systemType:
+            return f"{self.systemType}:{self.name}"
         return self.name
 
     def setSystemType(self, systemType: str) -> None:
@@ -646,6 +648,8 @@ class ContainerImage(PodmanRuntime):
                          fromRef)
 
     def __repr__(self) -> str:
+        if self.systemType:
+            return f"{self.systemType}:{self.localName}"
         return self.localName
 
     def getExecName(self) -> ExecArgs:
