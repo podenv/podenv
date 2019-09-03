@@ -36,7 +36,7 @@ class TestCommandLineInterface(unittest.TestCase):
                          "fedora env is loaded")
 
     def test_override_environ(self):
-        env = getEnv(["-e", "PORT=4242", "python-http-server"])
+        env = getEnv(["-e", "PORT=4242", "fedora"])
         self.assertEqual(env.environ["PORT"], "4242")
 
 

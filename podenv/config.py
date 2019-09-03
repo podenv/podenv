@@ -29,6 +29,7 @@ from podenv import defaults
 
 
 log = getLogger("podenv")
+podhub = "https://github.com/podenv/hub"
 
 
 def urlToFilename(url: str) -> str:
@@ -138,6 +139,8 @@ def initConfig(configDir: Path, configFile: Path) -> None:
           default-capabilities:
             seccomp: True
             selinux: True
+          registries:
+            - {podhub}
 
         environments:
           # Local environments
@@ -157,7 +160,7 @@ def initConfig(configDir: Path, configFile: Path) -> None:
                   fi
                   export PS1="{ps1}"
                   alias ls='ls -ap --color=auto'
-        """.format(ps1=ps1))
+        """.format(ps1=ps1, podhub=podhub))
     configDir.mkdir(parents=True, exist_ok=True)
     configFile.write_text(defaultConfig)
 

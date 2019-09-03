@@ -21,38 +21,15 @@ and [guix environment](https://guix.gnu.org/manual/en/html_node/Invoking-guix-en
 
 ## Examples
 
+Environments can be shared through the [hub](https://github.com/podenv/hub).
+
 In a `~/.config/podenv/config.yaml`file, define desktop application:
 
 ```yaml
 environments:
-  fedora:
-    image: registry.fedoraproject.org/fedora:30
-    capabilities:
-      auto-update: True
-      seccomp: True
-      selinux: True
-    environ:
-      LC_ALL: en_US.UTF-8
-      SHLVL: 3
-      TERM: xterm
-
-  shell:
-    parent: fedora
-    capabilities:
-      terminal: True
-      mount-run: True
-    overlays:
-      - .bashrc: |
-          if [ -f /etc/bashrc ]; then
-            . /etc/bashrc
-          fi
-          export PS1="\[\033[01;32m\]\h \[\033[01;34m\]\w \$ \[\033[00m\]"
-          alias ls='ls -ap --color=auto'
-    command:
-      - /bin/bash
-    image-tasks:
-      - name: Install packages documentation
-        command: sed -e 's/nodocs//' -i /etc/dnf/dnf.conf
+  browser:
+    parent: firefox
+    home: ~/.config/firefox
 
   ansible:
     parent: shell
@@ -65,43 +42,14 @@ environments:
     mounts:
       ~/.config/openstack: ~/.config/openstack
 
-  firefox:
-    parent: fedora
-    image-tasks:
-      - name: Install rpmfusion repository
-        shell: dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(grep ^VERSION_ID= /etc/os-release | cut -d= -f2).noarch.rpm
-    packages:
-      - firefox
-      - ffmpeg
-    capabilities:
-      ipc: True
-      pulseaudio: True
-      x11: True
-      network: True
-    command:
-      - firefox
-      - --no-remote
-    shmsize: 4g
-
-  firefox-webgl:
-    parent: firefox
-    packages:
-      - libvdpau-va-gl
-      - mesa-dri-drivers
-      - libva-intel-driver
-      - libva-intel-hybrid-driver
-    capabilities:
-      dri: True
-      network: True
-
   webreview:
-    parent: firefox
+    parent: firefox-light
     args:
       - https://review.opendev.org
-    home: ~/.cache/firefox-review.opendev.org
+    home: ~/.config/firefox-review.opendev.org
 
   video-conf:
-    parent: firefox-webgl
+    parent: firefox
     packages:
       - chromium
     capabilities:
