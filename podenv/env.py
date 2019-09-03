@@ -17,6 +17,7 @@ This module handles environment definitions.
 """
 
 from __future__ import annotations
+import base64
 import copy
 import os
 import re
@@ -71,8 +72,19 @@ def taskToCommand(task: Task) -> str:
         command.append(str(task.pop("command")))
     elif task.get("shell"):
         command.append(str(task.pop("shell")))
+    elif task.get("copy"):
+        copyTask = task.pop("copy")
+        if not isinstance(copyTask, dict):
+            raise RuntimeError(f"Invalid copy task {copyTask}")
+        copyContent = copyTask.pop("content")
+        copyDest = copyTask.pop("dest")
+        if copyTask:
+            raise RuntimeError(f"Unsupported copy attribute: {copyTask}")
+        command.append("echo {b64content} | base64 -d > {dest}".format(
+            b64content=base64.b64encode(
+                copyContent.encode('utf-8')).decode('ascii'),
+            dest=copyDest))
     else:
-        raise Exception
         raise RuntimeError(f"Unsupported task: {task}")
     if task:
         raise RuntimeError(f"Unsupported task attribute: {task}")
