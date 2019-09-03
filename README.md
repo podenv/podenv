@@ -245,6 +245,7 @@ selinux              | enable SELinux                                           
 setuid               | enable setuid                                                |
 ptrace               | enable ptrace                                                |
 network              | enable network                                               |
+foreground           | work around application that goes into background            |
 mount-cwd            | mount cwd to /data                                           |
 mount-home           | mount home to host home                                      |
 mount-run            | mount home and tmp to host tmpfs                             |
@@ -267,10 +268,11 @@ usage: podenv [-h] [--verbose] [--list] [--shell] [--net NET] [-p PACKAGE]
               [--webcam] [--no-webcam] [--alsa] [--no-alsa] [--dri] [--no-dri]
               [--kvm] [--no-kvm] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
               [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
-              [--no-ptrace] [--network] [--no-network] [--mount-cwd]
-              [--no-mount-cwd] [--mount-home] [--no-mount-home] [--mount-run]
-              [--no-mount-run] [--mount-cache] [--no-mount-cache]
-              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
+              [--no-ptrace] [--network] [--no-network] [--foreground]
+              [--no-foreground] [--mount-cwd] [--no-mount-cwd] [--mount-home]
+              [--no-mount-home] [--mount-run] [--no-mount-run] [--mount-cache]
+              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
+              [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -338,6 +340,9 @@ optional arguments:
   --no-ptrace           Disable ptrace capibility
   --network             Enable capability: enable network
   --no-network          Disable network capibility
+  --foreground          Enable capability: work around application that goes
+                        into background
+  --no-foreground       Disable foreground capibility
   --mount-cwd           Enable capability: mount cwd to /data
   --no-mount-cwd        Disable mount-cwd capibility
   --mount-home          Enable capability: mount home to host home

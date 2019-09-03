@@ -622,6 +622,17 @@ def setuidCap(active: bool, ctx: ExecContext, env: Env) -> None:
             ctx.syscaps.append(cap)
 
 
+def foregroundCap(active: bool, ctx: ExecContext, env: Env) -> None:
+    "work around application that goes into background"
+    if active:
+        # TODO: add gui dialog support for terminal-less usage
+        env.command = [
+            "bash", "-c",
+            "set -e; {command}; echo 'press ctrl-c to quit'; sleep Inf".format(
+                command=";".join(env.command)
+            )]
+
+
 def autoUpdateCap(active: bool, _: ExecContext, env: Env) -> None:
     "keep environment updated"
     if active:
@@ -657,6 +668,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         setuidCap,
         ptraceCap,
         networkCap,
+        foregroundCap,
         mountCwdCap,
         mountHomeCap,
         mountRunCap,
