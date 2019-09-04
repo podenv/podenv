@@ -206,21 +206,21 @@ uidmap               | map host uid                                             
 ```bash
 $ python3 -mpip install --user .
 $ podenv --help
-usage: podenv [-h] [--verbose] [--list] [--shell] [--net NET] [-p PACKAGE]
-              [-e ENVIRON] [-i IMAGE] [-b BASE] [-t TAG] [--manage-image]
-              [--no-manage-image] [--branch-image] [--no-branch-image]
-              [--root] [--no-root] [--privileged] [--no-privileged]
-              [--terminal] [--no-terminal] [--ipc] [--no-ipc] [--x11]
-              [--no-x11] [--pulseaudio] [--no-pulseaudio] [--git] [--no-git]
-              [--editor] [--no-editor] [--ssh] [--no-ssh] [--gpg] [--no-gpg]
-              [--webcam] [--no-webcam] [--alsa] [--no-alsa] [--dri] [--no-dri]
-              [--kvm] [--no-kvm] [--tun] [--no-tun] [--seccomp] [--no-seccomp]
-              [--selinux] [--no-selinux] [--setuid] [--no-setuid] [--ptrace]
-              [--no-ptrace] [--network] [--no-network] [--foreground]
-              [--no-foreground] [--mount-cwd] [--no-mount-cwd] [--mount-home]
-              [--no-mount-home] [--mount-run] [--no-mount-run] [--mount-cache]
-              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
-              [--no-uidmap]
+usage: podenv [-h] [--verbose] [--list] [--shell] [--net NET] [--home HOME]
+              [-p PACKAGE] [-e ENVIRON] [-i IMAGE] [-b BASE] [-t TAG]
+              [--manage-image] [--no-manage-image] [--branch-image]
+              [--no-branch-image] [--root] [--no-root] [--privileged]
+              [--no-privileged] [--terminal] [--no-terminal] [--ipc]
+              [--no-ipc] [--x11] [--no-x11] [--pulseaudio] [--no-pulseaudio]
+              [--git] [--no-git] [--editor] [--no-editor] [--ssh] [--no-ssh]
+              [--gpg] [--no-gpg] [--webcam] [--no-webcam] [--alsa] [--no-alsa]
+              [--dri] [--no-dri] [--kvm] [--no-kvm] [--tun] [--no-tun]
+              [--seccomp] [--no-seccomp] [--selinux] [--no-selinux] [--setuid]
+              [--no-setuid] [--ptrace] [--no-ptrace] [--network]
+              [--no-network] [--foreground] [--no-foreground] [--mount-cwd]
+              [--no-mount-cwd] [--mount-home] [--no-mount-home] [--mount-run]
+              [--no-mount-run] [--mount-cache] [--no-mount-cache]
+              [--auto-update] [--no-auto-update] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -235,6 +235,7 @@ optional arguments:
   --list                List available environments
   --shell               Run bash instead of the profile command
   --net NET             Set the network (host or env name)
+  --home HOME           Set the home directory path
   -p PACKAGE, --package PACKAGE
                         Add a package to the environment
   -e ENVIRON, --environ ENVIRON
