@@ -68,10 +68,12 @@ def taskToCommand(task: Task) -> str:
         if "'" in task["name"]:
             raise RuntimeError(f"Task name can't have ': {task['name']}")
         command.append("echo '%s'" % task.pop("name"))
-    if task.get("command"):
-        command.append(str(task.pop("command")))
-    elif task.get("shell"):
-        command.append(str(task.pop("shell")))
+    if task.get("command") or task.get("shell"):
+        if task.get("command"):
+            cmd = task.pop("command")
+        else:
+            cmd = task.pop("shell")
+        command.append(str(cmd).rstrip('\n'))
     elif task.get("copy"):
         copyTask = task.pop("copy")
         if not isinstance(copyTask, dict):
