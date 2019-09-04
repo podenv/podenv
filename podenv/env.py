@@ -859,6 +859,7 @@ def prepareEnv(
         envPreTasks: ExecArgs = []
         for preTask in env.preTasks:
             command = taskToCommand(preTask)
+            command = command.format(**env.environ)
             if command.startswith("run_local_host; "):
                 hostPreTasks.append(command.split('; ', 1)[1])
             else:
@@ -871,6 +872,7 @@ def prepareEnv(
     if env.postTasks:
         for postTask in env.postTasks:
             command = taskToCommand(postTask)
+            command = command.format(**env.environ)
             if command.startswith("run_local_host; "):
                 hostPostTasks.append(command.split('; ', 1)[1])
             else:
