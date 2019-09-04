@@ -77,6 +77,7 @@ def syncRegistry(url: str, localPath: Path) -> None:
         else:
             log.info("Updating %s", url)
             execute(["git", "pull"], cwd=localPath)
+        (localPath / ".git").touch()
         # TODO: Validate signature
     except RuntimeError:
         log.warning(f"Couldn't update {url}")
