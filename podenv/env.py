@@ -112,6 +112,14 @@ def taskToCommand(task: Task) -> str:
     return "; ".join(command)
 
 
+def safeFormat(string: str, variables: Dict[str, str]) -> str:
+    """Implement python str.format that supports foreign keys"""
+    result = string
+    for k, v in variables.items():
+        result = result.replace("{%s}" % k, v)
+    return result
+
+
 class Runtime(ABC):
     @abstractmethod
     def exists(self, autoUpdate: bool) -> bool:
@@ -877,8 +885,7 @@ def prepareEnv(
         # TODO: create a /tmp/start.sh script when preTasks are too long
         envPreTasks: ExecArgs = []
         for preTask in env.preTasks:
-            command = taskToCommand(preTask)
-            command = command.format(**env.environ)
+            command = safeFormat(taskToCommand(preTask), env.environ)
             if command.startswith("run_local_host; "):
                 hostPreTasks.append(command.split('; ', 1)[1])
             else:
@@ -890,8 +897,7 @@ def prepareEnv(
     hostPostTasks: ExecArgs = []
     if env.postTasks:
         for postTask in env.postTasks:
-            command = taskToCommand(postTask)
-            command = command.format(**env.environ)
+            command = safeFormat(taskToCommand(postTask), env.environ)
             if command.startswith("run_local_host; "):
                 hostPostTasks.append(command.split('; ', 1)[1])
             else:
