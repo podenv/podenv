@@ -430,6 +430,9 @@ class Env:
         self.capabilities.update(retroCap)
         # Convert str to list
         self.requires = asList(self.requires)
+        # Ensure environ is a str,str mapping
+        self.environ = dict(map(lambda x: (str(x[0]), str(x[1])),
+                                self.environ.items()))
         # Minify registry name
         self.registryShortName = "/".join(
             self.registryName.rstrip('/').split('/')[-3:])
