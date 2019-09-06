@@ -60,10 +60,20 @@ def taskToCommand(task: Task) -> str:
     """Convert ansible like task to shell string"""
     task = copy.copy(task)
     command = []
+    whenCondition: Union[None, str, Dict[str, str]] = None
     if task.get("delegate_to"):
         if task["delegate_to"] != "host":
             raise RuntimeError(f"Task delegate_to is incorrect: {task}")
         command.append("run_local_%s" % task.pop("delegate_to"))
+    if task.get("when") or task.get("unless"):
+        if task.get("unless"):
+            whenCondition = "! %s" % task.pop("unless")
+        else:
+            whenCondition = task.pop("when")
+        if not isinstance(whenCondition, str):
+            raise RuntimeError(f"Invalid when condition {whenCondition}")
+        command.append(f"if {whenCondition}; then true")
+
     if task.get("name"):
         if "'" in task["name"]:
             raise RuntimeError(f"Task name can't have ': {task['name']}")
@@ -90,6 +100,8 @@ def taskToCommand(task: Task) -> str:
         raise RuntimeError(f"Unsupported task: {task}")
     if task:
         raise RuntimeError(f"Unsupported task attribute: {task}")
+    if whenCondition:
+        command.append("fi")
     return "; ".join(command)
 
 
