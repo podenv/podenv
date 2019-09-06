@@ -83,7 +83,7 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
     if args.image:
         env.image = args.image
     if args.net:
-        env.network = args.network
+        env.network = args.net
     if args.home:
         env.home = str(Path(args.home).expanduser().resolve(strict=True))
 
