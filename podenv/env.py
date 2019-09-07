@@ -21,6 +21,7 @@ import base64
 import copy
 import os
 import re
+import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -42,10 +43,10 @@ Task = Dict[str, Union[str, Dict[str, str]]]
 StrOrList = Union[str, List[str]]
 
 
-def asList(param: StrOrList = []) -> StrOrList:
+def asList(param: StrOrList = []) -> List[str]:
     if isinstance(param, list):
         return param
-    return param.split()
+    return shlex.split(param)
 
 
 def pipFilter(packages: Set[str]) -> Set[str]:
@@ -439,6 +440,8 @@ class Env:
         # Ensure parent is a str
         if not self.parent:
             self.parent = ""
+        # Ensure command is a list
+        self.command = asList(self.command)
         # Record envName (e.g. without any variant names)
         self.envName = self.name
         self.systemPackages = packageFilter(set(self.packages))
