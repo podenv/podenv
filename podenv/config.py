@@ -120,6 +120,9 @@ class Config:
             configFile: Path,
             registryName: str) -> None:
         for envName, envSchema in schema.items():
+            if "." in envName:
+                raise RuntimeError(
+                    f"'.' is not allowed in environment name {envName}")
             self.envs[envName] = Env(
                 envName,
                 configFile=configFile,
