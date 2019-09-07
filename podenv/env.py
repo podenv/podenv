@@ -595,9 +595,10 @@ def editorCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share ssh agent and keys"
     if active:
-        ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
-        sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
-        ctx.mounts[Path(sshSockPath)] = sshSockPath
+        if os.environ.get("SSH_AUTH_SOCK"):
+            ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
+            sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
+            ctx.mounts[Path(sshSockPath)] = sshSockPath
         ctx.mounts[ctx.home / ".ssh"] = Path("~/.ssh")
 
 
