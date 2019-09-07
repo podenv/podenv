@@ -603,6 +603,7 @@ def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
             sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
             ctx.mounts[Path(sshSockPath)] = sshSockPath
         ctx.mounts[ctx.home / ".ssh"] = Path("~/.ssh")
+        env.systemPackages.add("openssh-clients")
 
 
 def gpgCap(active: bool, ctx: ExecContext, env: Env) -> None:
@@ -643,6 +644,7 @@ def tunCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share tun device"
     if active:
         ctx.devices.append(Path("/dev/net/tun"))
+        env.systemPackages.add("iproute")
 
 
 def selinuxCap(active: bool, ctx: ExecContext, env: Env) -> None:
