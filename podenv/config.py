@@ -40,6 +40,7 @@ def urlToFilename(url: str) -> str:
 def attributesToCamelCase(envSchema: Dict[Any, Any]) -> Dict[Any, Any]:
     """Convert attribute from yaml to dataclass camelCase"""
     for hyphenKey in (
+            "add-hosts",
             "image-customizations",
             "image-tasks",
             "system-type",

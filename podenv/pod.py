@@ -865,6 +865,7 @@ def setupInfraNetwork(networkName: str, imageName: ExecArgs, env: Env) -> None:
             args.extend(getUidMap(env))
         if env.dns:
             args.append(f"--dns={env.dns}")
+        args.extend(env.ctx.getHosts())
 
         executePod("net-" + networkName, args, imageName, ["sleep", "Inf"])
     except AlreadyRunning:

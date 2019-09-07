@@ -121,6 +121,14 @@ def safeFormat(string: str, variables: Dict[str, str]) -> str:
     return result
 
 
+def dictFormat(d: Dict[str, str], vars: Dict[str, str]) -> Dict[str, str]:
+    """Format a dictionary keys anv values"""
+    return dict(map(lambda x:
+                    (safeFormat(str(x[0]), vars),
+                     safeFormat(str(x[1]), vars)),
+                    d.items()))
+
+
 class Runtime(ABC):
     @abstractmethod
     def exists(self, autoUpdate: bool) -> bool:
@@ -202,6 +210,7 @@ class ExecContext:
     home: Path = field(default_factory=Path)
     cwd: Path = field(default_factory=Path)
     xdgDir: Path = field(default_factory=Path)
+    addHosts: Dict[str, str] = field(default_factory=dict)
     detachKeys: str = ""
     interactive: bool = False
     user: int = 0
@@ -218,6 +227,12 @@ class ExecContext:
         return not self.namespaces.get("network") or \
             self.namespaces["network"] == "host"
 
+    def getHosts(self) -> ExecArgs:
+        args = []
+        for hostName, hostIp in self.addHosts.items():
+            args.extend(["--add-host", f"{hostName}:{hostIp}"])
+        return args
+
     def getArgs(self) -> ExecArgs:
         args = []
 
@@ -228,6 +243,9 @@ class ExecContext:
 
         for ns, val in self.namespaces.items():
             args.extend([f"--{ns}", val])
+
+        if self.hasDirectNetwork():
+            args.extend(self.getHosts())
 
         if self.cwd == Path():
             self.cwd = self.home
@@ -342,6 +360,8 @@ class Env:
         doc="List of capabilities"))
     network: str = field(default="", metadata=dict(
         doc="Name of a network to be shared by multiple environment"))
+    addHosts: Dict[str, str] = field(default_factory=dict, metadata=dict(
+        doc="Custom hostname,ip to configure in the container"))
     requires: StrOrList = field(default_factory=asList, metadata=dict(
         doc="List of required environments"))
     overlays: List[Overlay] = field(default_factory=list, metadata=dict(
@@ -859,8 +879,11 @@ def prepareEnv(
             port = port.format(**vars)
             args.append(f"--publish={port}")
 
+    env.addHosts = dictFormat(env.addHosts, vars)
+
     env.ctx.syscaps.extend(env.syscaps)
     env.ctx.environ.update(env.environ)
+    env.ctx.addHosts.update(env.addHosts)
 
     for containerPath, hostPathStr in env.mounts.items():
         hostPath = Path(hostPathStr).expanduser().resolve()

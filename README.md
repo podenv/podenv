@@ -158,6 +158,7 @@ syscaps              | List[str]       | List of system capabilities(7)         
 mounts               | Dict[str, str]  | Extra mountpoints                        |
 capabilities         | Dict[str, bool] | List of capabilities                     |
 network              | str             | Name of a network to be shared by multiple environment |
+add-hosts            | Dict[str, str]  | Custom hostname,ip to configure in the container |
 requires             | StrOrList       | List of required environments            |
 overlays             | List[Overlay]   | List of overlay to copy in runtime directory |
 home                 | str             | Container home path mount                |
