@@ -332,6 +332,8 @@ class Env:
         doc="Optional arguments to append to the command"))
     environ: Dict[str, str] = field(default_factory=dict, metadata=dict(
         doc="User environ(7)"))
+    vars: Dict[str, str] = field(default_factory=dict, metadata=dict(
+        doc="Extra environ vars to be used for command substitution only"))
     syscaps: List[str] = field(default_factory=list, metadata=dict(
         doc="List of system capabilities(7)"))
     mounts: Dict[str, str] = field(default_factory=dict, metadata=dict(
@@ -434,6 +436,8 @@ class Env:
         # Ensure environ is a str,str mapping
         self.environ = dict(map(lambda x: (str(x[0]), str(x[1])),
                                 self.environ.items()))
+        self.vars = dict(map(lambda x: (str(x[0]), str(x[1])),
+                             self.vars.items()))
         # Minify registry name
         self.registryShortName = "/".join(
             self.registryName.rstrip('/').split('/')[-3:])
@@ -818,6 +822,10 @@ def prepareEnv(
         cliArgs: List[str],
         packages: List[str]) -> PrepareEnvResults:
     """Generate podman exec args based on capabilities"""
+    # Setup substitution format matp
+    vars = env.environ.copy()
+    vars.update(env.vars)
+
     # Apply capabilities
     for name, _, capability in Capabilities:
         capability(env.capabilities.get(name, False), env.ctx, env)
@@ -838,7 +846,7 @@ def prepareEnv(
         env.ctx.mounts[env.ctx.home] = Path(env.home).expanduser().resolve()
     if env.ports:
         for port in env.ports:
-            port = port.format(**env.environ)
+            port = port.format(**vars)
             args.append(f"--publish={port}")
 
     env.ctx.syscaps.extend(env.syscaps)
@@ -886,7 +894,7 @@ def prepareEnv(
         env.preTasks.append({"name": "Active virtualenv",
                              "shell": "source /venv/bin/activate"})
 
-    envArgs = list(map(str, commandArgs))
+    envArgs = list(map(lambda x: safeFormat(str(x), vars), commandArgs))
     hostPreTasks: ExecArgs = []
     if env.preTasks:
         if not envArgs:
@@ -894,7 +902,7 @@ def prepareEnv(
         # TODO: create a /tmp/start.sh script when preTasks are too long
         envPreTasks: ExecArgs = []
         for preTask in env.preTasks:
-            command = safeFormat(taskToCommand(preTask), env.environ)
+            command = safeFormat(taskToCommand(preTask), vars)
             if command.startswith("run_local_host; "):
                 hostPreTasks.append(command.split('; ', 1)[1])
             else:
@@ -906,7 +914,7 @@ def prepareEnv(
     hostPostTasks: ExecArgs = []
     if env.postTasks:
         for postTask in env.postTasks:
-            command = safeFormat(taskToCommand(postTask), env.environ)
+            command = safeFormat(taskToCommand(postTask), vars)
             if command.startswith("run_local_host; "):
                 hostPostTasks.append(command.split('; ', 1)[1])
             else:

@@ -153,6 +153,7 @@ post-tasks           | List[Task]      | List of ansible like command to run aft
 command              | ExecArgs        | Container starting command               |
 args                 | ExecArgs        | Optional arguments to append to the command |
 environ              | Dict[str, str]  | User environ(7)                          |
+vars                 | Dict[str, str]  | Extra environ vars to be used for command substitution only |
 syscaps              | List[str]       | List of system capabilities(7)           |
 mounts               | Dict[str, str]  | Extra mountpoints                        |
 capabilities         | Dict[str, bool] | List of capabilities                     |
