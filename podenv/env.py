@@ -330,6 +330,8 @@ class Env:
         doc="Application home page"))
     parent: str = field(default="", metadata=dict(
         doc="A parent environment name to inherit attributes from"))
+    abstract: bool = field(default=False, metadata=dict(
+        doc="Set to True to indicate the environment can't be used directly"))
     desktop: Optional[DesktopEntry] = field(default=None, metadata=dict(
         doc="A desktop launcher entry file definition"))
     image: str = field(default="", metadata=dict(

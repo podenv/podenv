@@ -248,6 +248,9 @@ def loadEnv(
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't load the environment")
 
+    if env.abstract:
+        raise RuntimeError(f"{envName} is abstract, it needs to be inherited")
+
     # Apply default cap
     for capName, capValue in conf.defaultCap.items():
         if capName not in env.capabilities:

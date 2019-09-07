@@ -143,6 +143,7 @@ name                 | str             | The name of the environment            
 description          | Optional[str]   | Environment description                  |
 url                  | Optional[str]   | Application home page                    |
 parent               | str             | A parent environment name to inherit attributes from |
+abstract             | bool            | Set to True to indicate the environment can't be used directly |
 desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
 image                | str             | The container image reference            |
 rootfs               | str             | The path of a rootfs                     |
