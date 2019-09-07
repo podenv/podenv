@@ -205,15 +205,6 @@ def getSelinuxLabel(env: Env) -> str:
     return "system_u:object_r:container_file_t:s0"
 
 
-@contextmanager
-def buildah(fromRef: str) -> Generator[BuildId, None, None]:
-    ctr = pread(["buildah", "from", fromRef]).strip()
-    try:
-        yield ctr
-    finally:
-        execute(["buildah", "delete", ctr], textOutput=True)
-
-
 def buildahRunCommand() -> ExecArgs:
     return ["buildah", "run", "--network", "host", "--user", "0:0"]
 
@@ -317,6 +308,13 @@ class PodmanRuntime(Runtime):
         self.name: str = name
         self.metadataPath = Path(
             str(cacheDir / self.name).rstrip('/') + '.json')
+
+    def lock(self) -> None:
+        self.lock_file = open(str(self.metadataPath) + '-lock', "w")
+        fcntl.flock(self.lock_file, fcntl.LOCK_EX)
+
+    def unlock(self) -> None:
+        fcntl.flock(self.lock_file, fcntl.LOCK_UN)
 
     def exists(self, autoUpdate: bool) -> bool:
         return self.metadataPath.exists()
@@ -672,7 +670,16 @@ class ContainerImage(PodmanRuntime):
         self.updateInfo({"updated": now()})
 
     def getSession(self, create: bool = False) -> BuildSession:
-        return buildah(self.fromRef if create else self.localName)
+        @contextmanager
+        def buildahSession(fromRef: str) -> Generator[BuildId, None, None]:
+            self.lock()
+            ctr = pread(["buildah", "from", fromRef]).strip()
+            try:
+                yield ctr
+            finally:
+                self.unlock()
+                execute(["buildah", "delete", ctr], textOutput=True)
+        return buildahSession(self.fromRef if create else self.localName)
 
     def runCommand(self, buildId: BuildId, command: Command) -> None:
         if isinstance(command, list):
@@ -747,7 +754,11 @@ class RootfsDirectory(PodmanRuntime):
     def getSession(self, create: bool = False) -> BuildSession:
         @contextmanager
         def fakeSession() -> Generator[BuildId, None, None]:
-            yield "noop"
+            self.lock()
+            try:
+                yield "noop"
+            finally:
+                self.unlock()
         return fakeSession()
 
     def runCommand(self, _: BuildId, command: Command) -> None:
