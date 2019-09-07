@@ -606,6 +606,16 @@ def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
             ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
             sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
             ctx.mounts[Path(sshSockPath)] = sshSockPath
+        sshconfigFile = Path("~/.ssh/config").expanduser().resolve()
+        if sshconfigFile.is_file():
+            for line in sshconfigFile.read_text().split('\n'):
+                line = line.strip()
+                if line.startswith("ControlPath"):
+                    controlPath = Path(line.split()[1].strip().replace(
+                        "%i", str(os.getuid()))).parent
+                    if controlPath.is_dir():
+                        ctx.mounts[controlPath] = controlPath
+
         ctx.mounts[ctx.home / ".ssh"] = Path("~/.ssh")
         env.systemPackages.add("openssh-clients")
 
