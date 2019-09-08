@@ -593,8 +593,11 @@ def pulseaudioCap(active: bool, ctx: ExecContext, env: Env) -> None:
 def gitCap(active: bool, ctx: ExecContext, env: Env) -> None:
     "share .gitconfig and excludesfile"
     if active:
+        gitconfigDir = Path("~/.config/git").expanduser().resolve()
         gitconfigFile = Path("~/.gitconfig").expanduser().resolve()
-        if gitconfigFile.is_file():
+        if gitconfigDir.is_dir():
+            ctx.mounts[ctx.home / ".config/git"] = gitconfigDir
+        elif gitconfigFile.is_file():
             ctx.mounts[ctx.home / ".gitconfig"] = gitconfigFile
             for line in gitconfigFile.read_text().split('\n'):
                 line = line.strip()
