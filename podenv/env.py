@@ -855,8 +855,8 @@ def prepareEnv(
         packages: List[str]) -> PrepareEnvResults:
     """Generate podman exec args based on capabilities"""
     # Setup substitution format matp
-    vars = env.environ.copy()
-    vars.update(env.vars)
+    vars = env.vars.copy()
+    vars.update(env.environ)
 
     # Apply capabilities
     for name, _, capability in Capabilities:
