@@ -712,7 +712,11 @@ class ContainerImage(PodmanRuntime):
             if age(self.info["created"]) > DAY * 21 and self.needUpdate():
                 log.info("Re-creating base layer because it is too old")
                 self.pull()
-                self.info.clear()
+                self.updateInfo(dict(
+                    updated="1970-01-01T00:00:00",
+                    packages=[],
+                    customHash=[],
+                ))
                 return False
             return True
         return False
