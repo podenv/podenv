@@ -865,7 +865,7 @@ def setupInfraNetwork(networkName: str, imageName: ExecArgs, env: Env) -> None:
     """Setup persistent infra pod"""
     try:
         args = ["--detach"]
-        if env.capabilities.get("uidmap"):
+        if env.ctx.uidmaps:
             args.extend(getUidMap(env))
         if env.dns:
             args.append(f"--dns={env.dns}")

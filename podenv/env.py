@@ -924,7 +924,7 @@ def prepareEnv(
     validateEnv(env)
 
     # OCI doesn't let you join a netns without the userns when using uidmap...
-    if env.capabilities.get("uidmap") and env.ctx.namespaces.get(
+    if env.ctx.uidmaps and env.ctx.namespaces.get(
             "network", "").startswith("container:"):
         env.ctx.namespaces["userns"] = env.ctx.namespaces["network"]
 
