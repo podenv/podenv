@@ -39,3 +39,16 @@ class TestConfig(TestCase):
                          config.envs["require-str"].requires)
         self.assertEqual(config.envs["require-str"].requires,
                          ["test"])
+
+    def test_volumes(self):
+        config = podenv.config.Config(fakeConfig(dedent("""
+          environments:
+            gertty:
+              volumes:
+                git:
+              mounts:
+                ~/git: ~/git
+        """)))
+        # TODO: implement path conflict and check for error here.
+        self.assertEqual(
+            config.envs["gertty"].volumeInfos["git"].name, "git")

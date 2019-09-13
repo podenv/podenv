@@ -200,10 +200,31 @@ class Runtime(ABC):
 
 
 @dataclass
+class VolumeInfo:
+    """A volume information"""
+    name: str = ""
+    volumeName: str = ""
+    readOnly: bool = field(default=False)
+
+    def getContainerPath(self) -> Path:
+        if self.name == "home":
+            return Path("~/")
+        elif self.name == "git":
+            return Path("~/git")
+        elif self.name.startswith("config-"):
+            return Path("~/.config") / self.name.split("config-", 1)[-1]
+        else:
+            raise RuntimeError(f"Unknown volume {self.name}")
+
+
+Volume = Union[str, VolumeInfo]
+
+
+@dataclass
 class ExecContext:
     """The intermediary podman context representation"""
     environ: Dict[str, str] = field(default_factory=dict)
-    mounts: Dict[Path, Path] = field(default_factory=dict)
+    mounts: Dict[Path, Union[Path, VolumeInfo]] = field(default_factory=dict)
     syscaps: List[str] = field(default_factory=list)
     devices: List[Path] = field(default_factory=list)
     uidmaps: List[str] = field(default_factory=list)
@@ -252,8 +273,13 @@ class ExecContext:
         args.extend(["--workdir", str(self.cwd)])
 
         for mount in sorted(self.mounts.keys()):
+            hostMount = self.mounts[mount]
+            if isinstance(hostMount, Path):
+                hostPath = str(hostMount.expanduser().resolve())
+            else:
+                hostPath = f"{hostMount.volumeName}"
             args.extend(["-v", "{hostPath}:{containerPath}".format(
-                hostPath=self.mounts[mount].expanduser().resolve(),
+                hostPath=hostPath,
                 containerPath=mount)])
 
         for device in self.devices:
@@ -356,6 +382,8 @@ class Env:
         doc="Extra environ vars to be used for command substitution only"))
     syscaps: List[str] = field(default_factory=list, metadata=dict(
         doc="List of system capabilities(7)"))
+    volumes: Dict[str, Volume] = field(default_factory=dict, metadata=dict(
+        doc="List of volumes"))
     mounts: Dict[str, str] = field(default_factory=dict, metadata=dict(
         doc="Extra mountpoints"))
     capabilities: Dict[str, bool] = field(default_factory=dict, metadata=dict(
@@ -382,6 +410,8 @@ class Env:
     # Internal attribute
     envName: str = field(default="", metadata=dict(
         internal=True))
+    volumeInfos: Dict[str, VolumeInfo] = field(
+        default_factory=dict, metadata=dict(internal=True))
     runtime: Optional[Runtime] = field(default=None, metadata=dict(
         internal=True))
     systemPackages: Set[str] = field(default_factory=set, metadata=dict(
@@ -443,6 +473,21 @@ class Env:
                 terminal=self.capabilities.get("terminal", False),
                 relPath=self.configFile.parent,
                 **self.desktop)
+        for volumeName, volumeValue in self.volumes.items():
+            if not volumeValue:
+                volumeValue = volumeName
+            if isinstance(volumeValue, str):
+                self.volumeInfos[volumeName] = VolumeInfo(
+                    name=volumeName,
+                    volumeName=volumeValue)
+            else:
+                # Ignoring type here just to convert yaml dict to VolumeInfo
+                self.volumeInfos[volumeName] = VolumeInfo(
+                    name=volumeName,
+                    volumeName=volumeValue["name"],  # type: ignore
+                    readOnly=(volumeValue.get(  # type: ignore
+                        "read-only", "no").lower() in ("yes", "true")))
+
         # Support retro cap name written in camelCase
         retroCap = {}
         for cap, value in self.capabilities.items():
@@ -802,6 +847,8 @@ def validateEnv(env: Env) -> None:
     if env.capabilities.get("selinux") and HAS_SELINUX:
         label = "container_file_t"
         for hostPath in env.ctx.mounts.values():
+            if isinstance(hostPath, VolumeInfo):
+                continue
             hostPath = hostPath.expanduser().resolve()
             if hostPath.exists() and \
                selinux.getfilecon(str(hostPath))[1].split(':')[2] != label:
@@ -812,6 +859,12 @@ def validateEnv(env: Env) -> None:
 
     # Check mount points permissions
     for hostPath in env.ctx.mounts.values():
+        if isinstance(hostPath, VolumeInfo):
+            if not hostPath.readOnly and not env.capabilities.get("uidmap"):
+                warn("UIDMap is required for rw volume")
+                uidmapCap(True, env.ctx, env)
+                break
+            continue
         hostPath = hostPath.expanduser().resolve()
         if hostPath.exists() and not os.access(str(hostPath), os.R_OK):
             warn(f"{hostPath} is not readable by the current user.")
@@ -896,6 +949,13 @@ def prepareEnv(
             env.ctx.mounts[env.ctx.home / containerPath[2:]] = hostPath
         else:
             env.ctx.mounts[Path(containerPath)] = hostPath
+
+    # Inject volume in mounts point
+    for volumeName, volumeInfo in env.volumeInfos.items():
+        containerPath = str(volumeInfo.getContainerPath())
+        if containerPath.startswith("~"):
+            containerPath = str(env.ctx.home / containerPath.lstrip('~/'))
+        env.ctx.mounts[Path(containerPath)] = volumeInfo
 
     # Look for file argument requirement
     fileArg: Optional[Path] = None

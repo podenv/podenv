@@ -39,7 +39,8 @@ except ImportError:
     HAS_SELINUX = False
 
 from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
-    UserNotif, taskToCommand
+    UserNotif, VolumeInfo, taskToCommand
+
 
 log = logging.getLogger("podenv")
 BuildId = str
@@ -899,6 +900,19 @@ def setupRunDir(env: Env) -> None:
             selinux.chcon(str(path), getSelinuxLabel(env))
 
 
+def setupVolumes(volumeInfos: Dict[str, VolumeInfo]) -> None:
+    """Create volume first to ensure proper owner"""
+    volumes = readProcessJson(["podman", "volume", "ls", "--format", "json"])
+    existingVolumes: Set[str] = set()
+    if volumes:
+        for volume in volumes:
+            existingVolumes.add(volume["name"])
+    for volumeInfo in volumeInfos.values():
+        if volumeInfo.volumeName not in existingVolumes:
+            log.info(f"Creating volume {volumeInfo.volumeName}")
+            execute(["podman", "volume", "create", volumeInfo.volumeName])
+
+
 def setupPod(
         userNotif: UserNotif,
         env: Env,
@@ -917,26 +931,31 @@ def setupPod(
         # Inject runtime volumes
         imageName = env.runtime.getSystemMounts(withTmp=False) + imageName
 
+    if env.volumes:
+        setupVolumes(env.volumeInfos)
     if env.desktop:
         setupDesktopFile(env.desktop)
 
     for containerPath, hostPath in sorted(env.ctx.mounts.items()):
-        hostPath = hostPath.expanduser().resolve()
-        if not hostPath.exists() and str(hostPath).startswith(str(env.runDir)):
-            setupRunDir(env)
-            if hostPath.name == "tmp":
-                hostPath.mkdir(mode=0o1777)
-                # TODO: check why mkdir mode results in 1774
-                hostPath.chmod(0o1777)
-            else:
+        if isinstance(hostPath, Path):
+            hostPath = hostPath.expanduser().resolve()
+            if not hostPath.exists() and str(hostPath).startswith(
+                    str(env.runDir)):
+                setupRunDir(env)
+                if hostPath.name == "tmp":
+                    hostPath.mkdir(mode=0o1777)
+                    # TODO: check why mkdir mode results in 1774
+                    hostPath.chmod(0o1777)
+                else:
+                    hostPath.mkdir(mode=0o755, parents=True)
+            elif not hostPath.exists():
                 hostPath.mkdir(mode=0o755, parents=True)
-        elif not hostPath.exists():
-            hostPath.mkdir(mode=0o755, parents=True)
-            if isSelinux():
-                selinux.chcon(str(hostPath), getSelinuxLabel(env))
+                if isSelinux():
+                    selinux.chcon(str(hostPath), getSelinuxLabel(env))
         if env.runDir and env.runDir.exists() and \
-           str(containerPath).startswith(str(env.ctx.home) + "/") and \
-           hostPath.is_dir():
+           str(containerPath).startswith(str(env.ctx.home) + "/") and (
+               (isinstance(hostPath, Path) and hostPath.is_dir()) or
+               (isinstance(hostPath, VolumeInfo))):
             # Need to create parent dir, otherwise podman creates them as root
             tmpPath = env.runDir / "home" / str(containerPath).replace(
                 str(env.ctx.home) + "/", "")
@@ -949,7 +968,11 @@ def setupPod(
                 raise RuntimeError(
                     "Overlays without home mount isn't supported")
 
-            if isinstance(overlay, str):
+            if isinstance(homeDir, VolumeInfo):
+                # TODO: Implement overlay application to volume
+                log.info(f"Overlay skipped for volume {homeDir.name}")
+
+            elif isinstance(overlay, str):
                 overlayDir = env.overlaysDir / overlay
                 if not overlayDir.exists():
                     raise RuntimeError(f"{overlay} does not exists")

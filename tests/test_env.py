@@ -13,8 +13,18 @@
 # under the License.
 
 from unittest import TestCase
+from pathlib import Path
 
+from podenv.config import attributesToCamelCase
 import podenv.env
+
+
+def fakeEnv(envName, envSchema):
+    return podenv.env.Env(
+        envName,
+        configFile=Path("test"),
+        registryName="test",
+        **attributesToCamelCase(envSchema))
 
 
 class TestConfig(TestCase):
@@ -24,3 +34,11 @@ class TestConfig(TestCase):
                          set(("python3-numpy",)))
         self.assertEqual(podenv.env.pipFilter(packages),
                          set(("pip:triangle",)))
+
+    def test_volumes(self):
+        env = fakeEnv("gertty",
+                      dict(capabilities=dict(uidmap=True),
+                           volumes=dict(git=None)))
+        preps = podenv.env.prepareEnv(env, [], [])
+        execCommand = " ".join(preps[1])
+        self.assertIn("-v git:/home/user/git", execCommand)
