@@ -613,8 +613,8 @@ class PipRuntime(ExtraRuntime):
             self.create()
         with self.runtime.getSession() as buildId:
             self.runtime.runCommand(
-                buildId, "/venv/bin/pip install --upgrade " + " ".join(
-                    self.packages))
+                buildId, "/venv/bin/pip install --upgrade " + " ".join(map(
+                    lambda x: x.split('pip:', 1)[-1], self.packages)))
 
     def install(self, packages: Set[str]) -> None:
         if not self.exists():
@@ -622,7 +622,7 @@ class PipRuntime(ExtraRuntime):
         with self.runtime.getSession() as buildId:
             self.runtime.runCommand(
                 buildId, "/venv/bin/pip install " + " ".join(map(
-                    lambda x: x.lstrip('pip:'), packages)))
+                    lambda x: x.split('pip:', 1)[-1], packages)))
         self.packages.update(packages)
         self.metadataPath.write_text(json.dumps(dict(
             packages=list(self.packages))))
