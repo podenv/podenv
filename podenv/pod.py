@@ -743,7 +743,7 @@ class RootfsDirectory(PodmanRuntime):
     def __init__(self, cacheDir: Path, fromRef: str) -> None:
         if fromRef.startswith("http"):
             self.url = fromRef
-            fromRefPath = Path("~/.config/share/podenv/") / os.path.basename(
+            fromRefPath = Path("~/.local/share/podenv/") / os.path.basename(
                 fromRef).split(".tar")[0]
         else:
             fromRefPath = Path(fromRef)
