@@ -157,7 +157,7 @@ environ              | Dict[str, str]  | User environ(7)                        
 vars                 | Dict[str, str]  | Extra environ vars to be used for command substitution only |
 syscaps              | List[str]       | List of system capabilities(7)           |
 volumes              | Dict[str, Volume] | List of volumes                          |
-mounts               | Dict[str, str]  | Extra mountpoints                        |
+mounts               | Dict[str, Optional[str]] | Extra mountpoints                        |
 capabilities         | Dict[str, bool] | List of capabilities                     |
 network              | str             | Name of a network to be shared by multiple environment |
 add-hosts            | Dict[str, str]  | Custom hostname,ip to configure in the container |

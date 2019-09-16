@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from pathlib import Path
 from textwrap import dedent
 from unittest import TestCase
 
@@ -52,3 +53,14 @@ class TestConfig(TestCase):
         # TODO: implement path conflict and check for error here.
         self.assertEqual(
             config.envs["gertty"].volumeInfos["git"].name, "git")
+
+    def test_mounts(self):
+        config = podenv.config.Config(fakeConfig(dedent("""
+          environments:
+            test-env:
+              mounts:
+                ~/git:
+        """)))
+        # TODO: implement path conflict and check for error here.
+        self.assertEqual(
+            config.envs["test-env"].mountInfos["~/git"], Path("~/git"))

@@ -35,6 +35,14 @@ class TestConfig(TestCase):
         self.assertEqual(podenv.env.pipFilter(packages),
                          set(("pip:triangle",)))
 
+    def test_mounts(self):
+        env = fakeEnv("test-env",
+                      dict(capabilities=dict(uidmap=True),
+                           mounts={"~/git": None}))
+        preps = podenv.env.prepareEnv(env, [], [])
+        execCommand = " ".join(preps[1])
+        self.assertIn("-v /home/user/git:/home/user/git", execCommand)
+
     def test_volumes(self):
         env = fakeEnv("gertty",
                       dict(capabilities=dict(uidmap=True),

@@ -384,8 +384,8 @@ class Env:
         doc="List of system capabilities(7)"))
     volumes: Dict[str, Volume] = field(default_factory=dict, metadata=dict(
         doc="List of volumes"))
-    mounts: Dict[str, str] = field(default_factory=dict, metadata=dict(
-        doc="Extra mountpoints"))
+    mounts: Dict[str, Optional[str]] = field(
+        default_factory=dict, metadata=dict(doc="Extra mountpoints"))
     capabilities: Dict[str, bool] = field(default_factory=dict, metadata=dict(
         doc="List of capabilities"))
     network: str = field(default="", metadata=dict(
@@ -410,6 +410,8 @@ class Env:
     # Internal attribute
     envName: str = field(default="", metadata=dict(
         internal=True))
+    mountInfos: Dict[str, Path] = field(
+        default_factory=dict, metadata=dict(internal=True))
     volumeInfos: Dict[str, VolumeInfo] = field(
         default_factory=dict, metadata=dict(internal=True))
     runtime: Optional[Runtime] = field(default=None, metadata=dict(
@@ -487,6 +489,10 @@ class Env:
                     volumeName=volumeValue["name"],  # type: ignore
                     readOnly=(volumeValue.get(  # type: ignore
                         "read-only", "no").lower() in ("yes", "true")))
+        for mountName, mountValue in self.mounts.items():
+            if not mountValue:
+                mountValue = mountName
+            self.mountInfos[mountName] = Path(mountValue)
 
         # Support retro cap name written in camelCase
         retroCap = {}
@@ -943,8 +949,8 @@ def prepareEnv(
     env.ctx.environ.update(env.environ)
     env.ctx.addHosts.update(env.addHosts)
 
-    for containerPath, hostPathStr in env.mounts.items():
-        hostPath = Path(hostPathStr).expanduser().resolve()
+    for containerPath, hostPath in env.mountInfos.items():
+        hostPath = hostPath.expanduser().resolve()
         if containerPath.startswith("~/"):
             env.ctx.mounts[env.ctx.home / containerPath[2:]] = hostPath
         else:
