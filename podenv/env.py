@@ -211,6 +211,10 @@ class VolumeInfo:
             return Path("~/")
         elif self.name == "git":
             return Path("~/git")
+        elif self.name.startswith("lib-"):
+            return Path("/var/lib") / self.name.split("lib-", 1)[-1]
+        elif self.name.startswith("cache-"):
+            return Path("~/.cache") / self.name.split("cache-", 1)[-1]
         elif self.name.startswith("config-"):
             return Path("~/.config") / self.name.split("config-", 1)[-1]
         else:
