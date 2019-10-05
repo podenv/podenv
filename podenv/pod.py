@@ -358,11 +358,11 @@ class PodmanRuntime(Runtime):
             raise RuntimeError(f"Invalid {key} metadata")
         return not lastUpdate or (not updated(lastUpdate) and canUpdate())
 
-    def setLastUpdated(self) -> None:
+    def setLastUpdated(self, nowDate: str) -> None:
         key = "updated"
         if self.systemType != self.info.get("system"):
             key = f"{self.systemType}Updated"
-        self.updateInfo({key: now()})
+        self.updateInfo({key: nowDate})
 
     def updateInfo(self, info: Info) -> None:
         self.info.update(info)
@@ -445,11 +445,13 @@ class PodmanRuntime(Runtime):
                             "mkdir -p /run/user/0",
                             "chown 0:0 /run/user/0"]:
                 self.runCommand(buildId, command)
+            nowDate = now()
             for config in ["--author='%s'" % os.environ["USER"],
-                           "--created-by podenv"]:
+                           "--created-by podenv",
+                           "--history-comment '%s: created'" % nowDate]:
                 self.applyConfig(buildId, config)
-            self.commit(buildId)
-        self.updateInfo(dict(created=now(),
+            self.commit(buildId, nowDate)
+        self.updateInfo(dict(created=nowDate,
                              updated="1970-01-01T00:00:00",
                              packages=[],
                              system=systemType,
@@ -467,15 +469,21 @@ class PodmanRuntime(Runtime):
                         self.runCommandArgs(buildId) +
                         commandsToExecArgs(self.commands["update"]),
                         live=True)
+                    nowDate = now()
                     if "Nothing to do." in updateOutput:
                         break
-                    self.commit(buildId)
+                    for config in ["--author='%s'" % os.environ["USER"],
+                                   "--created-by podenv",
+                                   "--history-comment '%s: updated'" %
+                                   nowDate]:
+                        self.applyConfig(buildId, config)
+                    self.commit(buildId, nowDate)
                     break
             except RuntimeError:
                 if retry == 2:
                     raise
                 log.warning("Retrying failed update...")
-        self.setLastUpdated()
+        self.setLastUpdated(nowDate)
 
     def install(self, packages: Set[str]) -> None:
         with self.getSession() as buildId:
@@ -489,7 +497,13 @@ class PodmanRuntime(Runtime):
                 command += packagesArgs
             self.runCommand(
                 buildId, commandsToExecArgs(command))
-            self.commit(buildId)
+            nowDate = now()
+            for config in ["--author='%s'" % os.environ["USER"],
+                           "--created-by podenv",
+                           "--history-comment '%s: installed %s'" % (
+                               nowDate, ' '.join(packages))]:
+                self.applyConfig(buildId, config)
+            self.commit(buildId, nowDate)
         self.updateInstalledPackages(packages)
 
     def enableExtra(self, extra: str, env: Env) -> None:
@@ -524,7 +538,12 @@ class PodmanRuntime(Runtime):
                 commandArgs += ["/bin/bash", "-c", command]
                 execute(commandArgs)
                 knownHash.add(commandHash)
-            self.commit(buildId)
+            nowDate = now()
+            for config in ["--author='%s'" % os.environ["USER"],
+                           "--created-by podenv",
+                           "--history-comment '%s: customized'" % nowDate]:
+                self.applyConfig(buildId, config)
+            self.commit(buildId, nowDate)
         self.updateInfo(dict(customHash=list(knownHash)))
 
     @abstractmethod
@@ -548,7 +567,7 @@ class PodmanRuntime(Runtime):
         ...
 
     @abstractmethod
-    def commit(self, buildId: BuildId) -> None:
+    def commit(self, buildId: BuildId, nowDate: str) -> None:
         ...
 
 
@@ -695,8 +714,8 @@ class ContainerImage(PodmanRuntime):
     def applyConfig(self, buildId: BuildId, config: str) -> None:
         buildahConfig(buildId, config)
 
-    def commit(self, buildId: BuildId) -> None:
-        tagRef = "%s:%s" % (self.localName, now().replace(':', '-'))
+    def commit(self, buildId: BuildId, nowDate: str) -> None:
+        tagRef = "%s:%s" % (self.localName, nowDate.replace(':', '-'))
         buildahCommit(buildId, tagRef)
         execute(["buildah", "tag", tagRef, f"{self.localName}:latest"])
 
@@ -782,7 +801,7 @@ class RootfsDirectory(PodmanRuntime):
         # Rootfs doesn't have metadata
         pass
 
-    def commit(self, buildId: BuildId) -> None:
+    def commit(self, buildId: BuildId, nowDate: str) -> None:
         # Rootfs doesn't have layer
         pass
 
