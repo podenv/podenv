@@ -543,7 +543,7 @@ def rootCap(active: bool, ctx: ExecContext, _: Env) -> None:
 
 
 def getUidMap(_: Env) -> ExecArgs:
-    return ["--uidmap", "1000:0:1", "--uidmap", "0:1:999",
+    return ["--uidmap", "1000:0:1", "--uidmap", "0:1:1000",
             "--uidmap", "1001:1001:%s" % (2**16 - 1001)]
 
 
