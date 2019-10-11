@@ -693,7 +693,7 @@ def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
                 if line.startswith("ControlPath"):
                     controlPath = Path(line.split()[1].strip().replace(
                         "%i", str(os.getuid()))).parent
-                    if controlPath.is_dir():
+                    if controlPath.is_dir() and controlPath != Path('/tmp'):
                         ctx.mounts[controlPath] = controlPath
 
         ctx.mounts[ctx.home / ".ssh"] = Path("~/.ssh")
