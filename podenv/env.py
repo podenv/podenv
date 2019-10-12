@@ -230,6 +230,7 @@ class ExecContext:
     environ: Dict[str, str] = field(default_factory=dict)
     mounts: Dict[Path, Union[Path, VolumeInfo]] = field(default_factory=dict)
     syscaps: List[str] = field(default_factory=list)
+    sysctls: List[str] = field(default_factory=list)
     devices: List[Path] = field(default_factory=list)
     uidmaps: List[str] = field(default_factory=list)
     home: Path = field(default_factory=Path)
@@ -291,6 +292,9 @@ class ExecContext:
 
         for cap in set(self.syscaps):
             args.extend(["--cap-add", cap])
+
+        for ctl in set(self.sysctls):
+            args.extend(["--sysctl", ctl])
 
         for e, v in sorted(self.environ.items()):
             args.extend(["-e", "%s=%s" % (e, v)])
@@ -386,6 +390,8 @@ class Env:
         doc="Extra environ vars to be used for command substitution only"))
     syscaps: List[str] = field(default_factory=list, metadata=dict(
         doc="List of system capabilities(7)"))
+    sysctls: List[str] = field(default_factory=list, metadata=dict(
+        doc="List of sysctl(8)"))
     volumes: Dict[str, Volume] = field(default_factory=dict, metadata=dict(
         doc="List of volumes"))
     mounts: Dict[str, Optional[str]] = field(
@@ -950,6 +956,7 @@ def prepareEnv(
     env.addHosts = dictFormat(env.addHosts, vars)
 
     env.ctx.syscaps.extend(env.syscaps)
+    env.ctx.sysctls.extend(env.sysctls)
     env.ctx.environ.update(env.environ)
     env.ctx.addHosts.update(env.addHosts)
 

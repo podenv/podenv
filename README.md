@@ -156,6 +156,7 @@ args                 | ExecArgs        | Optional arguments to append to the com
 environ              | Dict[str, str]  | User environ(7)                          |
 vars                 | Dict[str, str]  | Extra environ vars to be used for command substitution only |
 syscaps              | List[str]       | List of system capabilities(7)           |
+sysctls              | List[str]       | List of sysctl(8)                        |
 volumes              | Dict[str, Volume] | List of volumes                          |
 mounts               | Dict[str, Optional[str]] | Extra mountpoints                        |
 capabilities         | Dict[str, bool] | List of capabilities                     |
