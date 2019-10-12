@@ -985,9 +985,7 @@ def prepareEnv(
 
     commandArgs: List[str] = []
     for command in env.command:
-        if command == "$@" and cliArgs:
-            commandArgs += cliArgs
-        elif command == "$1" and fileArg:
+        if command == "$1" and fileArg:
             commandArgs.append("/tmp/" + fileArg.name)
         else:
             commandArgs.append(command)

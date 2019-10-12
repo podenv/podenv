@@ -61,22 +61,10 @@ environments:
 ```
 
 
-Command may contains `$@` to include command line arguments, or `$1` to
-mount a file argument inside the container, for examples:
+Command may contains `$1` to mount a file argument inside the container,
+for examples:
 
 ```yaml
-  # podenv youtube-dl $url  # download file to local directory
-  youtube-dl:
-    parent: fedora
-    packages:
-      - youtube-dl
-    capabilities:
-      network: True
-      mount-cwd: True
-    command:
-      - youtube-dl
-      - $@
-
   # podenv pdf $filepath  # open local file
   pdf:
     parent: fedora
