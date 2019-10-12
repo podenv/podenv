@@ -209,6 +209,8 @@ class VolumeInfo:
     def getContainerPath(self) -> Path:
         if self.name == "home":
             return Path("~/")
+        elif self.name == "tmp":
+            return Path("/tmp")
         elif self.name == "git":
             return Path("~/git")
         elif self.name.startswith("lib-"):
