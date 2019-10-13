@@ -692,7 +692,7 @@ def sshCap(active: bool, ctx: ExecContext, env: Env) -> None:
     if active:
         if os.environ.get("SSH_AUTH_SOCK"):
             ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
-            sshSockPath = Path(os.environ["SSH_AUTH_SOCK"])
+            sshSockPath = Path(os.environ["SSH_AUTH_SOCK"]).parent
             ctx.mounts[Path(sshSockPath)] = sshSockPath
         sshconfigFile = Path("~/.ssh/config").expanduser().resolve()
         if sshconfigFile.is_file():
