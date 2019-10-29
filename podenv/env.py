@@ -239,7 +239,7 @@ class ExecContext:
     cwd: Path = field(default_factory=Path)
     xdgDir: Path = field(default_factory=Path)
     addHosts: Dict[str, str] = field(default_factory=dict)
-    detachKeys: str = ""
+    detachKeys: Optional[str] = None
     interactive: bool = False
     user: int = 0
     privileged: bool = False
@@ -309,7 +309,7 @@ class ExecContext:
         if self.privileged:
             args.extend(["--privileged"])
 
-        if self.detachKeys:
+        if self.detachKeys is not None:
             args.extend(["--detach-keys", self.detachKeys])
 
         if self.interactive:
@@ -570,7 +570,7 @@ def terminalCap(active: bool, ctx: ExecContext, _: Env) -> None:
     "interactive mode"
     if active:
         ctx.interactive = True
-        ctx.detachKeys = "ctrl-e,e"
+        ctx.detachKeys = ""
 
 
 def networkCap(active: bool, ctx: ExecContext, env: Env) -> None:
