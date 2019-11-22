@@ -908,6 +908,9 @@ def validateEnv(env: Env) -> None:
             manageImageCap(True, env.ctx, env)
         if env.branchImage:
             warn("branch-image capability is incompatible with manage-image")
+        if env.autoUpdate:
+            warn("manage-image capability is incompatible with auto-update")
+            autoUpdateCap(False, env.ctx, env)
 
 
 # The name of the environment
