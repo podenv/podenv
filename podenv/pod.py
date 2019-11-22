@@ -61,7 +61,7 @@ def execute(
         args: ExecArgs,
         cwd: Optional[Path] = None,
         textOutput: bool = False) -> Optional[str]:
-    log.debug("Running %s" % " ".join(args))
+    log.debug("Running %s" % " ".join(map(lambda x: x if x else "''", args)))
     proc = Popen(
         args, stdout=PIPE if textOutput else None,
         cwd=str(cwd) if cwd else None)
