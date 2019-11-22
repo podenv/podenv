@@ -676,7 +676,7 @@ class ContainerImage(PodmanRuntime):
     def create(self) -> None:
         if self.manage:
             super().create()
-        else:
+        elif not self.fromRef.startswith("localhost/"):
             self.pull()
 
     def update(self) -> None:
