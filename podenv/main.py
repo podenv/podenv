@@ -35,6 +35,8 @@ log = logging.getLogger("podenv")
 def usageParser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
+    parser.add_argument("--config", help="The config path",
+                        default="~/.config/podenv/config.yaml")
     parser.add_argument("--list", action='store_true',
                         help="List available environments")
     parser.add_argument("--shell", action='store_true',
@@ -140,7 +142,8 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         # Load config and prepare the environment, no IO are performed here
-        conf = loadConfig(notifyUserProc, skipLocal=args.list or args.env)
+        conf = loadConfig(notifyUserProc, skipLocal=args.list or args.env,
+                          configFile=Path(args.config))
         if args.list:
             return listEnv(conf.envs)
         env = loadEnv(conf, args.env, args.base)

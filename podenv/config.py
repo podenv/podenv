@@ -23,6 +23,7 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional
 from yaml import safe_load
 
+from podenv.dhall import load as dhall_load
 from podenv.pod import canUpdate, execute, outdated
 from podenv.env import Env, UserNotif
 from podenv import defaults
@@ -86,7 +87,11 @@ def syncRegistry(url: str, localPath: Path) -> None:
 
 class Config:
     def __init__(self, configFile: Path) -> None:
-        schema: Dict[str, Any] = safe_load(configFile.read_text())
+        schema: Dict[str, Any]
+        if str(configFile).endswith(".dhall"):
+            schema = dhall_load(configFile)
+        else:
+            schema = safe_load(configFile.read_text())
         schema.setdefault('system', {})
         self.dns: Optional[str] = schema['system'].get('dns')
         self.default: str = schema['system'].get('default-env', 'shell')
@@ -186,9 +191,9 @@ def initOverlays(overlayDir: Path) -> None:
 def loadConfig(
         userNotif: UserNotif,
         skipLocal: bool = False,
-        configDir: Path = Path("~/.config/podenv")) -> Config:
-    configDir = configDir.expanduser()
-    configFile = configDir / "config.yaml"
+        configFile: Path = Path("~/.config/podenv/config.yaml")) -> Config:
+    configFile = configFile.expanduser()
+    configDir = configFile.parent
     if not configFile.exists():
         initConfig(configDir, configFile)
     conf = Config(configFile)
