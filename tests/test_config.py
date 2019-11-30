@@ -84,8 +84,14 @@ class TestDhallConfig(TestCase):
     def tearDownClass(cls):
         (Path(configPath(".")) / "podenv").unlink()
 
-
     def test_schemas(self):
         config = podenv.config.Config(configPath("minimal.dhall"))
         self.assertEqual(
             config.envs["shell"].command, ["/bin/bash"])
+
+    def test_simple_procedure(self):
+        config = podenv.config.Config(configPath("common-image.dhall"))
+        for env in ("firefox", "emacs"):
+            self.assertEqual(
+                config.envs[env].command, [env])
+            self.assertEqual(config.envs[env].image, "shared-image-name")
