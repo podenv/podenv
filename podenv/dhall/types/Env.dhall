@@ -1,2 +1,2 @@
 {- A podenv definition -}
-{ name : Text, environ : Optional ./Environ.dhall }
+{ name : Text, command : List Text, environ : Optional ./Environ.dhall }

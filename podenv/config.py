@@ -95,6 +95,12 @@ class Config:
                 dhallPackage.symlink_to(Path(__file__).parent / "dhall")
 
             schema = dhall_load(configFile)
+            # normalize the env list back to a map
+            envs = {}
+            for env in schema['environments']:
+                envs[env['name']] = env
+                del env['name']
+            schema['environments'] = envs
         else:
             schema = safe_load(configFile.read_text())
         schema.setdefault('system', {})
