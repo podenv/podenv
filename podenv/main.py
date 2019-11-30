@@ -25,7 +25,7 @@ from typing import Dict
 
 from podenv.config import loadConfig, loadEnv
 from podenv.pod import killPod, setupPod, executeHostTasks, executePod, \
-    desktopNotification, podmanExists
+    desktopNotification, podmanExists, prettyCmd
 from podenv.env import Capabilities, Env, ExecArgs, UserNotif, prepareEnv, \
     cleanupEnv
 
@@ -37,6 +37,8 @@ def usageParser() -> argparse.ArgumentParser:
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--config", help="The config path",
                         default="~/.config/podenv/config.yaml")
+    parser.add_argument("--show", action='store_true',
+                        help="Print the environment info and exit")
     parser.add_argument("--list", action='store_true',
                         help="List available environments")
     parser.add_argument("--shell", action='store_true',
@@ -153,6 +155,13 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
                 env, args.args, args.package)
     except RuntimeError as e:
         fail(notifyUserProc, str(e))
+
+    if args.show:
+        print("Environment:")
+        print(env)
+        print("Command line:")
+        print("podman run " + prettyCmd(containerArgs + [env.image] + envArgs))
+        exit(0)
 
     try:
         # Prepare the image and create needed host directories

@@ -57,11 +57,17 @@ class AlreadyRunning(Exception):
     pass
 
 
+def prettyCmd(argv: ExecArgs) -> str:
+    return " ".join(map(
+            lambda arg: (lambda x: str(x if arg else "''"))(arg)
+            if " " not in arg else f"'{arg}'", argv))
+
+
 def execute(
         args: ExecArgs,
         cwd: Optional[Path] = None,
         textOutput: bool = False) -> Optional[str]:
-    log.debug("Running %s" % " ".join(map(lambda x: x if x else "''", args)))
+    log.debug("Running %s" % prettyCmd(args))
     proc = Popen(
         args, stdout=PIPE if textOutput else None,
         cwd=str(cwd) if cwd else None)

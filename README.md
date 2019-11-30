@@ -199,7 +199,7 @@ uidmap               | map host uid                                             
 ```bash
 $ python3 -mpip install --user .
 $ podenv --help
-usage: podenv [-h] [--verbose] [--config CONFIG] [--list] [--shell]
+usage: podenv [-h] [--verbose] [--config CONFIG] [--show] [--list] [--shell]
               [--net NET] [--home HOME] [-p PACKAGE] [-e ENVIRON] [-i IMAGE]
               [-b BASE] [-t TAG] [--manage-image] [--no-manage-image]
               [--branch-image] [--no-branch-image] [--root] [--no-root]
@@ -227,6 +227,7 @@ optional arguments:
   -h, --help            show this help message and exit
   --verbose
   --config CONFIG       The config path
+  --show                Print the environment info and exit
   --list                List available environments
   --shell               Run bash instead of the profile command
   --net NET             Set the network (host or env name)
