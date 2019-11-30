@@ -21,7 +21,7 @@ import podenv.config
 
 def fakeConfig(content):
     return type('ConfigFile', (object,), dict(
-        read_text=lambda: content))
+        read_text=lambda: content, name="<test>"))
 
 
 class TestConfig(TestCase):

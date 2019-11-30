@@ -88,7 +88,12 @@ def syncRegistry(url: str, localPath: Path) -> None:
 class Config:
     def __init__(self, configFile: Path) -> None:
         schema: Dict[str, Any]
-        if str(configFile).endswith(".dhall"):
+        if configFile.name.endswith(".dhall"):
+            # Inject convenient dhall package access with package_data symlink
+            dhallPackage = configFile.parent / "podenv"
+            if not dhallPackage.exists():
+                dhallPackage.symlink_to(Path(__file__).parent / "dhall")
+
             schema = dhall_load(configFile)
         else:
             schema = safe_load(configFile.read_text())
@@ -105,6 +110,19 @@ class Config:
         if distConfig.exists():
             self.loadEnvs(safe_load(
                 distConfig.read_text()), distConfig, "included")
+
+        if configFile.name.endswith(".dhall") and schema.get(
+                "system", {}).get("registries", []):
+            # Inject convenient dhall package access with package_data symlink
+            registriesPodenvDir = \
+                configFile.parent / "registries" / "podenv" / "podenv"
+            if not registriesPodenvDir.exists():
+                registriesPodenvDir.mkdir(parents=True)
+            registriesDhallPackage = registriesPodenvDir / "dhall"
+            if not registriesDhallPackage.exists():
+                registriesDhallPackage.symlink_to(
+                    Path(__file__).parent / "dhall")
+
         for registry in schema.get("system", {}).get("registries", []):
             localPath = (configFile.parent / "registries" /
                          urlToFilename(registry))

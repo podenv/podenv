@@ -25,6 +25,7 @@ setuptools.setup(
     url="https://github.com/podenv/podenv",
     packages=["podenv"],
     install_requires=["PyYAML"],
+    package_data={'podenv': ['dhall/', 'dhall/types/*', 'dhall/defaults/*']},
     entry_points={
         'console_scripts': [
             'podenv=podenv.main:run',
