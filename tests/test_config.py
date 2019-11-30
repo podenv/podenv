@@ -14,7 +14,7 @@
 
 from pathlib import Path
 from textwrap import dedent
-from unittest import TestCase
+from unittest import skipIf, TestCase
 
 import podenv.config
 
@@ -22,6 +22,10 @@ import podenv.config
 def fakeConfig(content):
     return type('ConfigFile', (object,), dict(
         read_text=lambda: content, name="<test>"))
+
+
+def configPath(name: str) -> Path:
+    return Path(__file__).parent / "config" / name
 
 
 class TestConfig(TestCase):
@@ -64,3 +68,24 @@ class TestConfig(TestCase):
         # TODO: implement path conflict and check for error here.
         self.assertEqual(
             config.envs["test-env"].mountInfos["~/git"], Path("~/git"))
+
+
+@skipIf(not Path("~/.local/bin/dhall-to-json").expanduser().exists(),
+        "dhall-to-json is missing")
+class TestDhallConfig(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            (Path(configPath(".")) / "podenv").unlink()
+        except FileNotFoundError:
+            pass
+
+    @classmethod
+    def tearDownClass(cls):
+        (Path(configPath(".")) / "podenv").unlink()
+
+
+    def test_schemas(self):
+        config = podenv.config.Config(configPath("minimal.dhall"))
+        self.assertEqual(
+            config.envs["shell"].command, ["/bin/bash"])

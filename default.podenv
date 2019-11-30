@@ -2,6 +2,9 @@
 ---
 description: 'Run podenv unittest'
 parent: fedora
+mounts:
+  ~/.cache/dhall:
+  ~/.local/bin/dhall-to-json:
 capabilities:
   mount-cwd: True
   uidmap: True
