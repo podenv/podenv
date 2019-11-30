@@ -9,4 +9,6 @@
 , setuid : Bool
 , ptrace : Bool
 , foreground : Bool
+, x11 : Bool
+, pulseaudio : Bool
 }

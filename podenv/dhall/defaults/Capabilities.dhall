@@ -9,4 +9,6 @@
 , setuid = False
 , ptrace = False
 , foreground = False
+, x11 = False
+, pulseaudio = False
 }

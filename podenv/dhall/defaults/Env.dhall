@@ -1,1 +1,7 @@
-{ environ = None ../types/Environ.dhall, capabilities = ./Capabilities.dhall }
+{ description = None Text
+, url = None Text
+, environ = None ../types/Environ.dhall
+, packages = None (List Text)
+, ports = None (List Text)
+, capabilities = ./Capabilities.dhall
+}

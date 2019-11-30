@@ -99,3 +99,10 @@ class TestDhallConfig(TestCase):
     def test_capabilities(self):
         config = podenv.config.Config(configPath("capabilities.dhall"))
         self.assertEqual(config.envs["shell"].capabilities["terminal"], True)
+
+    def test_hubconfigs(self):
+        config = podenv.config.Config(configPath("hubconfigs.dhall"))
+        self.assertEqual(
+            config.envs["pavucontrol"].capabilities["pulseaudio"], True)
+        self.assertEqual(config.envs["pavucontrol"].packages, ["pavucontrol"])
+        self.assertEqual(config.envs["xeyes"].packages, ["xorg-x11-apps"])
