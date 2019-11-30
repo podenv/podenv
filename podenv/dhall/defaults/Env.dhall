@@ -1,1 +1,1 @@
-{ environ = None ../types/Environ.dhall }
+{ environ = None ../types/Environ.dhall, capabilities = ./Capabilities.dhall }

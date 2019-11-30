@@ -95,3 +95,7 @@ class TestDhallConfig(TestCase):
             self.assertEqual(
                 config.envs[env].command, [env])
             self.assertEqual(config.envs[env].image, "shared-image-name")
+
+    def test_capabilities(self):
+        config = podenv.config.Config(configPath("capabilities.dhall"))
+        self.assertEqual(config.envs["shell"].capabilities["terminal"], True)

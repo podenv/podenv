@@ -61,3 +61,10 @@ newdoc = doc[:envblockstart] + envblock + doc[envblockend:capblockstart] + \
          usage + doc[usageblockend:]; \
 exit(0) if newdoc == doc else open('README.md', 'w').write('\n'.join( \
   newdoc)); print('README.md updated!');")
+	@(python3 -c "'Generate types based from defaults'; \
+import re; \
+cap = open('podenv/dhall/defaults/Capabilities.dhall').read().split('\n'); \
+capFile = 'podenv/dhall/types/Capabilities.dhall'; \
+capType = open(capFile).read(); \
+newType = '\n'.join(map(lambda x: re.sub(' = .*', ' : Bool', x), cap)); \
+exit(0) if newType == capType else open(capFile, 'w').write(newType); print(capFile, 'updated!');")
