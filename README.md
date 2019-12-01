@@ -43,6 +43,7 @@ These cookbooks teach you how to solve specific tasks:
 These posts explain the context and motivation behind this tool:
 
 * [Declarative containers](./docs/discussions/declarative-containers.md)
+* [Using dhall for configuration?](./docs/discussions/dhall-configuration.md)
 * [Roadmap](./docs/discussions/roadmap.md)
 
 ## References
