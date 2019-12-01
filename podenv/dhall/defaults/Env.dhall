@@ -4,4 +4,5 @@
 , packages = None (List Text)
 , ports = None (List Text)
 , capabilities = ./Capabilities.dhall
+, pre-tasks = None (List ../types/Task.dhall)
 }

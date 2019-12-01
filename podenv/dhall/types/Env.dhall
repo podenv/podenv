@@ -8,4 +8,5 @@
 , capabilities : ./Capabilities.dhall
 , environ : Optional ./Environ.dhall
 , ports : Optional (List Text)
+, pre-tasks : Optional (List ./Task.dhall)
 }

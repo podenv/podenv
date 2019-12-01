@@ -3,6 +3,8 @@ let Podenv = ./podenv/package.dhall
 
 let Cap = Podenv.Schemas.Capabilities
 
+let Task = Podenv.Schemas.Task
+
 let Fedora =
       Podenv.Schemas.Env::{
       , url = Some "https://fedoraproject.org/"
@@ -50,5 +52,31 @@ in  Podenv.Schemas.Config::{
         ,     Fedora
           //  mkSimple "mumble" "VoIP solution"
           //  { capabilities = Cap::Network // X11 // Pulseaudio }
+        ,     Fedora
+          //  { name = "sshvpn"
+              , description = Some "Create a point-to-point ssh tunel"
+              , capabilities = Cap::Network // { tun = True, terminal = True }
+              , pre-tasks =
+                  Some
+                    [ Task::{
+                      , name = Some "Creating local tun"
+                      , shell =
+                          Some
+                            ''
+                            ip tuntap add dev tun1 mode tun user user;
+                            ip link set tun1 mtu 9000 up
+                            ''
+                      , unless = Some "ip link show tun1"
+                      }
+                    , Task::{
+                      , name = Some "Creating remote tun"
+                      , shell =
+                          Some
+                            ''
+                            ip tuntap add dev tun{REMOTE_TUN}
+                            ''
+                      }
+                    ]
+              }
         ]
     }

@@ -11,4 +11,5 @@
 , foreground = False
 , x11 = False
 , pulseaudio = False
+, tun = False
 }

@@ -11,4 +11,5 @@
 , foreground : Bool
 , x11 : Bool
 , pulseaudio : Bool
+, tun : Bool
 }
