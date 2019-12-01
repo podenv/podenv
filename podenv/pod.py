@@ -942,7 +942,7 @@ def setupContainer(userNotif: UserNotif, env: Env, cacheDir: Path) -> str:
     """Ensure the container image is consistent with the containerfile"""
     localFile = (cacheDir / "containerfiles" /
                  f"Containerfile.{env.image}").expanduser()
-    localName = f"localhost/podenv/{env.image}"
+    localName = f"podenv/{env.image}"
 
     def build(filePath: Path) -> None:
         # TODO: add image build mount cache

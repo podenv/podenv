@@ -100,6 +100,8 @@ class Config:
             envs = {}
             for env in schema['environments']:
                 envs[env['name']] = env
+                if not env.get('image'):
+                    env['image'] = env['name']
                 del env['name']
             schema['environments'] = envs
         else:
