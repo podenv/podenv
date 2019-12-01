@@ -1,0 +1,92 @@
+#!/bin/env python3
+# Copyright 2019 Red Hat
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+"""
+A script to generate docs and types
+"""
+import re
+from dataclasses import fields
+from pathlib import Path
+from podenv.env import Env, Capabilities
+from podenv.main import usageParser
+
+dirty = False
+
+
+def update(path: Path, newContent: str) -> None:
+    if newContent[-1] != "\n":
+        newContent += "\n"
+    if path.read_text() != newContent:
+        global dirty
+        path.write_text(newContent)
+        print(f"{path}: updated!")
+        dirty = True
+
+
+def writeDhallCapabilities() -> None:
+    capNames = [c[0] for c in Capabilities]
+    defTrue = ("selinux", "seccomp")
+    for f, c in (
+            ("types/Capabilities.dhall",
+             "{ " + "\n, ".join(map(
+                 lambda c: c + " : Bool", capNames)) + "\n}"),
+            ("defaults/Capabilities.dhall",
+             "{ " + "\n, ".join(map(
+                 lambda c: c + " = %s" % ("True" if c in defTrue else "False"),
+                 capNames)) + "\n}")):
+        update(Path("podenv") / "dhall" / f, c)
+
+
+def writeReferences() -> None:
+    path = Path("docs/references/configuration.md")
+    doc = path.read_text().split('\n')
+
+    envblockstart = doc.index(
+        'Name                 | Type            | '
+        'Doc                                      |') + 2
+    envblockend = doc[envblockstart:].index('') + envblockstart
+    capblockstart = doc.index(
+        'Name                 | Doc               '
+        '                                         |') + 2
+    capblockend = doc[capblockstart:].index('') + capblockstart
+
+    envblock = ['{name:20s} | {type:15s} | {doc:40s} |'.format(
+        name=(lambda s: re.sub('([A-Z]+)', r'-\1', s).lower())(f.name),
+        type=f.type, doc=f.metadata.get('doc', ''))  # type: ignore
+                for f in fields(Env)
+                if not f.metadata.get('internal', False)]  # type: ignore
+    capblock = ['{name:20s} | {doc:60s} |'.format(
+        name=c[0], doc=c[1]) for c in Capabilities]
+    newdoc = doc[:envblockstart] + envblock + doc[
+        envblockend:capblockstart] + capblock + doc[capblockend:]
+    update(path, "\n".join(newdoc))
+
+
+def writeCommandLine() -> None:
+    import sys
+    sys.argv = ['podenv']
+    path = Path("docs/references/command-line.md")
+    doc = path.read_text().split('\n')
+    clistart = doc.index('```bash')
+    newdoc = doc[:clistart + 1] + (
+        usageParser().format_help().split('\n')[:-1]) + ["```"]
+    update(path, "\n".join(newdoc))
+
+
+if __name__ == "__main__":
+    writeDhallCapabilities()
+    writeReferences()
+    writeCommandLine()
+    exit(dirty)
