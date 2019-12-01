@@ -38,6 +38,7 @@ shmsize              | str             | The shm-size value string              
 ports                | List[str]       | List of port to expose on the host       |
 system-type          | str             | Set image system type                    |
 dns                  | str             | A custom DNS server                      |
+container-file       | str             | Containerfile content                    |
 image-customizations | List[str]       |                                          |
 
 

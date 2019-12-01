@@ -1,5 +1,6 @@
 {- A podenv definition -}
 { name : Text
+, container-file : Optional Text
 , description : Optional Text
 , url : Optional Text
 , image : Text

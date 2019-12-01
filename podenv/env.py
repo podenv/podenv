@@ -419,6 +419,9 @@ class Env:
     dns: str = field(default="", metadata=dict(
         doc="A custom DNS server"))
 
+    containerFile: str = field(default="", metadata=dict(
+        doc="Containerfile content"))
+
     # Internal attribute
     envName: str = field(default="", metadata=dict(
         internal=True))

@@ -1,5 +1,6 @@
 { description = None Text
 , url = None Text
+, container-file = None Text
 , environ = None ../types/Environ.dhall
 , packages = None (List Text)
 , ports = None (List Text)

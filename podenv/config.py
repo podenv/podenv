@@ -47,6 +47,7 @@ def attributesToCamelCase(envSchema: Dict[Any, Any]) -> Dict[Any, Any]:
             "system-type",
             "pre-tasks",
             "post-tasks",
+            "container-file",
     ):
         if hyphenKey in envSchema:
             words = hyphenKey.split('-')

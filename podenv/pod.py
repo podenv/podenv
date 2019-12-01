@@ -938,12 +938,37 @@ def setupVolumes(volumeInfos: Dict[str, VolumeInfo]) -> None:
             execute(["podman", "volume", "create", volumeInfo.volumeName])
 
 
+def setupContainer(userNotif: UserNotif, env: Env, cacheDir: Path) -> str:
+    """Ensure the container image is consistent with the containerfile"""
+    localFile = (cacheDir / "containerfiles" /
+                 f"Containerfile.{env.image}").expanduser()
+    localName = f"localhost/podenv/{env.image}"
+
+    def build(filePath: Path) -> None:
+        # TODO: add image build mount cache
+        execute(["buildah", "bud", "-f", filePath.name, "-t", localName,
+                 str(filePath.parent)])
+
+    if not localFile.exists() \
+       or localFile.read_text() != env.containerFile \
+       or not podmanExists("image", localName):
+        localFile.parent.mkdir(parents=True, exist_ok=True)
+        localFile.write_text(env.containerFile)
+        build(localFile)
+    return localName
+
+
 def setupPod(
         userNotif: UserNotif,
         env: Env,
         cacheDir: Path = Path("~/.cache/podenv")) -> ExecArgs:
-    imageName = setupRuntime(userNotif, env, cacheDir)
-    configureRuntime(userNotif, env)
+
+    if env.containerFile:
+        imageName = [setupContainer(userNotif, env, cacheDir)]
+    else:
+        imageName = setupRuntime(userNotif, env, cacheDir)
+        configureRuntime(userNotif, env)
+
     if env.network:
         setupInfraNetwork(env.network, imageName, env)
 
