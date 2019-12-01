@@ -216,8 +216,11 @@ def initOverlays(overlayDir: Path) -> None:
 def loadConfig(
         userNotif: UserNotif,
         skipLocal: bool = False,
-        configFile: Path = Path("~/.config/podenv/config.yaml")) -> Config:
+        configFile: Path = Path("~/.config/podenv/config.dhall")) -> Config:
     configFile = configFile.expanduser()
+    if not configFile.exists() and configFile.name.endswith(".dhall"):
+        # Fall back to legacy format
+        configFile = Path(str(configFile).replace('.dhall', '.yaml'))
     configDir = configFile.parent
     if not configFile.exists():
         initConfig(configDir, configFile)

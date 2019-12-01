@@ -36,7 +36,7 @@ def usageParser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--config", help="The config path",
-                        default="~/.config/podenv/config.yaml")
+                        default="~/.config/podenv/config.dhall")
     parser.add_argument("--show", action='store_true',
                         help="Print the environment info and exit")
     parser.add_argument("--list", action='store_true',
