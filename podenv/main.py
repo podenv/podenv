@@ -127,7 +127,9 @@ def listEnv(envs: Dict[str, Env]) -> None:
     maxRegistryNameLen = max(
         map(lambda x: len(x.registryShortName), envs.values())) + 3
     lineFmt = "{:<%ds}{:<%ds}{:<%ds}{}" % (
-        maxEnvNameLen, maxParentNameLen, maxRegistryNameLen)
+        maxEnvNameLen,
+        max(10, maxParentNameLen),
+        max(12, maxRegistryNameLen))
     print(lineFmt.format("NAME", "PARENT", "REGISTRY", "DESCRIPTION"))
     for _, env in sorted(envs.items()):
         print(lineFmt.format(
