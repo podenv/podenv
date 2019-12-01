@@ -111,8 +111,9 @@ class Config:
             'default-capabilities', dict(selinux=True, seccomp=True))
         self.envs: Dict[str, Env] = {}
         self.overlaysDir: Optional[Path] = None
-        self.loadEnvs(
-            defaults.environments, Path(defaults.__file__), "internal")
+        if not configFile.name.endswith(".dhall"):
+            self.loadEnvs(
+                defaults.environments, Path(defaults.__file__), "internal")
         distConfig = Path("/usr/share/podenv/config.yaml")
         if distConfig.exists():
             self.loadEnvs(safe_load(
