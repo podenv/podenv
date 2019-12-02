@@ -126,17 +126,24 @@ def listEnv(envs: Dict[str, Env]) -> None:
     maxParentNameLen = max(map(lambda x: len(x.parent), envs.values())) + 3
     maxRegistryNameLen = max(
         map(lambda x: len(x.registryShortName), envs.values())) + 3
-    lineFmt = "{:<%ds}{:<%ds}{:<%ds}{}" % (
-        maxEnvNameLen,
-        max(10, maxParentNameLen),
-        max(12, maxRegistryNameLen))
-    print(lineFmt.format("NAME", "PARENT", "REGISTRY", "DESCRIPTION"))
+    if maxParentNameLen > 3:
+        # legacy --list
+        lineFmt = "{:<%ds}{:<%ds}{:<%ds}{}" % (
+            maxEnvNameLen,
+            max(10, maxParentNameLen),
+            max(12, maxRegistryNameLen))
+        print(lineFmt.format("NAME", "PARENT", "REGISTRY", "DESCRIPTION"))
+        for _, env in sorted(envs.items()):
+            print(lineFmt.format(
+                env.envName,
+                env.parent if env.parent else "",
+                env.registryShortName,
+                env.description))
+        return
+    lineFmt = "{:<%ds}{}" % maxEnvNameLen
+    print(lineFmt.format("NAME", "DESCRIPTION"))
     for _, env in sorted(envs.items()):
-        print(lineFmt.format(
-            env.envName,
-            env.parent if env.parent else "",
-            env.registryShortName,
-            env.description))
+        print(lineFmt.format(env.envName, env.description))
 
 
 def run(argv: ExecArgs = sys.argv[1:]) -> None:
