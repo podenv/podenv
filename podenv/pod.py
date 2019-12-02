@@ -974,12 +974,13 @@ def setupPod(
 
     # TODO: check for environment requires list
 
-    if not env.runtime:
-        raise RuntimeError("Env has no runtime")
-    imageName = env.runtime.getRuntimeArgs() + imageName
-    if env.capabilities.get("mount-cache"):
-        # Inject runtime volumes
-        imageName = env.runtime.getSystemMounts(withTmp=False) + imageName
+    if not env.containerFile:
+        if not env.runtime:
+            raise RuntimeError("Env has no runtime")
+        imageName = env.runtime.getRuntimeArgs() + imageName
+        if env.capabilities.get("mount-cache"):
+            # Inject runtime volumes
+            imageName = env.runtime.getSystemMounts(withTmp=False) + imageName
 
     if env.volumes:
         setupVolumes(env.volumeInfos)
