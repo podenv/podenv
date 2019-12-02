@@ -990,6 +990,8 @@ def prepareEnv(
         if cliArgs:
             fileArg = Path(cliArgs.pop()).expanduser().resolve(strict=True)
             env.ctx.mounts[Path("/tmp") / fileArg.name] = fileArg
+        else:
+            env.command.remove("$1")
 
     commandArgs: List[str] = []
     for command in env.command:
