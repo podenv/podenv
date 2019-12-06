@@ -13,6 +13,7 @@
 # under the License.
 
 import setuptools
+import os
 
 setuptools.setup(
     name="podenv",
@@ -25,7 +26,11 @@ setuptools.setup(
     url="https://github.com/podenv/podenv",
     packages=["podenv"],
     install_requires=["PyYAML"],
-    package_data={'podenv': ['dhall/', 'dhall/types/*', 'dhall/defaults/*']},
+    package_data={'podenv': [
+        item[7:] for sub in map(lambda x: [x[0]] + list(map(
+            lambda y: x[0] + '/' + y, x[2])), os.walk(
+                'podenv/dhall'))
+        for item in sub]},
     entry_points={
         'console_scripts': [
             'podenv=podenv.main:run',

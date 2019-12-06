@@ -17,283 +17,93 @@ This module handles the configuration schema.
 """
 
 from __future__ import annotations
-from logging import getLogger
+from os import environ
 from pathlib import Path
-from textwrap import dedent
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Union
 from yaml import safe_load
 
 from podenv.dhall import load as dhall_load
-from podenv.pod import canUpdate, execute, outdated
-from podenv.env import Env, UserNotif
-from podenv import defaults
+from podenv.env import Env, loadEnv
 
 
-log = getLogger("podenv")
-podhub = "https://github.com/podenv/hub"
+defaultConfig = Path("~/.config/podenv/config.dhall")
+localConf = Path("default.podenv")
 
 
-def urlToFilename(url: str) -> str:
-    return url.replace('https://', '').replace('http://', '').replace(
-        '/', ':').replace('.', '-')
+def loadDhallConfig(configFile: Union[str, Path]) -> Any:
+    def pathEnv(env: str, default: str) -> Path:
+        return Path(default if environ.get(env) is None else
+                    environ[env]).expanduser()
 
-
-def attributesToCamelCase(envSchema: Dict[Any, Any]) -> Dict[Any, Any]:
-    """Convert attribute from yaml to dataclass camelCase"""
-    for hyphenKey in (
-            "add-hosts",
-            "image-customizations",
-            "image-tasks",
-            "system-type",
-            "pre-tasks",
-            "post-tasks",
-            "container-file",
-    ):
-        if hyphenKey in envSchema:
-            words = hyphenKey.split('-')
-            camelCase = words[0] + words[1].capitalize()
-            envSchema[camelCase] = envSchema.pop(hyphenKey)
-    return envSchema
-
-
-def askConfirmation(msg: str) -> bool:
-    print(msg + " [Yn]: ", end='')
+    hub = pathEnv(
+        "PODENV_HUB", "~/git/github.com/podenv/hub/package.dhall")
+    prelude = pathEnv(
+        "PODENV_PRELUDE",
+        "~/git/github.com/podenv/podenv/podenv/dhall/package.dhall")
+    if not prelude.exists():
+        prelude = Path(__file__).parent / "dhall" / "package.dhall"
     try:
-        return input().strip().lower() in ("", "y", "yes")
-    except KeyboardInterrupt:
-        print()
-        return False
+        dhallPackage = dict(
+            HOME=environ["HOME"],
+            PODENV_HUB=str(hub),
+            PODENV_PRELUDE=str(prelude),
+        )
+    except KeyError:
+        raise RuntimeError("HOME environment variable is required")
+    return dhall_load(configFile, dhallPackage)
 
 
-def syncRegistry(url: str, localPath: Path) -> None:
-    if not any(map(lambda scheme: url.startswith(f"{scheme}://"),
-                   ("https", "file"))):
-        raise RuntimeError(f"Can't sync registry over insecure channel {url}")
-    try:
-        if not (localPath / ".git").exists():
-            if url.startswith("https://") and not askConfirmation(
-                    f"Press enter to sync registry {url}"):
-                return
-            localPath.mkdir(parents=True, exist_ok=True)
-            log.info("Cloning %s", url)
-            execute(["git", "clone", url, str(localPath)])
-        else:
-            log.info("Updating %s", url)
-            execute(["git", "pull"], cwd=localPath)
-        (localPath / ".git").touch()
-        # TODO: Validate signature
-    except RuntimeError:
-        log.warning(f"Couldn't update {url}")
+def transformSchema(schema: Any) -> Dict[str, Env]:
+    """Transform input schema"""
+    # normalize env list to a map
+    envs: Dict[str, Env] = {}
+    if isinstance(schema, list):
+        for env in schema:
+            envs[env['name']] = loadEnv(env)
+    else:
+        envs[schema['name']] = loadEnv(schema)
+    return envs
 
 
-class Config:
-    def __init__(self, configFile: Path) -> None:
-        schema: Dict[str, Any]
-        if configFile.name.endswith(".dhall"):
-            # Inject convenient dhall package access with package_data symlink
-            dhallPackage = configFile.parent / "podenv"
-            if not dhallPackage.exists():
-                dhallPackage.symlink_to(Path(__file__).parent / "dhall")
+def loadConfig(skipLocal: bool = False,
+               configStr: str = "",
+               configFile: Path = defaultConfig) -> Dict[str, Env]:
+    # Resolve config location
+    config: Union[str, Path]
+    if configStr:
+        config = configStr
+    elif not skipLocal and localConf.exists():
+        config = localConf
+    elif configFile != defaultConfig:
+        config = configFile.expanduser()
+        if not config.exists():
+            raise RuntimeError(f"{configFile}: No such file or directory")
+    else:
+        configFile = defaultConfig.expanduser()
+        if not configFile.exists():
+            configFile.parent.mkdir(parents=True, exist_ok=True)
+            configFile.write_text("(env:PODENV_HUB).Defaults\n")
+        config = configFile
 
-            schema = dhall_load(configFile)
-            # normalize the env list back to a map
-            envs = {}
-            for env in schema['environments']:
-                envs[env['name']] = env
-                if not env.get('image'):
-                    env['image'] = env['name']
-                del env['name']
-            schema['environments'] = envs
-        else:
-            schema = safe_load(configFile.read_text())
-        schema.setdefault('system', {})
-        self.dns: Optional[str] = schema['system'].get('dns')
-        self.default: str = schema['system'].get('default-env', 'shell')
-        self.defaultCap: Dict[str, bool] = schema['system'].get(
-            'default-capabilities', dict(selinux=True, seccomp=True))
-        self.envs: Dict[str, Env] = {}
-        self.overlaysDir: Optional[Path] = None
-        if not configFile.name.endswith(".dhall"):
-            self.loadEnvs(
-                defaults.environments, Path(defaults.__file__), "internal")
-        distConfig = Path("/usr/share/podenv/config.yaml")
-        if distConfig.exists():
-            self.loadEnvs(safe_load(
-                distConfig.read_text()), distConfig, "included")
+    # Load config schema
+    schema: Any
+    if isinstance(config, Path) and config.name.endswith(".yaml"):
+        schema = safe_load(config.read_text())
+    else:
+        schema = loadDhallConfig(config)
 
-        if configFile.name.endswith(".dhall") and schema.get(
-                "system", {}).get("registries", []):
-            # Inject convenient dhall package access with package_data symlink
-            registriesPodenvDir = \
-                configFile.parent / "registries" / "podenv" / "podenv"
-            if not registriesPodenvDir.exists():
-                registriesPodenvDir.mkdir(parents=True)
-            registriesDhallPackage = registriesPodenvDir / "dhall"
-            if not registriesDhallPackage.exists():
-                registriesDhallPackage.symlink_to(
-                    Path(__file__).parent / "dhall")
-
-        for registry in schema.get("system", {}).get("registries", []):
-            localPath = (configFile.parent / "registries" /
-                         urlToFilename(registry))
-            extraConfigFile = localPath / "config.yaml"
-            if canUpdate() and (not extraConfigFile.exists() or
-                                outdated(localPath / ".git")):
-                syncRegistry(registry, localPath)
-            if extraConfigFile.exists():
-                self.loadEnvs(
-                    safe_load(extraConfigFile.read_text()),
-                    extraConfigFile,
-                    registry)
-
-        self.loadEnvs(schema.get('environments', {}), configFile, "local")
-
-    def loadEnvs(
-            self,
-            schema: Dict[str, Any],
-            configFile: Path,
-            registryName: str) -> None:
-        for envName, envSchema in schema.items():
-            if "." in envName:
-                raise RuntimeError(
-                    f"'.' is not allowed in environment name {envName}")
-            self.envs[envName] = Env(
-                envName,
-                configFile=configFile,
-                registryName=registryName,
-                **attributesToCamelCase(envSchema))
+    return transformSchema(schema)
 
 
-def initConfig(configDir: Path, configFile: Path) -> None:
-    ps1 = "\\[\\033[01;32m\\]\\h \\[\\033[01;34m\\]\\w \\$ \\[\\033[00m\\]"
-    defaultConfig = dedent("""\
-        # Podenv configuration file
-        ---
-        # Site local variable
-        system:
-          # Set IP of local resolver when using dnsmasq
-          dns: null
-          default-env: shell
-          default-capabilities:
-            seccomp: True
-            selinux: True
-          registries:
-            - {podhub}
-
-        environments:
-          # Local environments
-          shell:
-            command: ["/bin/bash"]
-            parent: fedora
-            capabilities:
-              terminal: True
-              mount-run: True
-            environ:
-              SHLVL: 3
-              TERM: xterm
-            overlays:
-              - .bashrc: |
-                  if [ -f /etc/bashrc ]; then
-                    . /etc/bashrc
-                  fi
-                  export PS1="{ps1}"
-                  alias ls='ls -ap --color=auto'
-        """.format(ps1=ps1, podhub=podhub))
-    configDir.mkdir(parents=True, exist_ok=True)
-    configFile.write_text(defaultConfig)
-
-
-def initOverlays(overlayDir: Path) -> None:
-    overlayDir.mkdir()
-    bashOverlay = overlayDir / "bash"
-    bashOverlay.mkdir()
-    (bashOverlay / ".bashrc").write_text(dedent(r"""
-        if [ -f /etc/bashrc ]; then
-            . /etc/bashrc
-        fi
-        export PS1="\[\033[01;32m\]\h \[\033[01;34m\]\w \$ \[\033[00m\]"
-        alias ls='ls -ap --color=auto'
-    """))
-
-
-def loadConfig(
-        userNotif: UserNotif,
-        skipLocal: bool = False,
-        configFile: Path = Path("~/.config/podenv/config.dhall")) -> Config:
-    configFile = configFile.expanduser()
-    if not configFile.exists() and configFile.name.endswith(".dhall"):
-        # Fall back to legacy format
-        configFile = Path(str(configFile).replace('.dhall', '.yaml'))
-    configDir = configFile.parent
-    if not configFile.exists():
-        initConfig(configDir, configFile)
-    conf = Config(configFile)
-    conf.overlaysDir = configDir / "overlay"
-    if not conf.overlaysDir.exists():
-        initOverlays(conf.overlaysDir)
-    # Look for local conf
-    localConf = Path("default.podenv")
-    if not skipLocal and localConf.exists():
-        # Create profile name
-        envName = Path().resolve().name
-        conf.envs[envName] = Env(
-            envName,
-            configFile=localConf,
-            registryName="local-file",
-            **attributesToCamelCase(safe_load(localConf.read_text())))
-        conf.default = envName
-        userNotif(f"Using ./{localConf} for {envName}")
-    return conf
-
-
-def loadEnv(
-        conf: Config, envName: Optional[str], baseName: Optional[str]) -> Env:
-    if not envName:
-        envName = conf.default
-
-    def resolvParents(parent: Optional[str], history: List[str]) -> None:
-        if not parent and (baseName and baseName not in history):
-            parent = baseName
-        if not parent:
-            return
-        if parent in history:
-            raise RuntimeError("Circular dependencies detected %s in %s" % (
-                parent, history))
-        if parent not in conf.envs:
-            log.error(
-                "%s: parent does not exist (history: %s)", parent, history)
-        parentEnv = conf.envs[parent]
-        if not parentEnv.parent and baseName:
-            # Override last parent with base
-            if baseName not in conf.envs:
-                log.error("%s: parent does not exist", baseName)
-            parentEnv = conf.envs[baseName]
-            parent = baseName
-        env.applyParent(parentEnv)
-        resolvParents(parentEnv.parent, history + [parent])
-
+def getEnv(conf: Dict[str, Env], envName: str) -> Env:
     try:
         variant = envName.split(".")
         if len(variant) == 2:
             envName = variant[-1]
             variantName = variant[0]
-        env: Env = conf.envs[envName]
+        env: Env = conf[envName]
         if len(variant) == 2:
             env.name = f"{variantName}-{envName}"
-        resolvParents(env.parent, [])
     except KeyError:
         raise RuntimeError(f"{envName}: couldn't load the environment")
-
-    if env.abstract:
-        raise RuntimeError(f"{envName} is abstract, it needs to be inherited")
-
-    # Apply default cap
-    for capName, capValue in conf.defaultCap.items():
-        if capName not in env.capabilities:
-            env.capabilities[capName] = capValue
-
-    env.overlaysDir = conf.overlaysDir
-    env.runDir = Path("/tmp/podenv") / env.name
-    if conf.dns:
-        env.dns = conf.dns
     return env

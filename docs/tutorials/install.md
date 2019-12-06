@@ -17,13 +17,17 @@ sudo dnf install -y python3-pyyaml podman buildah
 ## Installation in PATH
 
 Podenv is in early development without any release.
-To install it you have to clone the project:
+To install it you have to clone the projects:
 
 ```bash
-mkdir -p ~/git/github.com/podenv/podenv
+mkdir -p ~/git/github.com/podenv/
 git clone https://github.com/podenv/podenv ~/git/github.com/podenv/podenv
+git clone https://github.com/podenv/hub ~/git/github.com/podenv/hub
 python3 -mpip install --user ~/git/github.com/podenv/podenv
 ```
+
+> Note: if you clone the podenv/hub project to a different location, set this
+> environment variable: PODENV_HUB=~/path/of/hub/package.dhall
 
 You can verify the podenv command is successfully installed by running:
 
@@ -45,15 +49,10 @@ alias podenv='env PYTHONPATH=~/git/github.com/podenv/podenv python3 ~/git/github
 
 Podenv is designed to be used from the command line or behind a desktop shortcut.
 
-On the first invocation, podenv creates a default configuration in `~/.config/podenv`
-and it will ask if you want to setup the default registry:
+On the first invocation, podenv creates a default configuration in `~/.config/podenv`:
 
 ```bash
 $ podenv --list
-Press enter to sync registry https://github.com/podenv/hub [Yn]: ⏎
-2019-12-01 19:05:40 INFO  podenv - Cloning https://github.com/podenv/hub
-Cloning into '/home/tristanC/.config/podenv/registries/github-com:podenv:hub'...
-[skip]
 NAME                 PARENT          REGISTRY                DESCRIPTION
 emacs                emacs-nox       github.com/podenv/hub   Extensible text editor
 ...

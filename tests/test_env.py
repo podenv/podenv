@@ -13,40 +13,29 @@
 # under the License.
 
 from unittest import TestCase
-from pathlib import Path
 
-from podenv.config import attributesToCamelCase
 import podenv.env
 
 
 def fakeEnv(envName, envSchema):
-    return podenv.env.Env(
-        envName,
-        configFile=Path("test"),
-        registryName="test",
-        **attributesToCamelCase(envSchema))
+    envSchema['name'] = envName
+    envSchema['image'] = envName
+    return podenv.env.loadEnv(envSchema)
 
 
 class TestConfig(TestCase):
-    def test_package_filters(self):
-        packages = set(("python3-numpy", "pip:triangle"))
-        self.assertEqual(podenv.env.packageFilter(packages),
-                         set(("python3-numpy",)))
-        self.assertEqual(podenv.env.pipFilter(packages),
-                         set(("pip:triangle",)))
-
     def test_mounts(self):
         env = fakeEnv("test-env",
                       dict(capabilities=dict(uidmap=True),
                            mounts={"~/git": None}))
-        preps = podenv.env.prepareEnv(env, [], [])
-        execCommand = " ".join(preps[1])
+        ctx = podenv.env.prepareEnv(env, [])
+        execCommand = " ".join(ctx.getArgs())
         self.assertIn("-v /home/user/git:/home/user/git", execCommand)
 
     def test_volumes(self):
-        env = fakeEnv("gertty",
-                      dict(capabilities=dict(uidmap=True),
-                           volumes=dict(git=None)))
-        preps = podenv.env.prepareEnv(env, [], [])
-        execCommand = " ".join(preps[1])
+        env = fakeEnv("gertty", dict(
+            capabilities=dict(uidmap=True),
+            volumes=[{"ContainerPath": "~/git", "name": "git"}]))
+        ctx = podenv.env.prepareEnv(env, [])
+        execCommand = " ".join(ctx.getArgs())
         self.assertIn("-v git:/home/user/git", execCommand)

@@ -1,26 +1,27 @@
 {- Change the image of envs to use another dhall config -}
-let Podenv = ./podenv/package.dhall
+let Podenv = env:PODENV_PRELUDE
 
 let Env = Podenv.Types.Env
 
 let basic-env
     : forall (name : Text) -> Env
     =     \(name : Text)
-      ->  Podenv.Schemas.Env::{ name = name, image = name, command = [ name ] }
+      ->  Podenv.Schemas.Env::{
+          , name = name
+          , image = Some name
+          , command = Some [ name ]
+          }
 
 let default-envs = [ basic-env "firefox", basic-env "emacs" ]
 
 let update-image
     : forall (image : Text) -> forall (envs : List Env) -> List Env
     =     \(image : Text)
-      ->  Podenv.Prelude.List.map
+      ->  (env:PODENV_HUB).Prelude.List.map
             Env
             Env
-            (\(env : Env) -> env // { image = image })
+            (\(env : Env) -> env // { image = Some image })
 
 let image = "shared-image-name"
 
-in  Podenv.Schemas.Config::{
-    , system = { dns = None Text }
-    , environments = update-image image default-envs
-    }
+in  update-image image default-envs

@@ -11,35 +11,26 @@ Name                 | Type            | Doc                                    
 name                 | str             | The name of the environment              |
 description          | Optional[str]   | Environment description                  |
 url                  | Optional[str]   | Application home page                    |
-parent               | str             | A parent environment name to inherit attributes from |
-abstract             | bool            | Set to True to indicate the environment can't be used directly |
-desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
-image                | str             | The container image reference            |
-rootfs               | str             | The path of a rootfs                     |
-packages             | List[str]       | List of packages to be installed in the image |
-image-tasks          | List[Task]      | List of ansible like command to commit to the image |
-pre-tasks            | List[Task]      | List of ansible like command to run before the command |
-post-tasks           | List[Task]      | List of ansible like command to run after the pod exited |
-command              | ExecArgs        | Container starting command               |
-args                 | ExecArgs        | Optional arguments to append to the command |
-environ              | Dict[str, str]  | User environ(7)                          |
-vars                 | Dict[str, str]  | Extra environ vars to be used for command substitution only |
-syscaps              | List[str]       | List of system capabilities(7)           |
-sysctls              | List[str]       | List of sysctl(8)                        |
-volumes              | Dict[str, Volume] | List of volumes                          |
-mounts               | Dict[str, Optional[str]] | Extra mountpoints                        |
 capabilities         | Dict[str, bool] | List of capabilities                     |
-network              | str             | Name of a network to be shared by multiple environment |
-add-hosts            | Dict[str, str]  | Custom hostname,ip to configure in the container |
-requires             | StrOrList       | List of required environments            |
-overlays             | List[Overlay]   | List of overlay to copy in runtime directory |
-home                 | str             | Container home path mount                |
-shmsize              | str             | The shm-size value string                |
-ports                | List[str]       | List of port to expose on the host       |
-system-type          | str             | Set image system type                    |
-dns                  | str             | A custom DNS server                      |
-container-file       | str             | Containerfile content                    |
-image-customizations | List[str]       |                                          |
+image                | str             | The container image reference            |
+container-file       | Optional[Union[str, List[Task]]] | Containerfile content                    |
+container-update     | Optional[Union[str, List[Task]]] | Containerfile update content             |
+packages             | Optional[List[str]] | List of required packages                |
+command              | Optional[ExecArgs] | Container starting command               |
+pre-tasks            | Optional[List[Task]] | List of ansible like command to run before the command |
+post-tasks           | Optional[List[Task]] | List of ansible like command to run after the pod exited |
+work-dir             | Optional[Path]  | The container workdir                    |
+environ              | Optional[Dict[str, str]] | User environ(7)                          |
+syscaps              | Optional[List[str]] | List of system capabilities(7)           |
+sysctls              | Optional[List[str]] | List of sysctl(8)                        |
+volumes              | Optional[Volumes] | List of volumes                          |
+mounts               | Optional[Mounts] | Extra mountpoints                        |
+network              | Optional[str]   | Name of a shared network                 |
+add-hosts            | Optional[Dict[str, str]] | Custom hostname,ip to configure in the container |
+ports                | Optional[List[str]] | List of port to expose on the host       |
+dns                  | Optional[str]   | A custom DNS server                      |
+home                 | Optional[str]   | Container home path mount                |
+desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
 
 
 ## Capabilities list
@@ -48,11 +39,11 @@ The available capabilities are:
 
 Name                 | Doc                                                        |
 -------------------- | ---------------------------------------------------------- |
-manage-image         | manage the image with buildah                                |
-branch-image         | branch the image for this environment                        |
 root                 | run as root                                                  |
 privileged           | run as privileged container                                  |
 terminal             | interactive mode                                             |
+hostfiles            | enable host files access                                     |
+large-shm            | mount a 4gb shm                                              |
 ipc                  | share host ipc                                               |
 x11                  | share x11 socket                                             |
 pulseaudio           | share pulseaudio socket                                      |
@@ -74,6 +65,4 @@ foreground           | work around application that goes into background        
 mount-cwd            | mount cwd to /data                                           |
 mount-home           | mount home to host home                                      |
 mount-run            | mount home and tmp to host tmpfs                             |
-mount-cache          | mount image build cache                                      |
-auto-update          | keep environment updated                                     |
 uidmap               | map host uid                                                 |

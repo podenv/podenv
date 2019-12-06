@@ -16,41 +16,20 @@
 This module prepares and executes the runtime.
 """
 
-import copy
 import fcntl
 import logging
 import json
-import os
-import select
-import shlex
-import time
-import urllib.request
-from abc import abstractmethod
 from contextlib import contextmanager
-from hashlib import md5
 from pathlib import Path
-from typing import Any, ContextManager, Dict, Generator, List, \
-    Optional, Set, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 from subprocess import Popen, PIPE
-try:
-    import selinux  # type: ignore
-    HAS_SELINUX = True
-except ImportError:
-    HAS_SELINUX = False
 
-from podenv.env import DesktopEntry, Env, ExecArgs, Info, Runtime, getUidMap, \
-    UserNotif, VolumeInfo, taskToCommand
+from podenv.security import selinux, HAS_SELINUX
+from podenv.context import UserNotif, BuildContext, DesktopEntry, ExecArgs, \
+    Volume, Volumes, ExecContext
 
 
 log = logging.getLogger("podenv")
-BuildId = str
-BuildSession = ContextManager[BuildId]
-Command = Union[str, List[str]]
-TZFormat = "%Y-%m-%dT%H:%M:%S"
-DAY = 3600 * 24
-HasRoute: Optional[bool] = None
-GuixBuilder = "guix-daemon --build-users-group=guix-builder " \
-    "--disable-chroot & true"
 
 
 class AlreadyRunning(Exception):
@@ -78,7 +57,7 @@ def execute(
         proc.kill()
         raise
     if proc.wait():
-        raise RuntimeError("Failed to run %s" % " ".join(args))
+        raise RuntimeError("Failed to run %s" % prettyCmd(args))
     if textOutput:
         output: str = stdout.decode('utf-8')
         return output
@@ -90,53 +69,11 @@ def desktopNotification(msg: str, color: str = "92") -> None:
         log.warning("Couldn't send notification")
 
 
-def pwrite(args: ExecArgs, stdin: bytes) -> None:
-    log.debug("Running %s" % " ".join(args))
-    proc = Popen(args, stdin=PIPE)
-    try:
-        proc.stdin.write(stdin)
-    except KeyboardInterrupt:
-        proc.terminate()
-        proc.kill()
-    if proc.wait():
-        raise RuntimeError("Failed to run %s" % " ".join(args))
-
-
-def pread(
-        args: ExecArgs, live: bool = False, cwd: Optional[Path] = None) -> str:
-    if live:
-        return preadLive(args, cwd)
+def pread(args: ExecArgs, cwd: Optional[Path] = None) -> str:
     output = execute(args, cwd, True)
     if output:
         return output
     return ""
-
-
-def preadLive(args: ExecArgs, cwd: Optional[Path] = None) -> str:
-    log.debug("Running %s" % " ".join(args))
-    proc = Popen(
-        args, bufsize=0, start_new_session=True,
-        stdout=PIPE, stderr=PIPE, cwd=str(cwd) if cwd else None)
-    for f in (proc.stdout, proc.stderr):
-        # Make proc output non blocking
-        fd = f.fileno()
-        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-    output = []
-    while True:
-        active = False
-        r, w, x = select.select([proc.stdout, proc.stderr], [], [], 1)
-        for reader in r:
-            data = reader.read()
-            if data:
-                active = True
-                data = data.decode('utf-8')
-                print(data, end='')
-                output.append(data)
-        if not active and proc.poll() is not None:
-            if proc.poll():
-                raise RuntimeError("Failed to run %s" % " ".join(args))
-            return "".join(output)
 
 
 def readProcessJson(args: ExecArgs) -> Any:
@@ -146,13 +83,6 @@ def readProcessJson(args: ExecArgs) -> Any:
     if proc.wait():
         return None
     return json.loads(stdout)
-
-
-def commandsToExecArgs(commands: Command) -> ExecArgs:
-    if isinstance(commands, list):
-        return ["bash", "-c", "; ".join(["set -e"] + commands)]
-    else:
-        return shlex.split(commands)
 
 
 def podmanInspect(objType: str, name: str) -> Dict[str, Any]:
@@ -173,729 +103,34 @@ def podmanExists(objType: str, name: str) -> bool:
         return False
 
 
-def hash(message: str) -> str:
-    return md5(message.encode('utf-8')).hexdigest()
-
-
-def now() -> str:
-    return time.strftime(TZFormat)
-
-
-def age(date: str) -> float:
-    return time.time() - time.mktime(time.strptime(date, TZFormat))
-
-
-def canUpdate() -> bool:
-    global HasRoute
-    if HasRoute is None:
-        try:
-            HasRoute = "via" in pread(["ip", "route", "get", "1.1.1.1"])
-        except RuntimeError:
-            log.warning("Skipping update because host is not online")
-            HasRoute = False
-    return HasRoute
-
-
-def updated(lastUpdate: str, maxAge: int = DAY) -> bool:
-    return age(lastUpdate) < maxAge
-
-
-def outdated(path: Path, maxAge: int = DAY) -> bool:
-    return not path.exists() or os.stat(path).st_mtime < (time.time() - maxAge)
-
-
 def isSelinux() -> bool:
     return HAS_SELINUX and Path("/sys/fs/selinux/").exists()
 
 
-def getSelinuxLabel(env: Env) -> str:
+def getSelinuxLabel(ctx: ExecContext) -> str:
     return "system_u:object_r:container_file_t:s0"
 
 
-def buildahRunCommand() -> ExecArgs:
-    return ["buildah", "run", "--network", "host", "--user", "0:0"]
-
-
-def buildahConfig(buildId: BuildId, config: str) -> None:
-    execute(["buildah", "config"] + shlex.split(config) + [buildId])
-
-
-def buildahCommit(buildId: BuildId, tagRef: str) -> None:
-    execute(["buildah", "commit", buildId, tagRef])
-
-
-class PodmanRuntime(Runtime):
-    System: Dict[str, Dict[str, Any]] = {
-        "dnf": {
-            "commands": {
-                "install": "dnf install -y",
-                "update": "dnf update -y",
-            },
-            "mounts": {
-                "/var/cache/dnf": "~/.cache/podenv/dnf"
-            }
-        },
-        "yum": {
-            "commands": {
-                "install": "yum install -y",
-                "update": "yum update -y",
-            },
-            "mounts": {
-                "/var/cache/yum": "~/.cache/podenv/yum"
-            }
-        },
-        "apt-get": {
-            "commands": {
-                "install": "apt-get install -y",
-                "update": "apt-get update -y"
-            },
-            "mounts": {
-                "/var/cache/apt": "~/.cache/podenv/apt"
-            },
-            "packagesMap": {
-                "vi": "vim"
-            },
-        },
-        "emerge": {
-            "mounts": {
-                "/var/db/repos/gentoo": "~/.cache/podenv/portage",
-                "/usr/portage": "~/.cache/podenv/portage",
-                "/var/cache/distfiles": "~/.cache/podenv/distfiles",
-                "/var/cache/eix": "~/.cache/podenv/eix",
-            },
-            "commands": {
-                "install": "emerge -vDNt --verbose-conflicts",
-                "update": "emerge -uvDNt @world",
-                "pre-update": "emerge --sync --quiet",
-            },
-            "packagesMap": {
-                "git": "dev-vcs/git",
-                "vi": "app-editors/vim",
-            }
-        },
-        "guix": {
-            "mounts": {
-                "/gnu": "~/.cache/podenv/guix/gnu",
-                "/var/guix": "~/.cache/podenv/guix/var/guix",
-            },
-            "commands": {
-                "install": [
-                    GuixBuilder,
-                    "guix install"],
-                "pre-update": [
-                    GuixBuilder,
-                    "rm -f /var/guix/profiles/default/current-guix",
-                    "guix pull"],
-                "update": [
-                    GuixBuilder,
-                    "guix package -u"],
-            },
-            "environments": {
-                "GUIX_PROFILE": "/root/.config/guix/current",
-                "PATH": ("/var/guix/profiles/per-user/root/current-guix/bin/:"
-                         "/bin:/sbin:/usr/bin:/usr/sbin:"
-                         "/usr/local/bin:/usr/local/sbin")
-            },
-            "packagesMap": {
-                "vi": "vim"
-            },
-        },
-    }
-
-    def __init__(self, cacheDir: Path, name: str, fromRef: str):
-        self.commands: Dict[str, Command] = {}
-        self.mounts: Dict[str, str] = {}
-        self.runtimeMounts: Dict[str, str] = {}
-        self.packagesMap: Dict[str, str] = {}
-        self.environments: Dict[str, str] = {}
-        self.extras: Dict[str, ExtraRuntime] = {}
-        self.info: Info = {}
-        self.systemType: str = ""
-        self.fromRef: str = fromRef
-        self.name: str = name
-        self.metadataPath = Path(
-            str(cacheDir / self.name).rstrip('/') + '.json')
-
-    def lock(self) -> None:
-        self.lock_file = open(str(self.metadataPath) + '-lock', "w")
-        fcntl.flock(self.lock_file, fcntl.LOCK_EX)
-
-    def unlock(self) -> None:
-        fcntl.flock(self.lock_file, fcntl.LOCK_UN)
-
-    def exists(self, autoUpdate: bool) -> bool:
-        return self.metadataPath.exists()
-
-    def loadInfo(self) -> None:
-        self.info = json.loads(self.metadataPath.read_text())
-        if self.info.get("system") and isinstance(self.info["system"], str):
-            self.setSystemType(self.info["system"])
-
-    def getCustomizations(self) -> List[str]:
-        customHashes = self.info.get("customHash", [])
-        if not isinstance(customHashes, list):
-            raise RuntimeError("Invalid customHash metadata")
-        return customHashes
-
-    def getInstalledPackages(self) -> List[str]:
-        if self.systemType != self.info.get("system"):
-            packages = self.info.get(f"{self.systemType}Packages", [])
-        else:
-            packages = self.info.get("packages", [])
-        if not isinstance(packages, list):
-            raise RuntimeError("Invalid packages metadata")
-        return packages
-
-    def updateInstalledPackages(self, packages: Set[str]) -> None:
-        installedPackages = list(packages.union(self.getInstalledPackages()))
-        newInfo: Info = {}
-        if self.systemType != self.info.get("system"):
-            newInfo = {f"{self.systemType}Packages": installedPackages}
-        else:
-            newInfo = {"packages": installedPackages}
-        self.updateInfo(newInfo)
-
-    def needUpdate(self) -> bool:
-        key = "updated"
-        if self.systemType != self.info.get("system"):
-            key = f"{self.systemType}Updated"
-        lastUpdate = self.info.get(key, "")
-        if not isinstance(lastUpdate, str):
-            raise RuntimeError(f"Invalid {key} metadata")
-        return not lastUpdate or (not updated(lastUpdate) and canUpdate())
-
-    def setLastUpdated(self, nowDate: str) -> None:
-        key = "updated"
-        if self.systemType != self.info.get("system"):
-            key = f"{self.systemType}Updated"
-        self.updateInfo({key: nowDate})
-
-    def updateInfo(self, info: Info) -> None:
-        self.info.update(info)
-        self.metadataPath.write_text(json.dumps(self.info))
-
-    def __repr__(self) -> str:
-        if self.systemType:
-            return f"{self.systemType}:{self.name}"
-        return self.name
-
-    def setSystemType(self, systemType: str) -> None:
-        # Backward compat
-        if systemType == "rpm":
-            systemType = "dnf"
-        elif systemType == "apt":
-            systemType = "apt-get"
-        self.systemType = systemType
-        self.commands = self.System[systemType]["commands"]
-        self.mounts = self.System[systemType].get("mounts", {})
-        self.packagesMap = self.System[systemType].get("packagesMap", {})
-        self.environments = self.System[systemType].get("environment", {})
-
-    def getSystemType(self, buildId: BuildId) -> str:
-        systemType = self.info.get("system")
-        if not systemType:
-            for systemType in self.System:
-                try:
-                    self.runCommand(
-                        buildId, ["sh", "-c", f"type {systemType}"])
-                    break
-                except RuntimeError:
-                    pass
-            else:
-                raise RuntimeError("Couldn't discover system type")
-        if not isinstance(systemType, str):
-            # Mypy is confused by the type from the for loop
-            raise RuntimeError("Invalid systemType")
-        self.setSystemType(systemType)
-        return systemType
-
-    def getMounts(self, mountsDict: Dict[str, str]) -> ExecArgs:
-        mounts = []
-        for containerDir, hostDir in mountsDict.items():
-            hostPath = Path(hostDir).expanduser().resolve()
-            if not hostPath.exists():
-                hostPath.mkdir(parents=True, exist_ok=True)
-                if isSelinux():
-                    selinux.chcon(
-                        str(hostPath), "system_u:object_r:container_file_t:s0")
-            mounts.extend(["-v", "%s:%s" % (
-                hostPath, containerDir)])
-        return mounts
-
-    def getSystemMounts(self, withTmp: bool) -> ExecArgs:
-        """Mount points needed to manage the runtime image"""
-        # Filter out runtimeMounts
-        extra = ["--mount=type=tmpfs,destination=/tmp"] if withTmp else []
-        return self.getMounts(dict(filter(
-            lambda x: x[0] not in self.runtimeMounts,
-            self.mounts.items()))) + extra
-
-    def getSystemEnvironments(self) -> ExecArgs:
-        envs = []
-        for key, value in self.environments:
-            envs.extend(["-e", f"{key}={value}"])
-        return envs
-
-    def getSystemArgs(self) -> ExecArgs:
-        return self.getRuntimeArgs() + self.getSystemMounts(withTmp=True)
-
-    def getRuntimeArgs(self) -> ExecArgs:
-        return self.getRuntimeMounts() + self.getSystemEnvironments()
-
-    def create(self) -> None:
-        with self.getSession(create=True) as buildId:
-            systemType = self.getSystemType(buildId)
-            for command in ["useradd -u 1000 -m user",
-                            "mkdir -p /run/user/1000",
-                            "chown 1000:1000 /run/user/1000",
-                            "mkdir -p /run/user/0",
-                            "chown 0:0 /run/user/0"]:
-                self.runCommand(buildId, command)
-            nowDate = now()
-            for config in ["--author='%s'" % os.environ["USER"],
-                           "--created-by podenv",
-                           "--history-comment '%s: created'" % nowDate]:
-                self.applyConfig(buildId, config)
-            self.commit(buildId, nowDate)
-        self.updateInfo(dict(created=nowDate,
-                             updated="1970-01-01T00:00:00",
-                             packages=[],
-                             system=systemType,
-                             fromRef=self.fromRef))
-
-    def update(self) -> None:
-        for retry in range(3):
-            try:
-                with self.getSession() as buildId:
-                    if self.commands.get("pre-update"):
-                        self.runCommand(buildId, commandsToExecArgs(
-                            self.commands["pre-update"]))
-
-                    updateOutput = pread(
-                        self.runCommandArgs(buildId) +
-                        commandsToExecArgs(self.commands["update"]),
-                        live=True)
-                    nowDate = now()
-                    if "Nothing to do." in updateOutput:
-                        break
-                    for config in ["--author='%s'" % os.environ["USER"],
-                                   "--created-by podenv",
-                                   "--history-comment '%s: updated'" %
-                                   nowDate]:
-                        self.applyConfig(buildId, config)
-                    self.commit(buildId, nowDate)
-                    break
-            except RuntimeError:
-                if retry == 2:
-                    raise
-                log.warning("Retrying failed update...")
-        self.setLastUpdated(nowDate)
-
-    def install(self, packages: Set[str]) -> None:
-        with self.getSession() as buildId:
-            packagesMapped = map(lambda x: self.packagesMap.get(x, x),
-                                 packages)
-            command = copy.copy(self.commands["install"])
-            packagesArgs = " " + " ".join(packagesMapped)
-            if isinstance(command, list):
-                command[-1] += packagesArgs
-            else:
-                command += packagesArgs
-            self.runCommand(
-                buildId, commandsToExecArgs(command))
-            nowDate = now()
-            for config in ["--author='%s'" % os.environ["USER"],
-                           "--created-by podenv",
-                           "--history-comment '%s: installed %s'" % (
-                               nowDate, ' '.join(packages))]:
-                self.applyConfig(buildId, config)
-            self.commit(buildId, nowDate)
-        self.updateInstalledPackages(packages)
-
-    def enableExtra(self, extra: str, env: Env) -> None:
-        if extra == "pip":
-            extraRuntime = PipRuntime(self, env.envName)
-        else:
-            raise NotImplementedError(f"Unknown extra type {extra}")
-        self.extras[extra] = extraRuntime
-        extraRuntime.enable(env)
-
-    def getRuntimeMounts(self) -> ExecArgs:
-        return self.getMounts(self.runtimeMounts)
-
-    def getInstalledExtra(self, extra: str) -> Set[str]:
-        return self.extras[extra].getInstalled()
-
-    def updateExtra(self, extra: str) -> None:
-        self.extras[extra].update()
-
-    def installExtra(self, extra: str, packages: Set[str]) -> None:
-        self.extras[extra].install(packages)
-
-    def customize(self, commands: List[Tuple[str, str]]) -> None:
-        knownHash: Set[str] = set(self.info.get("customHash", []))
-        with self.getSession() as buildId:
-            for commandHash, command in commands:
-                commandArgs: ExecArgs = []
-                if not command.startswith("run_local_host; "):
-                    commandArgs = self.runCommandArgs(buildId)
-                else:
-                    command = command.split('; ', 1)[1]
-                commandArgs += ["/bin/bash", "-c", command]
-                execute(commandArgs)
-                knownHash.add(commandHash)
-            nowDate = now()
-            for config in ["--author='%s'" % os.environ["USER"],
-                           "--created-by podenv",
-                           "--history-comment '%s: customized'" % nowDate]:
-                self.applyConfig(buildId, config)
-            self.commit(buildId, nowDate)
-        self.updateInfo(dict(customHash=list(knownHash)))
-
-    @abstractmethod
-    def getExecName(self) -> ExecArgs:
-        ...
-
-    @abstractmethod
-    def getSession(self, create: bool = False) -> BuildSession:
-        ...
-
-    @abstractmethod
-    def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
-        ...
-
-    @abstractmethod
-    def runCommand(self, buildId: BuildId, command: Command) -> None:
-        ...
-
-    @abstractmethod
-    def applyConfig(self, buildId: BuildId, config: str) -> None:
-        ...
-
-    @abstractmethod
-    def commit(self, buildId: BuildId, nowDate: str) -> None:
-        ...
-
-
-class ExtraRuntime:
-    def __init__(
-            self, extra: str, runtime: PodmanRuntime, envName: str) -> None:
-        self.extraDir = (Path("~/.cache/podenv") / (
-            runtime.name + "-" + envName + "-pip")).expanduser()
-        self.metadataPath = Path(str(self.extraDir) + ".json")
-        self.packages: Set[str] = set()
-        self.runtime: PodmanRuntime = runtime
-
-    def getInstalled(self) -> Set[str]:
-        return self.packages
-
-    @abstractmethod
-    def update(self) -> None:
-        ...
-
-    @abstractmethod
-    def install(self, packages: Set[str]) -> None:
-        ...
-
-    @abstractmethod
-    def enable(self, env: Env) -> None:
-        ...
-
-
-def createContainerDir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    if isSelinux():
-        selinux.chcon(str(path), "system_u:object_r:container_file_t:s0")
-
-
-class PipRuntime(ExtraRuntime):
-    def __init__(self, runtime: PodmanRuntime, envName: str) -> None:
-        super().__init__("pip", runtime, envName)
-        self.pipCache = Path("~/.cache/podenv/pip-cache").expanduser()
-        if not self.pipCache.exists():
-            createContainerDir(self.pipCache)
-
-    def enable(self, env: Env) -> None:
-        if self.metadataPath.exists():
-            self.packages = set(json.loads(self.metadataPath.read_text())[
-                "packages"])
-            createContainerDir(self.extraDir)
-        self.runtime.mounts["/root/.cache/pip"] = str(self.pipCache)
-        self.runtime.mounts["/venv"] = str(self.extraDir)
-        self.runtime.runtimeMounts["/venv"] = str(self.extraDir)
-
-    def exists(self) -> bool:
-        return (self.extraDir / "bin" / "activate").exists()
-
-    def create(self) -> None:
-        with self.runtime.getSession() as buildId:
-            self.runtime.runCommand(
-                buildId, "python3 -mvenv --system-site-packages /venv")
-
-    def update(self) -> None:
-        if not self.packages:
-            return
-        if not self.exists():
-            self.create()
-        with self.runtime.getSession() as buildId:
-            self.runtime.runCommand(
-                buildId, "/venv/bin/pip install --upgrade " + " ".join(map(
-                    lambda x: x.split('pip:', 1)[-1], self.packages)))
-
-    def install(self, packages: Set[str]) -> None:
-        if not self.exists():
-            self.create()
-        with self.runtime.getSession() as buildId:
-            self.runtime.runCommand(
-                buildId, "/venv/bin/pip install " + " ".join(map(
-                    lambda x: x.split('pip:', 1)[-1], packages)))
-        self.packages.update(packages)
-        self.metadataPath.write_text(json.dumps(dict(
-            packages=list(self.packages))))
-
-
-class ContainerImage(PodmanRuntime):
-    def __init__(
-            self,
-            cacheDir: Path,
-            fromRef: str,
-            manage: bool,
-            localName: str) -> None:
-        self.localName: str = fromRef
-        self.manage: bool = manage
-        if manage:
-            if not localName:
-                localName = fromRef.split('/', 1)[-1].replace(':', '-')
-            self.localName = "localhost/podenv/" + localName
-        super().__init__(cacheDir,
-                         fromRef.replace(':', '-').replace('/', '_'),
-                         fromRef)
-
-    def __repr__(self) -> str:
-        if self.systemType:
-            return f"{self.systemType}:{self.localName}"
-        return self.localName
-
-    def getExecName(self) -> ExecArgs:
-        return [self.localName]
-
-    def create(self) -> None:
-        if self.manage:
-            super().create()
-        elif not self.fromRef.startswith("localhost/"):
-            self.pull()
-
-    def update(self) -> None:
-        if self.manage:
-            super().update()
-        else:
-            self.pull()
-
-    def pull(self) -> None:
-        execute(["podman", "pull", self.fromRef])
-        self.updateInfo({"updated": now()})
-
-    def getSession(self, create: bool = False) -> BuildSession:
-        @contextmanager
-        def buildahSession(fromRef: str) -> Generator[BuildId, None, None]:
-            self.lock()
-            ctr = pread(["buildah", "from", fromRef]).strip()
-            try:
-                yield ctr
-            finally:
-                self.unlock()
-                execute(["buildah", "delete", ctr], textOutput=True)
-        return buildahSession(self.fromRef if create else self.localName)
-
-    def runCommand(self, buildId: BuildId, command: Command) -> None:
-        if isinstance(command, list):
-            args = command
-        else:
-            args = shlex.split(command)
-        execute(self.runCommandArgs(buildId) + args)
-
-    def runCommandArgs(self, buildId: BuildId) -> ExecArgs:
-        return buildahRunCommand() + self.getSystemArgs() + [buildId]
-
-    def applyConfig(self, buildId: BuildId, config: str) -> None:
-        buildahConfig(buildId, config)
-
-    def commit(self, buildId: BuildId, nowDate: str) -> None:
-        tagRef = "%s:%s" % (self.localName, nowDate.replace(':', '-'))
-        buildahCommit(buildId, tagRef)
-        execute(["buildah", "tag", tagRef, f"{self.localName}:latest"])
-
-    def exists(self, autoUpdate: bool) -> bool:
-        if super().exists(autoUpdate):
-            if not podmanExists("image", self.localName):
-                return False
-            if not autoUpdate:
-                return True
-            # Check if image needs to be rebuilt from scratch
-            self.loadInfo()
-            if not isinstance(self.info["created"], str):
-                raise RuntimeError("Invalid created metadata")
-            if age(self.info["created"]) > DAY * 21 and self.needUpdate():
-                log.info("Re-creating base layer because it is too old")
-                self.pull()
-                self.updateInfo(dict(
-                    updated="1970-01-01T00:00:00",
-                    packages=[],
-                    customHash=[],
-                ))
-                return False
-            return True
-        return False
-
-
-def extractUrl(url: str, target: Path) -> None:
-    log.info(f"Downloading {url} to memory...")
-    req = urllib.request.urlopen(url)
-    target.mkdir(parents=True, exist_ok=True)
-    if isSelinux():
-        selinux.chcon(str(target), "system_u:object_r:container_file_t:s0")
-    pwrite(["tar", "-C", str(target),
-            "--exclude", "dev/*", "-xJf", "-"], req.read())
-
-
-def downloadUrl(url: str, target: Path) -> None:
-    log.info(f"Downloading {url} to {target}...")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.urlopen(url)
-    target.write_bytes(req.read())
-
-
-class RootfsDirectory(PodmanRuntime):
-    def __init__(self, cacheDir: Path, fromRef: str) -> None:
-        if fromRef.startswith("http"):
-            self.url = fromRef
-            fromRefPath = Path("~/.local/share/podenv/") / os.path.basename(
-                fromRef).split(".tar")[0]
-        else:
-            fromRefPath = Path(fromRef)
-            self.url = ""
-        self.rootfs = fromRefPath.expanduser().resolve()
-        super().__init__(
-            cacheDir, os.path.basename(fromRefPath), str(self.rootfs))
-
-    def getExecName(self) -> ExecArgs:
-        return ["--rootfs", self.fromRef]
-
-    def getSession(self, create: bool = False) -> BuildSession:
-        @contextmanager
-        def fakeSession() -> Generator[BuildId, None, None]:
-            self.lock()
-            try:
-                yield "noop"
-            finally:
-                self.unlock()
-        return fakeSession()
-
-    def runCommand(self, _: BuildId, command: Command) -> None:
-        if not self.rootfs.exists():
-            if self.url:
-                extractUrl(self.url, self.rootfs)
-            else:
-                raise RuntimeError(f"{self.rootfs}: does not exist")
-        execute(self.runCommandArgs(_) + commandsToExecArgs(command))
-
-    def runCommandArgs(self, _: BuildId) -> ExecArgs:
-        return ["podman", "run", "--rm", "-t"] + \
-            self.getSystemArgs() + self.getExecName()
-
-    def applyConfig(self, buildId: BuildId, config: str) -> None:
-        # Rootfs doesn't have metadata
-        pass
-
-    def commit(self, buildId: BuildId, nowDate: str) -> None:
-        # Rootfs doesn't have layer
-        pass
-
-
-def setupRuntime(userNotif: UserNotif, env: Env, cacheDir: Path) -> ExecArgs:
-    """Ensure image is ready."""
-    cacheDir = cacheDir.expanduser()
-    if not cacheDir.exists():
-        cacheDir.mkdir(parents=True)
-
-    if env.image and env.rootfs:
-        raise RuntimeError(
-            f"{env.envName}: both image and rootfs can't be defined")
-
-    if env.rootfs:
-        env.runtime = RootfsDirectory(cacheDir, env.rootfs)
-    elif env.image:
-        env.runtime = ContainerImage(
-            cacheDir, env.image, env.manageImage,
-            env.envName if env.branchImage else "")
-
-    if not env.runtime:
-        raise NotImplementedError("No runtime is defined")
-
-    if not env.runtime.exists(env.autoUpdate):
-        userNotif(f"Creating {env.runtime}")
-        env.runtime.create()
-    else:
-        env.runtime.loadInfo()
-
-    if env.systemType:
-        env.runtime.setSystemType(env.systemType)
-
-    return env.runtime.getExecName()
-
-
-def configureRuntime(userNotif: UserNotif, env: Env) -> None:
-    if not env.runtime:
-        raise RuntimeError("Env has no metadata")
-
-    imageCustomizations = env.runtime.getCustomizations()
-    envCustomizations: Dict[str, str] = {}
-    for envCustomization in env.imageCustomizations + list(map(
-            taskToCommand, env.imageTasks)):
-        envCustomizations[hash(envCustomization)] = envCustomization
-    needCustomizations: List[Tuple[str, str]] = [
-        (hash, command) for hash, command in envCustomizations.items()
-        if hash not in imageCustomizations]
-    if needCustomizations:
-        userNotif(f"Customizing image {needCustomizations}")
-        env.runtime.customize(needCustomizations)
-
-    imagePackages = env.runtime.getInstalledPackages()
-    envPackages = env.systemPackages
-    envPipPackages = env.pipPackages
-
-    if envPipPackages:
-        envPackages.add("python3")
-        env.runtime.enableExtra("pip", env)
-
-    if env.autoUpdate and env.runtime.needUpdate():
-        userNotif(f"Updating {env.runtime}")
-        env.runtime.update()
-        if envPipPackages:
-            env.runtime.updateExtra("pip")
-
-    need = envPackages.difference(imagePackages)
-    if need:
-        userNotif(f"Installing {need}")
-        env.runtime.install(need)
-
-    if envPipPackages:
-        pipPackages = env.runtime.getInstalledExtra("pip")
-        needPip = envPipPackages.difference(pipPackages)
-        if needPip:
-            userNotif(f"Installing {needPip}")
-            env.runtime.installExtra("pip", needPip)
-
-
-def setupInfraNetwork(networkName: str, imageName: ExecArgs, env: Env) -> None:
+@contextmanager
+def lock(name: Path) -> Generator[None, None, None]:
+    lock_file = open(str(name) + '.lock', "w")
+    fcntl.flock(lock_file, fcntl.LOCK_EX)
+    try:
+        yield None
+    finally:
+        fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def setupInfraNetwork(
+        networkName: str, imageName: str, ctx: ExecContext) -> None:
     """Setup persistent infra pod"""
     try:
         args = ["--detach"]
-        if env.ctx.uidmaps:
-            args.extend(getUidMap(env))
-        if env.dns:
-            args.append(f"--dns={env.dns}")
-        args.extend(env.ctx.getHosts())
+        if ctx.uidmaps:
+            args.extend(ctx.getUidMaps())
+        if ctx.dns:
+            args.append(f"--dns={ctx.dns}")
+        args.extend(ctx.getHosts())
 
         executePod("net-" + networkName, args, imageName, ["sleep", "Inf"])
     except AlreadyRunning:
@@ -915,84 +150,169 @@ def setupDesktopFile(
         log.info(f"{desktopFile}: wrote entry spec")
 
 
-def setupRunDir(env: Env) -> None:
-    path = env.runDir
+def setupRunDir(ctx: ExecContext) -> None:
+    path = ctx.runDir
     if path and not path.exists():
         if not path.parent.exists():
             path.parent.mkdir(mode=0o700)
         path.mkdir(mode=0o700)
         if isSelinux():
-            selinux.chcon(str(path), getSelinuxLabel(env))
+            selinux.chcon(str(path), getSelinuxLabel(ctx))
 
 
-def setupVolumes(volumeInfos: Dict[str, VolumeInfo]) -> None:
+def setupVolumes(volumes: Volumes) -> None:
     """Create volume first to ensure proper owner"""
     volumes = readProcessJson(["podman", "volume", "ls", "--format", "json"])
     existingVolumes: Set[str] = set()
     if volumes:
-        for volume in volumes:
-            existingVolumes.add(volume["name"])
-    for volumeInfo in volumeInfos.values():
-        if volumeInfo.volumeName not in existingVolumes:
-            log.info(f"Creating volume {volumeInfo.volumeName}")
-            execute(["podman", "volume", "create", volumeInfo.volumeName])
+        for volume in volumes.values():
+            existingVolumes.add(volume.name)
+    for volume in volumes.values():
+        if volume.name not in existingVolumes:
+            log.info(f"Creating volume {volume.name}")
+            execute(["podman", "volume", "create", volume.name])
 
 
-def setupContainer(userNotif: UserNotif, env: Env, cacheDir: Path) -> str:
+def build(filePath: Path, localName: str, ctx: Optional[BuildContext]) -> None:
+    # TODO: add image build mount cache
+    buildCommand = ["buildah", "bud"]
+    if ctx and ctx.mounts:
+        for containerPath, hostPath in ctx.mounts.items():
+            hostPath = hostPath.expanduser()
+            if not hostPath.exists():
+                hostPath.mkdir(parents=True, exist_ok=True)
+                if isSelinux():
+                    selinux.chcon(
+                        str(hostPath), "system_u:object_r:container_file_t:s0")
+            if str(containerPath).startswith("~/"):
+                containerPath = Path("/root") / str(containerPath)[2:]
+            buildCommand.append(f"--volume={hostPath}:{containerPath}")
+    with lock(filePath):
+        execute(buildCommand +
+                ["-f", filePath.name, "-t", localName, str(filePath.parent)])
+
+
+def getLocalName(cache: Path, image: str, update: bool) -> Tuple[str, Path]:
+    localName = image.replace("localhost/", "")
+    localFileName = localName.replace("/", "-")
+    if not update:
+        localFileName = "Containerfile." + localFileName
+    else:
+        localFileName = "Containerfile." + localFileName + "-update"
+    return (localName, (cache / "containerfiles" / localFileName).expanduser())
+
+
+def setupContainerFile(
+        userNotif: UserNotif,
+        ctx: ExecContext,
+        rebuild: bool, cacheDir: Path) -> None:
     """Ensure the container image is consistent with the containerfile"""
-    localFile = (cacheDir / "containerfiles" /
-                 f"Containerfile.{env.image}").expanduser()
-    localName = f"podenv/{env.image}"
+    if not ctx.containerFile:
+        raise RuntimeError(f"{ctx.name}: container-file required")
 
-    def build(filePath: Path) -> None:
-        # TODO: add image build mount cache
-        execute(["buildah", "bud", "-f", filePath.name, "-t", localName,
-                 str(filePath.parent)])
+    localName, localFile = getLocalName(cacheDir, ctx.imageName, update=False)
+
+    buildReasons: List[str] = []
+    if rebuild:
+        buildReasons.append("--rebuild set")
+    if not localFile.exists():
+        buildReasons.append(f"{localFile} doesn't exists")
+    elif localFile.read_text() != ctx.containerFile:
+        # TODO: show diff?
+        buildReasons.append(f"{localFile} content differ")
+    if not buildReasons and not podmanExists("image", ctx.imageName):
+        buildReasons.append(f"{ctx.imageName} doesn't exist in the store")
+
+    if buildReasons:
+        tmpFile = Path(str(localFile) + ".tmp")
+        tmpFile.parent.mkdir(parents=True, exist_ok=True)
+        tmpFile.write_text(ctx.containerFile)
+        userNotif(f"Building {ctx.imageName} with {tmpFile} because: " +
+                  ", ".join(buildReasons))
+        try:
+            build(tmpFile, localName, ctx.imageBuildCtx)
+        except RuntimeError as e:
+            raise RuntimeError(f"Build of {tmpFile} failed: " + str(e))
+        tmpFile.rename(localFile)
+
+
+def updateContainerFile(
+        userNotif: UserNotif,
+        ctx: ExecContext,
+        cacheDir: Path) -> None:
+    (_, containerFile) = getLocalName(cacheDir, ctx.imageName, update=False)
+    if not containerFile.exists():
+        raise RuntimeError(f"{ctx.name}: hasn't been built yet")
+    if not ctx.containerUpdate:
+        raise RuntimeError(f"{ctx.name}: doesn't have a container-update")
+
+    localName, localFile = getLocalName(cacheDir, ctx.imageName, update=True)
 
     if not localFile.exists() \
-       or localFile.read_text() != env.containerFile \
-       or not podmanExists("image", localName):
+       or localFile.read_text() != ctx.containerUpdate:
         localFile.parent.mkdir(parents=True, exist_ok=True)
-        localFile.write_text(env.containerFile)
-        build(localFile)
-    return localName
+        localFile.write_text(ctx.containerUpdate)
+    build(localFile, localName, ctx.imageBuildCtx)
+
+
+def pullImage(userNotif: UserNotif, imageName: str, force: bool) -> str:
+    if force or not podmanExists("image", imageName):
+        userNotif(f"Pulling {imageName}")
+        execute(["podman", "pull", imageName])
+    return imageName
+
+
+def updateImage(userNotif: UserNotif,
+                ctx: ExecContext,
+                cacheDir: Path) -> None:
+    if ctx.containerUpdate:
+        updateContainerFile(userNotif, ctx, cacheDir)
+    else:
+        try:
+            pullImage(userNotif, ctx.imageName, True)
+        except RuntimeError:
+            userNotif(f"{ctx.imageName} doesn't seem to exist, "
+                      "maybe there is a typo in the `image` attribute?")
+            raise
+
+
+def setupImage(userNotif: UserNotif,
+               ctx: ExecContext,
+               rebuild: bool,
+               cacheDir: Path) -> None:
+    if ctx.imageName.startswith("localhost/podenv/") and ctx.containerFile:
+        setupContainerFile(userNotif, ctx, rebuild, cacheDir)
+    else:
+        try:
+            pullImage(userNotif, ctx.imageName, rebuild)
+        except RuntimeError:
+            userNotif(f"{ctx.imageName} doesn't seem to exist. "
+                      "if you provided a `container-file` with a custom "
+                      "`image` name, make sure to prefix the name with "
+                      "'localhost/podenv/' to let podenv build it for you.")
+            raise
 
 
 def setupPod(
         userNotif: UserNotif,
-        env: Env,
-        cacheDir: Path = Path("~/.cache/podenv")) -> ExecArgs:
+        ctx: ExecContext,
+        rebuild: bool) -> None:
 
-    if env.containerFile:
-        imageName = [setupContainer(userNotif, env, cacheDir)]
-    else:
-        imageName = setupRuntime(userNotif, env, cacheDir)
-        configureRuntime(userNotif, env)
+    if ctx.network:
+        setupInfraNetwork(ctx.network, ctx.imageName, ctx)
 
-    if env.network:
-        setupInfraNetwork(env.network, imageName, env)
+    if ctx.volumes:
+        setupVolumes(ctx.volumes)
 
-    # TODO: check for environment requires list
+    if ctx.desktop:
+        setupDesktopFile(ctx.desktop)
 
-    if not env.containerFile:
-        if not env.runtime:
-            raise RuntimeError("Env has no runtime")
-        imageName = env.runtime.getRuntimeArgs() + imageName
-        if env.capabilities.get("mount-cache"):
-            # Inject runtime volumes
-            imageName = env.runtime.getSystemMounts(withTmp=False) + imageName
-
-    if env.volumes:
-        setupVolumes(env.volumeInfos)
-    if env.desktop:
-        setupDesktopFile(env.desktop)
-
-    for containerPath, hostPath in sorted(env.ctx.mounts.items()):
+    for containerPath, hostPath in sorted(ctx.mounts.items()):
         if isinstance(hostPath, Path):
             hostPath = hostPath.expanduser().resolve()
             if not hostPath.exists() and str(hostPath).startswith(
-                    str(env.runDir)):
-                setupRunDir(env)
+                    str(ctx.runDir)):
+                setupRunDir(ctx)
                 if hostPath.name == "tmp":
                     hostPath.mkdir(mode=0o1777)
                     # TODO: check why mkdir mode results in 1774
@@ -1002,43 +322,15 @@ def setupPod(
             elif not hostPath.exists():
                 hostPath.mkdir(mode=0o755, parents=True)
                 if isSelinux():
-                    selinux.chcon(str(hostPath), getSelinuxLabel(env))
-        if env.runDir and env.runDir.exists() and \
-           str(containerPath).startswith(str(env.ctx.home) + "/") and (
+                    selinux.chcon(str(hostPath), getSelinuxLabel(ctx))
+        if ctx.runDir and ctx.runDir.exists() and \
+           str(containerPath).startswith(str(ctx.home) + "/") and (
                (isinstance(hostPath, Path) and hostPath.is_dir()) or
-               (isinstance(hostPath, VolumeInfo))):
+               (isinstance(hostPath, Volume))):
             # Need to create parent dir, otherwise podman creates them as root
-            tmpPath = env.runDir / "home" / str(containerPath).replace(
-                str(env.ctx.home) + "/", "")
+            tmpPath = ctx.runDir / "home" / str(containerPath).replace(
+                str(ctx.home) + "/", "")
             tmpPath.mkdir(parents=True, exist_ok=True)
-
-    if env.overlaysDir:
-        for overlay in env.overlays:
-            homeDir = env.ctx.mounts.get(env.ctx.home)
-            if not homeDir:
-                raise RuntimeError(
-                    "Overlays without home mount isn't supported")
-
-            if isinstance(homeDir, VolumeInfo):
-                # TODO: Implement overlay application to volume
-                log.info(f"Overlay skipped for volume {homeDir.name}")
-
-            elif isinstance(overlay, str):
-                overlayDir = env.overlaysDir / overlay
-                if not overlayDir.exists():
-                    raise RuntimeError(f"{overlay} does not exists")
-                execute(["rsync", "--copy-links", "-a", str(overlayDir) + "/",
-                         str(homeDir) + "/"])
-            else:
-                for containerHomePath, content in overlay.items():
-                    hostPath = homeDir / containerHomePath
-                    if not hostPath.exists():
-                        hostPath.write_text(content)
-                    elif hostPath.read_text() != content:
-                        log.info(
-                            f"Overlay skipped for {hostPath}: already exists")
-
-    return imageName
 
 
 def executeHostTasks(commands: List[str]) -> None:
@@ -1047,7 +339,7 @@ def executeHostTasks(commands: List[str]) -> None:
 
 
 def executePod(
-        name: str, args: ExecArgs, image: ExecArgs, envArgs: ExecArgs) -> None:
+        name: str, args: ExecArgs, image: str, envArgs: ExecArgs) -> None:
     podInfo = podmanInspect("container", name)
     if podInfo:
         if podInfo["State"]["Status"].lower() == "running":
@@ -1055,7 +347,7 @@ def executePod(
         log.info(f"Cleaning left-over container {name}")
         execute(["podman", "rm", name])
     execute(
-        ["podman", "run", "--rm", "--name", name] + args + image + envArgs,
+        ["podman", "run", "--rm", "--name", name] + args + [image] + envArgs,
         cwd=Path('/'))
 
 

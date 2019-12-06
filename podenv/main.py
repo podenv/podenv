@@ -23,11 +23,12 @@ from os import environ
 from pathlib import Path
 from typing import Dict
 
-from podenv.config import loadConfig, loadEnv
-from podenv.pod import killPod, setupPod, executeHostTasks, executePod, \
-    desktopNotification, podmanExists, prettyCmd
-from podenv.env import Capabilities, Env, ExecArgs, UserNotif, prepareEnv, \
-    cleanupEnv
+from podenv.capabilities import Capabilities
+from podenv.config import loadConfig, getEnv
+from podenv.pod import killPod, updateImage, setupImage, setupPod, \
+    executeHostTasks, executePod, desktopNotification, prettyCmd
+from podenv.context import ExecArgs, ExecContext, UserNotif
+from podenv.env import Env, prepareEnv
 
 log = logging.getLogger("podenv")
 
@@ -35,8 +36,10 @@ log = logging.getLogger("podenv")
 def usageParser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
     parser.add_argument("--verbose", action='store_true')
-    parser.add_argument("--config", help="The config path",
+    parser.add_argument("--debug", action='store_true')
+    parser.add_argument("-c", "--config", help="The config path",
                         default="~/.config/podenv/config.dhall")
+    parser.add_argument("-E", "--expr", help="A dhall config expression")
     parser.add_argument("--show", action='store_true',
                         help="Print the environment info and exit")
     parser.add_argument("--list", action='store_true',
@@ -45,16 +48,14 @@ def usageParser() -> argparse.ArgumentParser:
                         help="Run bash instead of the profile command")
     parser.add_argument("--net", help="Set the network (host or env name)")
     parser.add_argument("--home", help="Set the home directory path")
-    parser.add_argument("-p", "--package", action='append',
-                        help="Add a package to the environment")
     parser.add_argument("-e", "--environ", action='append',
                         help="Set an environ variable")
     parser.add_argument("-i", "--image",
                         help="Override the image name")
-    parser.add_argument("-b", "--base",
-                        help="Override the base environment name")
-    parser.add_argument("-t", "--tag",
-                        help="Set the image tag")
+    parser.add_argument("--rebuild", default=False, action='store_true',
+                        help="Rebuilt the image")
+    parser.add_argument("--update", default=False, action='store_true',
+                        help="Update the image")
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capability: {doc}")
@@ -69,6 +70,16 @@ def usage(args: ExecArgs) -> argparse.Namespace:
     return usageParser().parse_args(args)
 
 
+def applyEnvironOverride(args: argparse.Namespace) -> None:
+    if environ.get("PODENV_CONFIG"):
+        if args.config != "~/.config/podenv/config.dhall" \
+           and args.config != environ.get("PODENV_CONFIG"):
+            print(
+                f"{args.config} is overriden by environ "
+                f"PODENV_CONFIG={environ['PODENV_CONFIG']}")
+        args.config = environ["PODENV_CONFIG"]
+
+
 def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
     """Mutate the environment with the command line override"""
     for name, _, _ in Capabilities:
@@ -80,6 +91,8 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
     if args.environ:
         for argsEnviron in args.environ:
             key, val = argsEnviron.split("=", 1)
+            if not env.environ:
+                env.environ = {}
             env.environ[key] = val
     if args.shell:
         env.capabilities["terminal"] = True
@@ -95,8 +108,7 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
 def setupLogging(debug: bool) -> None:
     loglevel = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
-        format="%(asctime)s %(levelname)-5.5s %(name)s - "
-               "\033[92m%(message)s\033[m",
+        format="[+] \033[92m%(message)s\033[m",
         level=loglevel)
 
 
@@ -118,80 +130,97 @@ def getUserNotificationProc(verbose: bool) -> UserNotif:
     elif verbose:
         return lambda msg: log.info(msg)
     return lambda msg: print(
-        f"\033[92m{msg}\033[m", file=sys.stderr)
+        f"[+] \033[92m{msg}\033[m", file=sys.stderr)
 
 
 def listEnv(envs: Dict[str, Env]) -> None:
     maxEnvNameLen = max(map(len, envs.keys())) + 3
-    maxParentNameLen = max(map(lambda x: len(x.parent), envs.values())) + 3
-    maxRegistryNameLen = max(
-        map(lambda x: len(x.registryShortName), envs.values())) + 3
-    if maxParentNameLen > 3:
-        # legacy --list
-        lineFmt = "{:<%ds}{:<%ds}{:<%ds}{}" % (
-            maxEnvNameLen,
-            max(10, maxParentNameLen),
-            max(12, maxRegistryNameLen))
-        print(lineFmt.format("NAME", "PARENT", "REGISTRY", "DESCRIPTION"))
-        for _, env in sorted(envs.items()):
-            print(lineFmt.format(
-                env.envName,
-                env.parent if env.parent else "",
-                env.registryShortName,
-                env.description))
-        return
     lineFmt = "{:<%ds}{}" % maxEnvNameLen
     print(lineFmt.format("NAME", "DESCRIPTION"))
     for _, env in sorted(envs.items()):
         print(lineFmt.format(env.envName, env.description))
 
 
+def showEnv(verbose: bool, env: Env, ctx: ExecContext) -> None:
+    containerFile = ctx.containerFile
+    localImage = env.image.startswith('localhost/podenv/')
+    if verbose:
+        log.debug("Environment:")
+        env.containerFile = None
+        print(env)
+    if localImage and containerFile:
+        print()
+        log.info("Containerfile:")
+        print(containerFile.strip())
+    if verbose and localImage and ctx.containerUpdate:
+        print()
+        log.info("Containerfile for update:")
+        print(ctx.containerUpdate.strip())
+    print()
+    log.info("Command line:")
+    print("podman run " + prettyCmd(
+        ctx.getArgs() + [ctx.imageName] + ctx.commandArgs))
+
+
 def run(argv: ExecArgs = sys.argv[1:]) -> None:
     args = usage(argv)
     setupLogging(args.verbose)
     notifyUserProc = getUserNotificationProc(args.verbose)
+    cacheDir = Path("~/.cache/podenv").expanduser()
+    applyEnvironOverride(args)
 
     try:
         # Load config and prepare the environment, no IO are performed here
-        conf = loadConfig(notifyUserProc, skipLocal=args.list or args.env,
+        conf = loadConfig(skipLocal=args.list or args.env,
+                          configStr=args.expr,
                           configFile=Path(args.config))
-        if args.list:
-            return listEnv(conf.envs)
-        env = loadEnv(conf, args.env, args.base)
+        if args.list and not args.show:
+            return listEnv(conf)
+
+        if not args.env:
+            if len(conf) != 1:
+                print(usageParser().format_help())
+                exit(1)
+            args.env = list(conf.keys())[0]
+
+        env = getEnv(conf, args.env)
         applyCommandLineOverride(args, env)
-        containerName, containerArgs, envArgs, \
-            hostPreArgs, hostPostArgs = prepareEnv(
-                env, args.args, args.package)
+        ctx = prepareEnv(env, args.args)
     except RuntimeError as e:
+        if args.debug:
+            raise
         fail(notifyUserProc, str(e))
 
     if args.show:
-        print("Environment:")
-        print(env)
-        print("Command line:")
-        print("podman run " + prettyCmd(containerArgs + [env.image] + envArgs))
-        exit(0)
+        return showEnv(args.verbose, env, ctx)
 
     try:
-        # Prepare the image and create needed host directories
-        imageName = setupPod(notifyUserProc, env)
+        # Update the image
+        if args.update:
+            if args.rebuild:
+                raise RuntimeError("Invalid action --update --rebuild")
+            updateImage(notifyUserProc, ctx, cacheDir)
     except RuntimeError as e:
+        if args.debug:
+            raise
         fail(notifyUserProc, str(e))
 
     try:
-        # Run the environment
-        if args.tag:
-            # This is a bit of a hack, tag should be passed to the env and used
-            # by the runtime.getExecName procedure
-            imageName[-1] += ":" + args.tag
-            if not podmanExists("image", imageName[-1]):
-                fail(notifyUserProc, f"Unknown tag {imageName[-1]}")
-        executeHostTasks(hostPreArgs)
-        executePod(containerName, containerArgs, imageName, envArgs)
+        setupImage(notifyUserProc, ctx, args.rebuild, cacheDir)
+        # Prepare the image and create required host directories
+        setupPod(notifyUserProc, ctx, args.rebuild)
+    except RuntimeError as e:
+        if args.debug:
+            raise
+        fail(notifyUserProc, str(e))
+
+    try:
+        executeHostTasks(ctx.hostPreTasks)
+        executePod(ctx.name, ctx.getArgs(), ctx.imageName, ctx.commandArgs)
         podResult = 0
     except KeyboardInterrupt:
         try:
-            killPod(containerName)
+            killPod(ctx.name)
         except RuntimeError:
             pass
         podResult = 1
@@ -200,13 +229,15 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         # Perform post tasks
-        executeHostTasks(hostPostArgs)
+        executeHostTasks(ctx.hostPostTasks)
     except RuntimeError as e:
+        if args.debug:
+            raise
         print(e)
 
     try:
         # Cleanup left-over
-        cleanupEnv(env)
+        ...
     except RuntimeError as e:
         fail(notifyUserProc, str(e))
 

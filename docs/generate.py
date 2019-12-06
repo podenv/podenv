@@ -19,7 +19,8 @@ A script to generate docs and types
 import re
 from dataclasses import fields
 from pathlib import Path
-from podenv.env import Env, Capabilities
+from podenv.env import Env
+from podenv.capabilities import Capabilities
 from podenv.main import usageParser
 
 dirty = False
@@ -44,7 +45,8 @@ def writeDhallCapabilities() -> None:
                  lambda c: c + " : Optional Bool", capNames)) + "\n}"),
             ("defaults/Capabilities.dhall",
              "{ " + "\n, ".join(map(
-                 lambda c: c + " = %s" % ("Some True" if c in defTrue else "None Bool"),
+                 lambda c: c + " = %s" % (
+                     "Some True" if c in defTrue else "None Bool"),
                  capNames)) + "\n}")):
         update(Path("podenv") / "dhall" / f, c)
 

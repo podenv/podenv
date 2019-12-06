@@ -1,8 +1,8 @@
-{ manage-image = None Bool
-, branch-image = None Bool
-, root = None Bool
+{ root = None Bool
 , privileged = None Bool
 , terminal = None Bool
+, hostfiles = None Bool
+, large-shm = None Bool
 , ipc = None Bool
 , x11 = None Bool
 , pulseaudio = None Bool
@@ -24,7 +24,5 @@
 , mount-cwd = None Bool
 , mount-home = None Bool
 , mount-run = None Bool
-, mount-cache = None Bool
-, auto-update = None Bool
 , uidmap = None Bool
 }

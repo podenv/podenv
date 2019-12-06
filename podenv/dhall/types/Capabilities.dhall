@@ -1,8 +1,8 @@
-{ manage-image : Optional Bool
-, branch-image : Optional Bool
-, root : Optional Bool
+{ root : Optional Bool
 , privileged : Optional Bool
 , terminal : Optional Bool
+, hostfiles : Optional Bool
+, large-shm : Optional Bool
 , ipc : Optional Bool
 , x11 : Optional Bool
 , pulseaudio : Optional Bool
@@ -24,7 +24,5 @@
 , mount-cwd : Optional Bool
 , mount-home : Optional Bool
 , mount-run : Optional Bool
-, mount-cache : Optional Bool
-, auto-update : Optional Bool
 , uidmap : Optional Bool
 }

@@ -1,5 +1,8 @@
 # podenv: a podman wrapper
 
+> Please note that this is a work in progress,
+> the schema maybe subject to change.
+
 Podenv provides a declarative interface to manage containers' environment.
 
 ## Overview and scope

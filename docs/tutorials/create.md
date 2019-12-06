@@ -5,26 +5,31 @@ the [GIMP - GNU Image Manipulation Program](https://gimp.org) application.
 
 ## Create the gimp environment definition
 
-You need to create a configuration file at the default location: **~/.config/podenv/config.dhall**
+We don't want to define the environment each time we use it, thus we record
+it's configuration to a file, for example at **~/.config/podenv/gimp.yaml**
 with this content:
 
-```dhall
-{ environments =
-    [ { name = "gimp"
-      , description = Some "GNU Image Manipulation Program"
-      , container-file =
-          ''
-          FROM registry.fedoraproject.org/fedora
-          RUN dnf install -y gimp
-          ''
-      }
-    ]
-}
+```yaml
+name: gimp
+description: "GNU Image Manipulation Program"
+container-file: |
+  FROM registry.fedoraproject.org/fedora
+  RUN dnf install -y gimp
 ```
 
 And you can validate the configuration is in place by running this command:
 
 ```console
+$ podenv --config ~/.config/podenv/gimp.yaml --list
+NAME   DESCRIPTION
+gimp   GNU Image Manipulation Program
+```
+
+We don't want to set the configuration file path each time, thus we define
+an environment variable:
+
+```console
+$ export PODENV_CONFIG=~/.config/podenv/gimp.yaml
 $ podenv --list
 NAME   DESCRIPTION
 gimp   GNU Image Manipulation Program
@@ -34,13 +39,15 @@ To execute this environment, you run this command:
 
 ```console
 $ podenv gimp
+[+] Building localhost/podenv/gimp with ~.cache/podenv/containerfiles/Containerfile.podenv-gimp.tmp
+    because: ~/.cache/podenv/containerfiles/Containerfile.podenv-gimp doesn't exists
 STEP 1: FROM registry.fedoraproject.org/fedora
+STEP 2: RUN dnf install -y gimp
 [...]
 Complete!
 STEP 3: COMMIT podenv/gimp
 Getting image source signatures
 Writing manifest to image destination
-Error: chdir: No such file or directory: OCI runtime command not found error
 ```
 
 Podenv successfully built the image:
@@ -52,68 +59,72 @@ localhost/podenv/gimp               latest                3ec91e4b571c   11 minu
 ```
 
 However, the environment didn't start because podenv default configuration
-requires an unprivileged user to exist in the image.
+doesn't give access to the terminal.
 
-You can get the podman command line by using the **--show** or **--verbose**
-argument:
+You can get the actual podman command by using the **--show** argument:
 
 ```console
 $ podenv --show gimp
-Environment:
-Env(name='gimp', description='GNU Image Manipulation Program', ...)
-Command line:
-podman run --hostname gimp --network none --workdir /home/user -e HOME=/home/user -e XDG_RUNTIME_DIR=/run/user/1000 --user 1000 gimp
+[+] Containerfile:
+FROM registry.fedoraproject.org/fedora
+RUN dnf install -y gimp
+
+[+] Command line:
+podman run --hostname gimp --network none --user 1000 localhost/podenv/gimp
 ```
 
-As you can see, podenv disable network access by default (`--network none`) and
-starts the container with an unprivileged user (`--workdir /home/user --user 1000`).
-However, the environment we defined doesn't have an unprivileged user.
+As you can see, podenv also disable network access by default (`--network none`) and
+starts the container with an unprivileged user (`--user 1000`).
+Next we see how to add capabilities.
 
 
-## Running the environment as root
+## Activate the terminal capability
 
-You need to activate the `root` capability to run the image using the default (container) root user:
+It is often useful to get a shell terminal in a container. We can add the `terminal` capability
+by using the `--terminal` command line argument:
 
 ```console
-$ podenv --verbose --root gimp
-Running podman run --rm --name gimp --hostname gimp --network none --workdir /root -e HOME=/root -e XDG_RUNTIME_DIR=/run/user/0 podenv/gimp
-Complete
+$ podenv --terminal gimp
+bash-5.0$ exit
 ```
 
-This time the command succeeded but the environment wasn't interactive and the container exited.
-You need to use the **--shell** argument to get an interactive access:
+Using the `terminal` capability to start a shell is useful to debug a container.
+And since the image may define a non-shell command,
+it is better to use the `--shell` command line argument to also force the command.
+Let's use it to start gimp:
 
 ```console
-$ podenv --root gimp --shell
-[root@gimp ~]# gimp
+$ podenv --shell gimp
+base-5.0$ gimp
 Cannot open display:
+base-5.0$ exit
 ```
 
-As you can see, podenv disable host access by default. You need to use the `x11` capability
-for the gimp command.
+While we could add the `--x11` capability to the command line, we'll see how to
+properly configure the environment next.
 
 
 ## Configure the environment capabilities
 
 We would like to be able to use the gimp environment without special command line argument.
 Since the gimp environment will always need the `x11` capability, you update the
-configuration file **~/.config/podenv/config.dhall** to:
+configuration file **~/.config/podenv/gimp.yaml** to:
 
-```dhall
-{ environments =
-    [ { name = "gimp"
-      , description = Some "GNU Image Manipulation Program"
-      , capabilities = { x11 = True, root = True }
-      , command = [ "gimp" ]
-      , container-file =
-          ''
-          FROM registry.fedoraproject.org/fedora
-          RUN dnf install -y gimp
-          ''
-      }
-    ]
-}
+```yaml
+name: gimp
+description: "GNU Image Manipulation Program"
+container-file: |
+  FROM registry.fedoraproject.org/fedora
+  RUN dnf install -y gimp
+command: gimp
+capabilities:
+  x11: true
+environ:
+  HOME: /tmp
 ```
+
+We added the `x11` capability and defined a *HOME* environment variable because the image
+doesn't have unprivileged user.
 
 This change also added the `command` attribute so that gimp starts by default instead
 of the container entrypoint.
@@ -126,54 +137,29 @@ $ podenv gimp
 ```
 
 However, the environment doesn't have access to any files.
-Any files modification will be trashed when the environment die.
+Any files modification are trashed when the environment die.
 
 
 ## Access files from the environments
 
-We would like our environment to be able to access and modify the current working
-directory content.
+We would like our environment to be able to access and modify files from the host
+filesystem. The `--hostfiles` capability takes care of exposing host path
+command line argument to the container.
 
-You can start the environment with the `--mount-cwd` capability to expose the host
-cwd to the environment **/data** directory.
-
-You can also updates the command attribute to support automatic file argument to
-be available in the environment.
-
-With this gimp environment definition:
-
-```dhall
-{- ~/.config/podenv/config.dhall -}
-{ environments =
-    [ { name = "gimp"
-      , description = Some "GNU Image Manipulation Program"
-      , capabilities = { x11 = True, root = True, mount-cwd = True }
-      , command = [ "gimp", "\$1" ]
-      , container-file =
-          ''
-          FROM registry.fedoraproject.org/fedora
-          RUN dnf install -y gimp
-          ''
-      }
-    ]
-}
-```
-
-You can now start podenv like so:
+You can open a single file using:
 
 ```console
-$ cd ~/Pictures
-$ podenv gimp
-[gimp starts with /data being ~/Pictures]
-$ gimp ~/git/github.com/podenv/docs/logo.svg
-[gimp starts with the logo.svg file arg being mounted in the environment]
+$ podenv --hostfiles gimp /usr/share/pixmaps/fedora-logo.png
+[fedora logo appears in gimp]
 ```
+
+You can access the host local directory in the container */data/* directory using:
+
+```console
+$ podenv --hostfiles gimp .
+```
+
 
 This concludes the tutorial on how to create a new environment.
 By this point you should understand how podenv can be configured and how
 capabilities work.
-
-
-> Please note that is still a work in progress and the above examples may become easier.
-> In particular the workdir may defaults to '/' to prevent the first error,
-> Then host files access may be refactored to auto-detect path arguments.

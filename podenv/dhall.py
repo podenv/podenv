@@ -19,13 +19,13 @@ This module interfaces with dhall-lang
 import json
 from pathlib import Path
 from subprocess import Popen, PIPE
-from typing import Any, Union
+from typing import Any, Dict, Optional, Union
 
 DEFAULT_PATH = Path("~/.local/bin/dhall-to-json").expanduser()
 DEFAULT_URL = "https://github.com/dhall-lang/dhall-haskell/releases/download/"\
-    "1.27.0/dhall-json-1.5.0-x86_64-linux.tar.bz2"
+    "1.28.0/dhall-json-1.6.0-x86_64-linux.tar.bz2"
 DEFAULT_HASH = \
-    "f8d6e06cd8e731ba3b1d4c67ee5aead76e0a54658a292b78071c9441b565cc2a"
+    "b9917603fa58295f211dde384c073f8482343d445ad9bfab8919ae2eaca6bda7"
 
 
 def _install() -> None:
@@ -48,25 +48,28 @@ def _install() -> None:
         raise RuntimeError(f"{DEFAULT_URL}: couldn't extract")
 
 
-def _load(input: Union[Path, str]) -> Any:
+def _load(input: Union[Path, str], env: Optional[Dict[str, str]]) -> Any:
     path = str(DEFAULT_PATH if DEFAULT_PATH.exists() else "dhall-to-json")
+    if env and not env.get('PATH'):
+        env['PATH'] = ':'.join(['/bin', '/usr/local/bin'])
     if isinstance(input, str):
-        proc = Popen([path], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        proc = Popen([path], stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
         proc.stdin.write(input.encode('utf-8'))
     else:
-        proc = Popen([path, "--file", input], stdout=PIPE, stderr=PIPE)
+        proc = Popen(
+            [path, "--file", input], stdout=PIPE, stderr=PIPE, env=env)
     stdout, stderr = proc.communicate()
     if stderr:
         raise RuntimeError(f"Dhall error:" + stderr.decode('utf-8'))
     return json.loads(stdout.decode('utf-8'))
 
 
-def load(input: Union[Path, str]) -> Any:
+def load(input: Union[Path, str], env: Optional[Dict[str, str]] = None) -> Any:
     try:
-        return _load(input)
+        return _load(input, env)
     except FileNotFoundError:
         _install()
-        return _load(input)
+        return _load(input, env)
 
 
 if __name__ == "__main__":

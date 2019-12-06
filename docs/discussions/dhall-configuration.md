@@ -1,8 +1,5 @@
 # Using dhall for configuration?
 
-> Note that this is a work in progress and the legacy
-> format is still implemented.
-
 Using dhall for podenv configuration might sound a bit hipster,
 however, it is effective for the following reasons:
 
@@ -91,19 +88,17 @@ reduced memory usage.
 The equivalent dhall configuration looks like this:
 
 ```dhall
-{ environments =
-    [ { name = "firefox"
-      , container-file =
-          ''
-          FROM registry.fedoraproject.org/fedora:30
-          RUN dnf install -y https://download1.rpmfusion.org/free/...
-          RUN dnf install -y firefox ffmpeg mesa-dri-drivers
-          ''
-      , container-update = Some 'RUN dnf update -y'
-      , capabilities = { x11 = True, dri = True }
-      }
-    ]
-}
+[ { name = "firefox"
+  , container-file =
+      ''
+      FROM registry.fedoraproject.org/fedora:30
+      RUN dnf install -y https://download1.rpmfusion.org/free/...
+      RUN dnf install -y firefox ffmpeg mesa-dri-drivers
+      ''
+  , container-update = "RUN dnf update -y"
+  , capabilities = { x11 = True, dri = True }
+  }
+]
 ```
 
 The syntax looks odd because it is a new language;
@@ -124,14 +119,12 @@ let fedoraImage =
                   RUN dnf install -y https://dowload1.rpmfusion.org/free/...
                   RUN dnf install -y ${concat " " packages}
                   ''
-              , container-update = Some "RUN dnf update -y"
+              , container-update = "RUN dnf update -y"
               }
 
-in  { environments =
-        [     fedoraImage [ "firefox", "ffmpeg", "mesa-dri-drivers" ]
-          //  { name = "firefox", capabilities = { x11 = True, dri = True } }
-        ]
-    }
+in  [     fedoraImage [ "firefox", "ffmpeg", "mesa-dri-drivers" ]
+      //  { name = "firefox", capabilities = { x11 = True, dri = True } }
+    ]
 ```
 
 We can now explicitely define how images are built, while being
@@ -139,6 +132,7 @@ able to combine multiple environment when needed.
 
 Using dhall, we can implement complex logic in the configuration layer,
 simplifying the runtime.
+
 
 ## Imports
 
@@ -148,10 +142,6 @@ as dhall can natively import configurations.
 The user doesn't have to implement the above `fedoraImage` function,
 as the function could be imported from a remote location.
 
-Podenv provides a [Prelude](https://github.com/podenv/podenv/blob/master/podenv/dhall/package.dhall),
-but using it is optional and the user configuration
-can load definitions from any HTTP location, including [ipfs](https://ipfs.io)
-gateway.
 
 ## Safety
 
@@ -168,20 +158,20 @@ Error: List elements should all have the same type
 ```
 
 Dhall's list elements shall all have the same signature.
-Podenv Prelude includes [schemas](https://github.com/podenv/podenv/blob/master/podenv/dhall/types/Env.dhall)
+Podenv package includes [schemas](https://github.com/podenv/podenv/blob/master/podenv/dhall/types/Env.dhall)
 that can be used to prevent such mistakes:
 
 ```dhall
--- ./test.dhall
-let Podenv = ./podenv/package.dhall
+{- ./test.dhall -}
+let Podenv = ./podenv/dhall/package.dhall
 
-in  Podenv.Schemas.Env::{ name = "firefox", command = [ "firefox" ] }
+in  Podenv.Schemas.Env::{ name = "firefox", image-oops = "firefox" }
 ```
 ```console
 $ dhall-to-yaml --file ./test.dhall
 Error: Expression doesn't match annotation
 
-{ - image : …
+{ + image-oops : …
 , …
 }
 ```
@@ -189,39 +179,35 @@ Error: Expression doesn't match annotation
 The above example is incorrect because an Env needs an image attribute:
 
 ```dhall
--- ./test.dhall
-let Podenv = ./podenv/package.dhall
+{- ./test.dhall -}
+let Podenv = ./podenv/dhall/package.dhall
 
-in  Podenv.Schemas.Env::{
-    , name = "firefox"
-    , command = [ "firefox" ]
-    , image = "firefox"
-    }
+in  Podenv.Schemas.Env::{ name = "firefox", image = Some "firefox" }
 ```
 ```console
 $ dhall-to-yaml --file ./test.dhall
-command:
-- firefox
+capabilities:
+  seccomp: true
+  selinux: true
 image: firefox
 name: firefox
 ```
 
 This is incredibly powerful when refactoring a configuration or when
 an import changes un-expectedly: dhall ensures the resulting configuration
-is consistent.
+is consistent with the excepted type.
 
 ## Conclusion
 
 Dhall produces a configuration object and this can still
-be written in plain YAML. However, the plain configuration become less flexible
-because some of the podenv logic can be expressed with dhall.
+be written in plain YAML. However, using dhall to program the environments
+definition is much more flexible.
 
-The good news is that dhall renders most of the podenv [defaults.py](https://github.com/podenv/podenv/blob/master/podenv/defaults.py) and [pod.py](https://github.com/podenv/podenv/blob/30d2543786e0a1a30f500a82cbc04c11013f080e/podenv/pod.py#L227-L887)
-modules obsolete and makes podenv configuration more flexible.
-For example, this enables:
+Dhall renders most of the legacy podenv logic obsolete while enabling more
+use cases, for example:
 
-* A less obscure and better image management,
+* A less obscure image management that supports simple Containerfile,
 * Custom configurations such as assigning a home volume and network to a group of environments, and
-* Dynamic definition.
+* Dynamic environment definition.
 
-Again, please note that is still a work in progress and dhall support is not fully implemented.
+Please note that is still a work in progress and dhall implementation maybe subject to change.

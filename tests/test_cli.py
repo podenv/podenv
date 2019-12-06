@@ -17,24 +17,18 @@ import unittest
 import podenv.config
 import podenv.main
 import podenv.pod
-from podenv.defaults import environments
 
 
 def getEnv(argv):
     args = podenv.main.usage(argv)
-    conf = podenv.config.loadConfig(lambda msg: msg)
-    env = podenv.config.loadEnv(conf, args.env, "")
+    conf = podenv.config.transformSchema([dict(name="fedora", image="fedora")])
+    env = podenv.config.getEnv(conf, args.env)
     podenv.main.applyCommandLineOverride(args, env)
-    podenv.env.prepareEnv(env, args.args, args.package)
+    podenv.env.prepareEnv(env, args.args)
     return env
 
 
 class TestCommandLineInterface(unittest.TestCase):
-    def test_env_variant(self):
-        env = getEnv(["test.fedora"])
-        self.assertEqual(env.image, environments["fedora"]["image"],
-                         "fedora env is loaded")
-
     def test_override_environ(self):
         env = getEnv(["-e", "PORT=4242", "fedora"])
         self.assertEqual(env.environ["PORT"], "4242")

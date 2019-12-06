@@ -15,11 +15,11 @@ to enable or disable network access use `--network` or `--no-network`.
 Here is the output of the `--help`:
 
 ```bash
-usage: podenv [-h] [--verbose] [--config CONFIG] [--show] [--list] [--shell]
-              [--net NET] [--home HOME] [-p PACKAGE] [-e ENVIRON] [-i IMAGE]
-              [-b BASE] [-t TAG] [--manage-image] [--no-manage-image]
-              [--branch-image] [--no-branch-image] [--root] [--no-root]
+usage: podenv [-h] [--verbose] [--debug] [-c CONFIG] [-E EXPR] [--show]
+              [--list] [--shell] [--net NET] [--home HOME] [-e ENVIRON]
+              [-i IMAGE] [--rebuild] [--update] [--root] [--no-root]
               [--privileged] [--no-privileged] [--terminal] [--no-terminal]
+              [--hostfiles] [--no-hostfiles] [--large-shm] [--no-large-shm]
               [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
               [--no-pulseaudio] [--git] [--no-git] [--editor] [--no-editor]
               [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam] [--no-webcam]
@@ -28,9 +28,7 @@ usage: podenv [-h] [--verbose] [--config CONFIG] [--show] [--list] [--shell]
               [--no-selinux] [--setuid] [--no-setuid] [--ptrace] [--no-ptrace]
               [--network] [--no-network] [--foreground] [--no-foreground]
               [--mount-cwd] [--no-mount-cwd] [--mount-home] [--no-mount-home]
-              [--mount-run] [--no-mount-run] [--mount-cache]
-              [--no-mount-cache] [--auto-update] [--no-auto-update] [--uidmap]
-              [--no-uidmap]
+              [--mount-run] [--no-mount-run] [--uidmap] [--no-uidmap]
               [env] [args [args ...]]
 
 podenv - a podman wrapper
@@ -42,31 +40,31 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   --verbose
-  --config CONFIG       The config path
+  --debug
+  -c CONFIG, --config CONFIG
+                        The config path
+  -E EXPR, --expr EXPR  A dhall config expression
   --show                Print the environment info and exit
   --list                List available environments
   --shell               Run bash instead of the profile command
   --net NET             Set the network (host or env name)
   --home HOME           Set the home directory path
-  -p PACKAGE, --package PACKAGE
-                        Add a package to the environment
   -e ENVIRON, --environ ENVIRON
                         Set an environ variable
   -i IMAGE, --image IMAGE
                         Override the image name
-  -b BASE, --base BASE  Override the base environment name
-  -t TAG, --tag TAG     Set the image tag
-  --manage-image        Enable capability: manage the image with buildah
-  --no-manage-image     Disable manage-image capibility
-  --branch-image        Enable capability: branch the image for this
-                        environment
-  --no-branch-image     Disable branch-image capibility
+  --rebuild             Rebuilt the image
+  --update              Update the image
   --root                Enable capability: run as root
   --no-root             Disable root capibility
   --privileged          Enable capability: run as privileged container
   --no-privileged       Disable privileged capibility
   --terminal            Enable capability: interactive mode
   --no-terminal         Disable terminal capibility
+  --hostfiles           Enable capability: enable host files access
+  --no-hostfiles        Disable hostfiles capibility
+  --large-shm           Enable capability: mount a 4gb shm
+  --no-large-shm        Disable large-shm capibility
   --ipc                 Enable capability: share host ipc
   --no-ipc              Disable ipc capibility
   --x11                 Enable capability: share x11 socket
@@ -110,10 +108,6 @@ optional arguments:
   --no-mount-home       Disable mount-home capibility
   --mount-run           Enable capability: mount home and tmp to host tmpfs
   --no-mount-run        Disable mount-run capibility
-  --mount-cache         Enable capability: mount image build cache
-  --no-mount-cache      Disable mount-cache capibility
-  --auto-update         Enable capability: keep environment updated
-  --no-auto-update      Disable auto-update capibility
   --uidmap              Enable capability: map host uid
   --no-uidmap           Disable uidmap capibility
 ```

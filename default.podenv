@@ -1,17 +1,53 @@
-# This file is a local podenv configuration
----
-description: 'Run podenv unittest'
-parent: fedora
-mounts:
-  ~/.cache/dhall:
-  ~/.local/bin/dhall-to-json:
-capabilities:
-  mount-cwd: True
-  uidmap: True
-packages:
-  - python3-mypy
-  - python3-flake8
-  - python3-pyyaml
-  - make
-command:
-  - make
+{- This file is a local podenv configuration to test podenv -}
+let Podenv = env:PODENV_PRELUDE
+
+let Hub = env:PODENV_HUB
+
+let packages =
+      [ "python3-mypy", "python3-flake8", "python3-pyyaml", "make", "bzip2" ]
+
+let dhall =
+      { url =
+          "https://github.com/dhall-lang/dhall-haskell/releases/download/1.28.0/dhall-json-1.6.0-x86_64-linux.tar.bz2"
+      , hash =
+          "b9917603fa58295f211dde384c073f8482343d445ad9bfab8919ae2eaca6bda7"
+      , dest = "/usr/local/bin"
+      , archive = Some "--strip-components=2 -j --mode='a+x'"
+      }
+
+in  Podenv.Schemas.Env::{
+    , name = "podenv-unittests"
+    , description = Some "Run podenv unittests"
+    , mounts =
+        Some
+          [ Hub.Functions.mkMountMap "~/.cache/dhall"
+          , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
+          ]
+    , capabilities =
+        Podenv.Schemas.Capabilities::{
+        , mount-cwd = Some True
+        , uidmap = Some True
+        }
+    , environ = Some (toMap { HOME = "/home/user" })
+    , container-file =
+        let concat = Hub.Prelude.Text.concatSep
+
+        in  Hub.Functions.containerFromText
+              (     ''
+                    FROM registry.fedoraproject.org/fedora:30
+                    RUN dnf install -y ${concat " " packages}
+                    RUN useradd -u 1000 -m user
+                    ''
+                ++  Hub.Functions.download "~/.cache/podenv/buildStore" dhall
+              )
+    , container-update = Hub.Functions.containerFromText "RUN dnf update -y"
+    , build-env =
+        Some
+          Podenv.Schemas.BuildEnv::{
+          , mounts =
+              [ Hub.Functions.mkMountMap "~/.cache/podenv/buildStore"
+              , Hub.Functions.mkMount "/var/cache/dnf" "~/.cache/podenv/dnf"
+              ]
+          }
+    , command = Some [ "make" ]
+    }
