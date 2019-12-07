@@ -1,30 +1,30 @@
-{ manage-image : Bool
-, branch-image : Bool
-, root : Bool
-, privileged : Bool
-, terminal : Bool
-, ipc : Bool
-, x11 : Bool
-, pulseaudio : Bool
-, git : Bool
-, editor : Bool
-, ssh : Bool
-, gpg : Bool
-, webcam : Bool
-, alsa : Bool
-, dri : Bool
-, kvm : Bool
-, tun : Bool
-, seccomp : Bool
-, selinux : Bool
-, setuid : Bool
-, ptrace : Bool
-, network : Bool
-, foreground : Bool
-, mount-cwd : Bool
-, mount-home : Bool
-, mount-run : Bool
-, mount-cache : Bool
-, auto-update : Bool
-, uidmap : Bool
+{ manage-image : Optional Bool
+, branch-image : Optional Bool
+, root : Optional Bool
+, privileged : Optional Bool
+, terminal : Optional Bool
+, ipc : Optional Bool
+, x11 : Optional Bool
+, pulseaudio : Optional Bool
+, git : Optional Bool
+, editor : Optional Bool
+, ssh : Optional Bool
+, gpg : Optional Bool
+, webcam : Optional Bool
+, alsa : Optional Bool
+, dri : Optional Bool
+, kvm : Optional Bool
+, tun : Optional Bool
+, seccomp : Optional Bool
+, selinux : Optional Bool
+, setuid : Optional Bool
+, ptrace : Optional Bool
+, network : Optional Bool
+, foreground : Optional Bool
+, mount-cwd : Optional Bool
+, mount-home : Optional Bool
+, mount-run : Optional Bool
+, mount-cache : Optional Bool
+, auto-update : Optional Bool
+, uidmap : Optional Bool
 }

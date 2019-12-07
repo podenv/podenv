@@ -8,7 +8,7 @@ in  Podenv.Schemas.Config::{
           , name = "shell"
           , image = "fedora"
           , command = [ "/bin/bash" ]
-          , capabilities = Podenv.Schemas.Capabilities::{ terminal = True }
+          , capabilities = Podenv.Schemas.Capabilities::{ terminal = Some True }
           }
         ]
     }

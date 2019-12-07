@@ -22,11 +22,11 @@ let {- When the env, package and command is a single name -} mkSimple =
           , command = [ name ]
           }
 
-let X11 = { x11 = True }
+let X11 = { x11 = Some True }
 
-let Pulseaudio = { pulseaudio = True }
+let Pulseaudio = { pulseaudio = Some True }
 
-let Network = { network = True }
+let Network = { network = Some True }
 
 in  Podenv.Schemas.Config::{
     , system = { dns = None Text }
@@ -55,7 +55,8 @@ in  Podenv.Schemas.Config::{
         ,     Fedora
           //  { name = "sshvpn"
               , description = Some "Create a point-to-point ssh tunel"
-              , capabilities = Cap::Network // { tun = True, terminal = True }
+              , capabilities =
+                  Cap::Network // { tun = Some True, terminal = Some True }
               , pre-tasks =
                   Some
                     [ Task::{

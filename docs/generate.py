@@ -41,10 +41,10 @@ def writeDhallCapabilities() -> None:
     for f, c in (
             ("types/Capabilities.dhall",
              "{ " + "\n, ".join(map(
-                 lambda c: c + " : Bool", capNames)) + "\n}"),
+                 lambda c: c + " : Optional Bool", capNames)) + "\n}"),
             ("defaults/Capabilities.dhall",
              "{ " + "\n, ".join(map(
-                 lambda c: c + " = %s" % ("True" if c in defTrue else "False"),
+                 lambda c: c + " = %s" % ("Some True" if c in defTrue else "None Bool"),
                  capNames)) + "\n}")):
         update(Path("podenv") / "dhall" / f, c)
 
