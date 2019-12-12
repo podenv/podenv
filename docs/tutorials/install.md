@@ -59,7 +59,7 @@ emacs                emacs-nox       github.com/podenv/hub   Extensible text edi
 ```
 
 The `--list` argument just list the available environments.
-To start an environment, just use its name as the argument.
+To start an environment, use its name as the argument.
 Try using the environment named `xeyes` to verify your installation is correct:
 
 ```bash

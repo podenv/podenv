@@ -26,7 +26,7 @@ environments:
       x11: true
 
   - name: firefox
-    parent: firefox
+    parent: firefox-light
     image-tasks:
       - name: "Install rpmfusion"
         shell: dnf install -y https://download1.rpmfusion.org/free/...
@@ -165,7 +165,7 @@ that can be used to prevent such mistakes:
 {- ./test.dhall -}
 let Podenv = ./podenv/dhall/package.dhall
 
-in  Podenv.Schemas.Env::{ name = "firefox", image-oops = "firefox" }
+in  Podenv.Schemas.Env::{ name = "firefox", image-oops = Some "firefox" }
 ```
 ```console
 $ dhall-to-yaml --file ./test.dhall
@@ -176,7 +176,7 @@ Error: Expression doesn't match annotation
 }
 ```
 
-The above example is incorrect because an Env needs an image attribute:
+The above example is incorrect because the `image` attribute name is misspelled:
 
 ```dhall
 {- ./test.dhall -}

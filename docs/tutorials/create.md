@@ -100,8 +100,9 @@ Cannot open display:
 base-5.0$ exit
 ```
 
-While we could add the `--x11` capability to the command line, we'll see how to
-properly configure the environment next.
+The gimp command failed because the environment doesn't have access to the
+window system. While we could fix that by using the `--x11` capability on the
+command line, we'll see how to properly configure the gimp environment next.
 
 
 ## Configure the environment capabilities
@@ -126,7 +127,7 @@ environ:
 We added the `x11` capability and defined a *HOME* environment variable because the image
 doesn't have unprivileged user.
 
-This change also added the `command` attribute so that gimp starts by default instead
+We also added the `command` attribute so that gimp starts by default instead
 of the container entrypoint.
 
 Now you can use the environment by running this command:
@@ -136,8 +137,8 @@ $ podenv gimp
 [gimp window appears]
 ```
 
-However, the environment doesn't have access to any files.
-Any files modification are trashed when the environment die.
+However, the environment doesn't have access to the host filesystem.
+Any file modification are trashed when the environment die.
 
 
 ## Access files from the environments
