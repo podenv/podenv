@@ -30,7 +30,7 @@ defaultConfig = Path("~/.config/podenv/config.dhall")
 localConf = Path("default.podenv")
 
 
-def loadDhallConfig(configFile: Union[str, Path]) -> Any:
+def loadDhallConfig(configFile: Union[str, Path], debug: bool = False) -> Any:
     def pathEnv(env: str, default: str) -> Path:
         return Path(default if environ.get(env) is None else
                     environ[env]).expanduser()
@@ -50,7 +50,7 @@ def loadDhallConfig(configFile: Union[str, Path]) -> Any:
         )
     except KeyError:
         raise RuntimeError("HOME environment variable is required")
-    return dhall_load(configFile, dhallPackage)
+    return dhall_load(configFile, dhallPackage, debug)
 
 
 def transformSchema(schema: Any, debug: bool = False) -> Dict[str, Env]:
@@ -91,7 +91,7 @@ def loadConfig(skipLocal: bool = False,
     if isinstance(config, Path) and config.name.endswith(".yaml"):
         schema = safe_load(config.read_text())
     else:
-        schema = loadDhallConfig(config)
+        schema = loadDhallConfig(config, debug)
 
     return transformSchema(schema, debug)
 

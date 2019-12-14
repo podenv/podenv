@@ -27,6 +27,9 @@ DEFAULT_URL = "https://github.com/dhall-lang/dhall-haskell/releases/download/"\
 DEFAULT_HASH = \
     "b9917603fa58295f211dde384c073f8482343d445ad9bfab8919ae2eaca6bda7"
 
+Input = Union[Path, str]
+Env = Optional[Dict[str, str]]
+
 
 def _install() -> None:
     # TODO: implement opt-out
@@ -48,28 +51,31 @@ def _install() -> None:
         raise RuntimeError(f"{DEFAULT_URL}: couldn't extract")
 
 
-def _load(input: Union[Path, str], env: Optional[Dict[str, str]]) -> Any:
-    path = str(DEFAULT_PATH if DEFAULT_PATH.exists() else "dhall-to-json")
+def _load(input: Input, env: Env = None, debug: bool = False) -> Any:
+    cmd = [str(DEFAULT_PATH if DEFAULT_PATH.exists() else "dhall-to-json")]
+    if debug:
+        cmd.append("--explain")
     if env and not env.get('PATH'):
         env['PATH'] = ':'.join(['/bin', '/usr/local/bin'])
     if isinstance(input, str):
-        proc = Popen([path], stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
+        proc = Popen(
+            cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
         proc.stdin.write(input.encode('utf-8'))
     else:
         proc = Popen(
-            [path, "--file", input], stdout=PIPE, stderr=PIPE, env=env)
+            cmd + ["--file", str(input)], stdout=PIPE, stderr=PIPE, env=env)
     stdout, stderr = proc.communicate()
     if stderr:
         raise RuntimeError(f"Dhall error:" + stderr.decode('utf-8'))
     return json.loads(stdout.decode('utf-8'))
 
 
-def load(input: Union[Path, str], env: Optional[Dict[str, str]] = None) -> Any:
+def load(input: Input, env: Env = None, debug: bool = False) -> Any:
     try:
-        return _load(input, env)
+        return _load(input, env, debug)
     except FileNotFoundError:
         _install()
-        return _load(input, env)
+        return _load(input, env, debug)
 
 
 if __name__ == "__main__":
