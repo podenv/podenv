@@ -30,6 +30,7 @@ network              | Optional[str]   | Name of a shared network               
 add-hosts            | Optional[Dict[str, str]] | Custom hostname,ip to configure in the container |
 ports                | Optional[List[str]] | List of port to expose on the host       |
 dns                  | Optional[str]   | A custom DNS server                      |
+hostname             | Optional[str]   | Container hostname                       |
 home                 | Optional[str]   | Container home path mount                |
 desktop              | Optional[DesktopEntry] | A desktop launcher entry file definition |
 

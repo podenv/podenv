@@ -91,6 +91,8 @@ class Env:
         doc="List of port to expose on the host"))
     dns: Optional[str] = field(default=None, metadata=dict(
         doc="A custom DNS server"))
+    hostname: Optional[str] = field(default=None, metadata=dict(
+        doc="Container hostname"))
 
     home: Optional[str] = field(default=None, metadata=dict(
         doc="Container home path mount"))
@@ -317,6 +319,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
         imageBuildCtx=env.buildCtx,
         network=env.network,
         dns=env.dns,
+        hostname=env.hostname,
         user=env.user,
         runDir=Path("/tmp/podenv") / env.name,
         commandArgs=env.command if env.command else [],

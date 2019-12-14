@@ -10,6 +10,7 @@
 , network = None Text
 , ports = None (List Text)
 , syscaps = None (List Text)
+, hostname = None Text
 , command = None (List Text)
 , user = None ../types/User.dhall
 , mounts = None (List ../types/Mount.dhall)

@@ -120,6 +120,7 @@ class ExecContext:
     network: Optional[str] = None
 
     dns: Optional[str] = None
+    hostname: Optional[str] = None
     user: Optional[User] = None
 
     # Set by caps
@@ -149,7 +150,8 @@ class ExecContext:
     def getArgs(self) -> ExecArgs:
         args = copy.copy(self.podmanArgs)
 
-        args.extend(["--hostname", self.name])
+        if self.hostname:
+            args.extend(["--hostname", self.hostname])
 
         if self.seLinuxLabel:
             args.extend(["--security-opt", f"label={self.seLinuxLabel}"])
