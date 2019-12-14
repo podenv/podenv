@@ -22,16 +22,22 @@ from typing import Tuple, List, Set, Optional
 from podenv.context import ExecContext, Path, Capability
 
 
+def needUser(capability: str) -> None:
+    raise RuntimeError(
+        f"The `{capability}` requires an environment with a user attribute."
+        "Alternatively uses the `root` capability.")
+
+
 def rootCap(active: bool, ctx: ExecContext) -> None:
     "run as root"
     if active:
         ctx.home = Path("/root")
         ctx.xdgDir = Path("/run/user/0")
-        ctx.user = 0
-    else:
-        ctx.home = Path("/home/user")
-        ctx.xdgDir = Path("/run/user/1000")
-        ctx.user = 1000
+        ctx.username = "root"
+    elif ctx.user:
+        ctx.home = ctx.user.home
+        ctx.xdgDir = Path(f"/run/user/{ctx.user.uid}")
+        ctx.username = ctx.user.name
 
 
 def uidmapCap(active: bool, ctx: ExecContext) -> None:
@@ -90,7 +96,7 @@ def mountRunCap(active: bool, ctx: ExecContext) -> None:
     if active:
         if ctx.runDir is None:
             raise RuntimeError("runDir isn't set")
-        if not ctx.mounts.get(ctx.home) and not ctx.home:
+        if ctx.home and not ctx.mounts.get(ctx.home):
             ctx.mounts[ctx.home] = ctx.runDir / "home"
         if not ctx.mounts.get(Path("/tmp")):
             ctx.mounts[Path("/tmp")] = ctx.runDir / "tmp"
@@ -99,6 +105,8 @@ def mountRunCap(active: bool, ctx: ExecContext) -> None:
 def mountHomeCap(active: bool, ctx: ExecContext) -> None:
     "mount home to host home"
     if active:
+        if not ctx.home:
+            return needUser("mount-home")
         ctx.mounts[ctx.home] = Path("~/").expanduser()
 
 
@@ -129,6 +137,8 @@ def pulseaudioCap(active: bool, ctx: ExecContext) -> None:
 def gitCap(active: bool, ctx: ExecContext) -> None:
     "share .gitconfig and excludesfile"
     if active:
+        if not ctx.home:
+            return needUser("git")
         gitconfigDir = Path("~/.config/git").expanduser().resolve()
         gitconfigFile = Path("~/.gitconfig").expanduser().resolve()
         if gitconfigDir.is_dir():
@@ -162,6 +172,8 @@ def editorCap(active: bool, ctx: ExecContext) -> None:
 def sshCap(active: bool, ctx: ExecContext) -> None:
     "share ssh agent and keys"
     if active:
+        if not ctx.home:
+            return needUser("ssh")
         if os.environ.get("SSH_AUTH_SOCK"):
             ctx.environ["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
             sshSockPath = Path(os.environ["SSH_AUTH_SOCK"]).parent
@@ -182,6 +194,8 @@ def sshCap(active: bool, ctx: ExecContext) -> None:
 def gpgCap(active: bool, ctx: ExecContext) -> None:
     "share gpg agent"
     if active:
+        if not ctx.home:
+            return needUser("gpg")
         gpgSockDir = Path(os.environ["XDG_RUNTIME_DIR"]) / "gnupg"
         ctx.mounts[ctx.xdgDir / "gnupg"] = gpgSockDir
         ctx.mounts[ctx.home / ".gnupg"] = Path("~/.gnupg")

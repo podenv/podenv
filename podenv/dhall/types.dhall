@@ -4,4 +4,5 @@
 , Environ = ./types/Environ.dhall
 , Mount = ./types/Mount.dhall
 , Task = ./types/Task.dhall
+, User = ./types/User.dhall
 }

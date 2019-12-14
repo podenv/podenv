@@ -28,6 +28,7 @@ in  Podenv.Schemas.Env::{
         , mount-cwd = Some True
         , uidmap = Some True
         }
+    , user = Some { name = "user", uid = 1000, home = "/home/user" }
     , environ = Some (toMap { HOME = "/home/user" })
     , container-file =
         let concat = Hub.Prelude.Text.concatSep

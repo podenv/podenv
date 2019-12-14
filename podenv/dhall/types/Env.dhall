@@ -16,6 +16,7 @@ The main environment declaration.
 , mounts : Optional (List ./Mount.dhall)
 , packages : Optional (List Text)
 , command : Optional (List Text)
+, user : Optional ./User.dhall
 , environ : Optional ./Environ.dhall
 , network : Optional Text
 , ports : Optional (List Text)

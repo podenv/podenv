@@ -25,6 +25,14 @@ from typing import Callable, Dict, List, Optional, Union
 
 
 @dataclass
+class User:
+    """Container user information"""
+    name: str
+    home: Path
+    uid: int
+
+
+@dataclass
 class Volume:
     """A volume information"""
     name: str
@@ -99,7 +107,7 @@ class ExecContext:
     podmanArgs: List[str] = field(default_factory=list)
 
     # home and xdgDir are always set by the root cap function
-    home: Path = field(default_factory=Path)
+    home: Optional[Path] = None
     xdgDir: Path = field(default_factory=Path)
 
     cwd: Optional[Path] = None
@@ -112,10 +120,11 @@ class ExecContext:
     network: Optional[str] = None
 
     dns: Optional[str] = None
+    user: Optional[User] = None
 
     # Set by caps
     interactive: bool = False
-    user: int = 1000
+    username: Optional[str] = None
     privileged: bool = False
     uidmaps: bool = False
 
@@ -181,8 +190,8 @@ class ExecContext:
         for e, v in sorted(self.environ.items()):
             args.extend(["-e", "%s=%s" % (e, v)])
 
-        if self.user:
-            args.extend(["--user", "%d" % self.user])
+        if self.username:
+            args.extend(["--user", self.username])
 
         if self.uidmaps:
             args.extend(self.getUidMaps())

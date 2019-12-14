@@ -11,6 +11,7 @@
 , ports = None (List Text)
 , syscaps = None (List Text)
 , command = None (List Text)
+, user = None ../types/User.dhall
 , mounts = None (List ../types/Mount.dhall)
 , add-hosts = None (List { Name : Text, IP : Text })
 , pre-tasks = None (List ../types/Task.dhall)

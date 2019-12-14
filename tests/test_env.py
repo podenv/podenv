@@ -12,8 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from pathlib import Path
 from unittest import TestCase
 
+from podenv.context import User
 import podenv.env
 
 
@@ -28,6 +30,9 @@ class TestConfig(TestCase):
         env = fakeEnv("test-env",
                       dict(capabilities=dict(uidmap=True),
                            mounts={"~/git": None}))
+        with self.assertRaises(RuntimeError):
+            podenv.env.prepareEnv(env, [])
+        env.user = User("user", Path("/home/user"), 1000)
         ctx = podenv.env.prepareEnv(env, [])
         execCommand = " ".join(ctx.getArgs())
         self.assertIn("-v /home/user/git:/home/user/git", execCommand)
@@ -36,6 +41,9 @@ class TestConfig(TestCase):
         env = fakeEnv("gertty", dict(
             capabilities=dict(uidmap=True),
             volumes=[{"ContainerPath": "~/git", "name": "git"}]))
+        with self.assertRaises(RuntimeError):
+            podenv.env.prepareEnv(env, [])
+        env.user = User("user", Path("/home/user"), 1000)
         ctx = podenv.env.prepareEnv(env, [])
         execCommand = " ".join(ctx.getArgs())
         self.assertIn("-v git:/home/user/git", execCommand)

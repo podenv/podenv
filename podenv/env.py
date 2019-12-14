@@ -29,7 +29,7 @@ import podenv.capabilities as Cap
 import podenv.tasks
 from podenv.security import selinux, HAS_SELINUX
 from podenv.context import BuildContext, DesktopEntry, ExecArgs, ExecContext, \
-    ContainerPath, HostPath, Mounts, Task, Volume, Volumes
+    ContainerPath, HostPath, Mounts, Task, User, Volume, Volumes
 
 
 HostName = str
@@ -61,6 +61,8 @@ class Env:
     packages: Optional[List[str]] = field(default=None, metadata=dict(
         doc="List of required packages"))
 
+    user: Optional[User] = field(default=None, metadata=dict(
+        doc="Container user information"))
     command: Optional[ExecArgs] = field(default=None, metadata=dict(
         doc="Container starting command"))
     preTasks: Optional[List[Task]] = field(default=None, metadata=dict(
@@ -113,7 +115,7 @@ class Env:
         for f in fields(Env):
             if f.metadata \
                and not f.metadata.get('internal', False):
-                value = self.__dict__[f.name]
+                value = str(self.__dict__[f.name])
                 if value:
                     if '\n' in value:
                         value = f'"""{value}"""'
@@ -232,6 +234,9 @@ def loadEnv(schema: Any, debug: bool = False) -> Env:
             terminal=schema['capabilities'].get("terminal", False),
             **schema["desktop"])
 
+    if schema.get('user'):
+        user = schema.pop('user')
+        schema['user'] = User(user['name'], Path(user['home']), user['uid'])
     if schema.get("command"):
         schema['command'] = asList(schema["command"])
     if schema.get("packages"):
@@ -312,6 +317,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
         imageBuildCtx=env.buildCtx,
         network=env.network,
         dns=env.dns,
+        user=env.user,
         runDir=Path("/tmp/podenv") / env.name,
         commandArgs=env.command if env.command else [],
         containerFile=env.fileStr,
@@ -336,11 +342,16 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
 
     # Convert env relative path to absolute path
     if env.home:
+        if not ctx.home:
+            raise RuntimeError("home attribute needs a user defintion")
         ctx.mounts[ctx.home] = Path(env.home).expanduser().resolve()
     if env.mounts:
         for containerPath, hostPath in env.mounts.items():
             hostPath = hostPath.expanduser().resolve()
             if str(containerPath).startswith("~/"):
+                if not ctx.home:
+                    raise RuntimeError(
+                        "mounts with ~/ path need a user defintion")
                 ctx.mounts[
                     ctx.home / str(containerPath)[2:]] = hostPath
             else:
@@ -348,6 +359,9 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
     if env.volumes:
         for containerPath, volume in env.volumes.items():
             if str(containerPath).startswith("~/"):
+                if not ctx.home:
+                    raise RuntimeError(
+                        "volumes with ~/ path need a user defintion")
                 ctx.mounts[ctx.home / str(containerPath)[2:]] = volume
             else:
                 ctx.mounts[containerPath] = volume
