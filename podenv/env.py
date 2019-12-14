@@ -17,6 +17,7 @@ This module handles environment definitions.
 """
 
 from __future__ import annotations
+import copy
 import os
 import shlex
 from dataclasses import dataclass, field, fields
@@ -96,6 +97,7 @@ class Env:
         doc="A desktop launcher entry file definition"))
 
     # Internal attribute
+    original: Optional[Any] = field(default=None, metadata=dict(internal=True))
     envName: str = field(default="", metadata=dict(internal=True))
     buildCtx: BuildContext = field(default_factory=BuildContext, metadata=dict(
         internal=True))
@@ -121,8 +123,12 @@ class Env:
         return "Env(%s)" % ", ".join(activeFields)
 
 
-def loadEnv(schema: Any) -> Env:
+def loadEnv(schema: Any, debug: bool = False) -> Env:
     """Convert input config to python Env object"""
+
+    # Copy the original schema in debug mode
+    if debug:
+        schema['original'] = copy.deepcopy(schema)
 
     # Do early validation first
     if not schema.get('name'):

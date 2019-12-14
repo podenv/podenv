@@ -280,7 +280,7 @@ def setupImage(userNotif: UserNotif,
                ctx: ExecContext,
                rebuild: bool,
                cacheDir: Path) -> None:
-    if ctx.imageName.startswith("localhost/podenv/") and ctx.containerFile:
+    if ctx.imageName.startswith("localhost/") and ctx.containerFile:
         setupContainerFile(userNotif, ctx, rebuild, cacheDir)
     else:
         try:
@@ -289,7 +289,7 @@ def setupImage(userNotif: UserNotif,
             userNotif(f"{ctx.imageName} doesn't seem to exist. "
                       "if you provided a `container-file` with a custom "
                       "`image` name, make sure to prefix the name with "
-                      "'localhost/podenv/' to let podenv build it for you.")
+                      "'localhost/' to let podenv build it for you.")
             raise
 
 

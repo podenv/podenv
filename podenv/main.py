@@ -21,6 +21,7 @@ import logging
 import sys
 from os import environ
 from pathlib import Path
+from yaml import safe_dump
 from typing import Dict
 
 from podenv.capabilities import Capabilities
@@ -141,22 +142,23 @@ def listEnv(envs: Dict[str, Env]) -> None:
         print(lineFmt.format(env.envName, env.description))
 
 
-def showEnv(verbose: bool, env: Env, ctx: ExecContext) -> None:
+def showEnv(verbose: bool, debug: bool, env: Env, ctx: ExecContext) -> None:
     containerFile = ctx.containerFile
-    localImage = env.image.startswith('localhost/podenv/')
+    localImage = env.image.startswith('localhost/')
+    if debug:
+        log.debug("Schema:")
+        print(safe_dump(env.original))
+        env.original = None
     if verbose:
         log.debug("Environment:")
         env.containerFile = None
-        print(env)
+        print(f"{env.__repr__()}\n")
     if localImage and containerFile:
-        print()
         log.info("Containerfile:")
-        print(containerFile.strip())
+        print(f"{containerFile.strip()}\n")
     if verbose and localImage and ctx.containerUpdate:
-        print()
         log.info("Containerfile for update:")
-        print(ctx.containerUpdate.strip())
-    print()
+        print(f"{ctx.containerUpdate.strip()}\n")
     log.info("Command line:")
     print("podman run " + prettyCmd(
         ctx.getArgs() + [ctx.imageName] + ctx.commandArgs))
@@ -164,6 +166,8 @@ def showEnv(verbose: bool, env: Env, ctx: ExecContext) -> None:
 
 def run(argv: ExecArgs = sys.argv[1:]) -> None:
     args = usage(argv)
+    if args.debug:
+        args.verbose = True
     setupLogging(args.verbose)
     notifyUserProc = getUserNotificationProc(args.verbose)
     cacheDir = Path("~/.cache/podenv").expanduser()
@@ -173,7 +177,8 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         # Load config and prepare the environment, no IO are performed here
         conf = loadConfig(skipLocal=args.list or args.env,
                           configStr=args.expr,
-                          configFile=Path(args.config))
+                          configFile=Path(args.config),
+                          debug=args.debug)
         if args.list and not args.show:
             return listEnv(conf)
 
@@ -192,7 +197,7 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         fail(notifyUserProc, str(e))
 
     if args.show:
-        return showEnv(args.verbose, env, ctx)
+        return showEnv(args.verbose, args.debug, env, ctx)
 
     try:
         # Update the image

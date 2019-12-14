@@ -53,21 +53,22 @@ def loadDhallConfig(configFile: Union[str, Path]) -> Any:
     return dhall_load(configFile, dhallPackage)
 
 
-def transformSchema(schema: Any) -> Dict[str, Env]:
+def transformSchema(schema: Any, debug: bool = False) -> Dict[str, Env]:
     """Transform input schema"""
     # normalize env list to a map
     envs: Dict[str, Env] = {}
     if isinstance(schema, list):
         for env in schema:
-            envs[env['name']] = loadEnv(env)
+            envs[env['name']] = loadEnv(env, debug)
     else:
-        envs[schema['name']] = loadEnv(schema)
+        envs[schema['name']] = loadEnv(schema, debug)
     return envs
 
 
 def loadConfig(skipLocal: bool = False,
                configStr: str = "",
-               configFile: Path = defaultConfig) -> Dict[str, Env]:
+               configFile: Path = defaultConfig,
+               debug: bool = False) -> Dict[str, Env]:
     # Resolve config location
     config: Union[str, Path]
     if configStr:
@@ -92,7 +93,7 @@ def loadConfig(skipLocal: bool = False,
     else:
         schema = loadDhallConfig(config)
 
-    return transformSchema(schema)
+    return transformSchema(schema, debug)
 
 
 def getEnv(conf: Dict[str, Env], envName: str) -> Env:
