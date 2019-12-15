@@ -57,6 +57,8 @@ def usageParser() -> argparse.ArgumentParser:
                         help="Override the image name")
     parser.add_argument("--rebuild", default=False, action='store_true',
                         help="Rebuilt the image")
+    parser.add_argument("--in-place", default=False, action='store_true',
+                        help="Rebuilt the image in place")
     parser.add_argument("--update", default=False, action='store_true',
                         help="Update the image")
     for name, doc, _ in Capabilities:
@@ -213,7 +215,7 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         fail(notifyUserProc, str(e))
 
     try:
-        setupImage(notifyUserProc, ctx, args.rebuild, cacheDir)
+        setupImage(notifyUserProc, ctx, args.rebuild, args.in_place, cacheDir)
         if args.dry:
             log.info("Done.")
             exit(0)

@@ -205,12 +205,15 @@ def getLocalName(cache: Path, image: str, update: bool) -> Tuple[str, Path]:
 def setupContainerFile(
         userNotif: UserNotif,
         ctx: ExecContext,
-        rebuild: bool, cacheDir: Path) -> None:
+        rebuild: bool,
+        inPlace: bool,
+        cacheDir: Path) -> None:
     """Ensure the container image is consistent with the containerfile"""
     if not ctx.containerFile:
         raise RuntimeError(f"{ctx.name}: container-file required")
 
     localName, localFile = getLocalName(cacheDir, ctx.imageName, update=False)
+    containerFileCopy: Optional[str] = None
 
     buildReasons: List[str] = []
     if rebuild:
@@ -218,7 +221,16 @@ def setupContainerFile(
     if not localFile.exists():
         buildReasons.append(f"{localFile} doesn't exists")
     elif localFile.read_text() != ctx.containerFile:
-        # TODO: show diff?
+        if inPlace:
+            # TODO: generalize this
+            containerFileCopy = ctx.containerFile
+            ctx.containerFile = "\n".join([
+                f"FROM {localName}",
+                ctx.containerFile.split("\n")[-1]
+            ])
+        else:
+            # TODO: show diff?
+            ...
         buildReasons.append(f"{localFile} content differ")
     if not buildReasons and not podmanExists("image", ctx.imageName):
         buildReasons.append(f"{ctx.imageName} doesn't exist in the store")
@@ -233,7 +245,10 @@ def setupContainerFile(
             build(tmpFile, localName, ctx.imageBuildCtx)
         except RuntimeError as e:
             raise RuntimeError(f"Build of {tmpFile} failed: " + str(e))
-        tmpFile.rename(localFile)
+        if containerFileCopy:
+            localFile.write_text(containerFileCopy)
+        else:
+            tmpFile.rename(localFile)
 
 
 def updateContainerFile(
@@ -279,9 +294,10 @@ def updateImage(userNotif: UserNotif,
 def setupImage(userNotif: UserNotif,
                ctx: ExecContext,
                rebuild: bool,
+               inPlace: bool,
                cacheDir: Path) -> None:
     if ctx.imageName.startswith("localhost/") and ctx.containerFile:
-        setupContainerFile(userNotif, ctx, rebuild, cacheDir)
+        setupContainerFile(userNotif, ctx, rebuild, inPlace, cacheDir)
     else:
         try:
             pullImage(userNotif, ctx.imageName, rebuild)
