@@ -47,6 +47,8 @@ def usageParser() -> argparse.ArgumentParser:
                         help="List available environments")
     parser.add_argument("--shell", action='store_true',
                         help="Run bash instead of the profile command")
+    parser.add_argument("--dry", action='store_true',
+                        help="Do not execute the environment")
     parser.add_argument("--net", help="Set the network (host or env name)")
     parser.add_argument("--home", help="Set the home directory path")
     parser.add_argument("-e", "--environ", action='append',
@@ -212,6 +214,9 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         setupImage(notifyUserProc, ctx, args.rebuild, cacheDir)
+        if args.dry:
+            log.info("Done.")
+            exit(0)
         # Prepare the image and create required host directories
         setupPod(notifyUserProc, ctx, args.rebuild)
     except RuntimeError as e:
