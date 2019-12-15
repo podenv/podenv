@@ -22,7 +22,8 @@ import sys
 from os import environ
 from pathlib import Path
 from yaml import safe_dump
-from typing import Dict
+from typing import Dict, List
+from textwrap import wrap
 
 from podenv.capabilities import Capabilities
 from podenv.config import loadConfig, getEnv
@@ -34,33 +35,93 @@ from podenv.env import Env, prepareEnv
 log = logging.getLogger("podenv")
 
 
+def formatUsage() -> str:
+    stableModifiers = ["--verbose", "--debug", "--config FILE", "--expr EXPR"]
+    stableCommand = ["--show", "--list", "--list-caps",
+                     "--rebuild ENV", "--update ENV"]
+    stableOptions = [
+        "--shell", "--net NAME", "--home PATH", "--image IMAGE",
+        "--environ KEY=VALUE"
+    ]
+
+    def opt(l: List[str]) -> List[str]:
+        return list(map(lambda x: f"[{x}]", l))
+
+    prefix = len("usage: podenv ")
+    return ("\n" + " " * prefix).join(
+        ["podenv " + " ".join(opt(stableModifiers))] +
+        [" ".join(opt(stableCommand))] +
+        wrap(" ".join(opt(stableOptions)), width=120 - prefix))
+
+
+def formatHelp() -> str:
+    return "\n".join([
+        "usage: " + formatUsage(),
+        "",
+        "podenv - a podman wrapper",
+        "",
+        "commands:",
+        "  --list          List the environments",
+        "  --list-caps     List available capabilities",
+        "  --show          Print the environments",
+        "  --update ENV    Update environment image",
+        "  --rebuild ENV   Rebuild environment image",
+        "  ENV [ARGS]      Execute an environment",
+        "",
+        "environment execution arguments:",
+        "  --home PATH     Set environment home directory",
+        "  --net  NAME     Set environment network",
+        "  --image IMAGE   Set environment image",
+        "  --shell         Run a shell instead of the default command",
+        "  --environ K=V   Add an environ(5) variable",
+        "  --CAP           Activate a capability",
+        "  --no-CAP        Disable a capability",
+        "",
+        "flags:",
+        "  --verbose       Prints logs such as exec argv",
+        "  --debug         Prints even more log",
+        "  --config PATH   Set the config file path,",
+        "                  (defaults to PODENV_CONFIG or "
+        "~/.config/podenv/config.dhall)",
+        "  --expr EXPR     Evaluate a config expression "
+        "from the command line",
+        "",
+    ])
+
+
+def formatCaps() -> str:
+    return "\n".join([
+        "capabilities:",
+    ] + [f"  {name:15s} {doc.capitalize()}"
+         for name, doc, _ in Capabilities if doc])
+
+
 def usageParser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="podenv - a podman wrapper")
+    parser = argparse.ArgumentParser(
+        prog="podenv",
+        description="podenv - a podman wrapper",
+        usage=formatUsage(),
+        add_help=False,
+    )
+    parser.add_argument("--help", action='store_true')
+    parser.add_argument("--list-caps", action='store_true')
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--debug", action='store_true')
-    parser.add_argument("-c", "--config", help="The config path",
+    parser.add_argument("-c", "--config",
                         default="~/.config/podenv/config.dhall")
-    parser.add_argument("-E", "--expr", help="A dhall config expression")
-    parser.add_argument("--show", action='store_true',
-                        help="Print the environment info and exit")
-    parser.add_argument("--list", action='store_true',
-                        help="List available environments")
-    parser.add_argument("--shell", action='store_true',
-                        help="Run bash instead of the profile command")
+    parser.add_argument("-E", "--expr")
+    parser.add_argument("--show", action='store_true')
+    parser.add_argument("--list", action='store_true')
+    parser.add_argument("--shell", action='store_true')
     parser.add_argument("--dry", action='store_true',
                         help="Do not execute the environment")
-    parser.add_argument("--net", help="Set the network (host or env name)")
-    parser.add_argument("--home", help="Set the home directory path")
-    parser.add_argument("-e", "--environ", action='append',
-                        help="Set an environ variable")
-    parser.add_argument("-i", "--image",
-                        help="Override the image name")
-    parser.add_argument("--rebuild", default=False, action='store_true',
-                        help="Rebuilt the image")
-    parser.add_argument("--in-place", default=False, action='store_true',
-                        help="Rebuilt the image in place")
-    parser.add_argument("--update", default=False, action='store_true',
-                        help="Update the image")
+    parser.add_argument("--net")
+    parser.add_argument("--home")
+    parser.add_argument("-e", "--environ", action='append')
+    parser.add_argument("-i", "--image")
+    parser.add_argument("--rebuild", default=False, action='store_true')
+    parser.add_argument("--in-place", default=False, action='store_true')
+    parser.add_argument("--update", default=False, action='store_true')
     for name, doc, _ in Capabilities:
         parser.add_argument(f"--{name}", action='store_true',
                             help=f"Enable capability: {doc}")
@@ -170,6 +231,10 @@ def showEnv(verbose: bool, debug: bool, env: Env, ctx: ExecContext) -> None:
 
 def run(argv: ExecArgs = sys.argv[1:]) -> None:
     args = usage(argv)
+    if args.help:
+        return print(formatHelp())
+    if args.list_caps:
+        return print(formatCaps())
     if args.debug:
         args.verbose = True
     setupLogging(args.verbose)
@@ -208,7 +273,7 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         if args.update:
             if args.rebuild:
                 raise RuntimeError("Invalid action --update --rebuild")
-            updateImage(notifyUserProc, ctx, cacheDir)
+            return updateImage(notifyUserProc, ctx, cacheDir)
     except RuntimeError as e:
         if args.debug:
             raise
@@ -216,9 +281,8 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
 
     try:
         setupImage(notifyUserProc, ctx, args.rebuild, args.in_place, cacheDir)
-        if args.dry:
-            log.info("Done.")
-            exit(0)
+        if args.dry or args.rebuild:
+            return log.info("Done.")
         # Prepare the image and create required host directories
         setupPod(notifyUserProc, ctx, args.rebuild)
     except RuntimeError as e:

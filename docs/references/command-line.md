@@ -15,99 +15,33 @@ to enable or disable network access use `--network` or `--no-network`.
 Here is the output of the `--help`:
 
 ```bash
-usage: podenv [-h] [--verbose] [--debug] [-c CONFIG] [-E EXPR] [--show]
-              [--list] [--shell] [--net NET] [--home HOME] [-e ENVIRON]
-              [-i IMAGE] [--rebuild] [--update] [--root] [--no-root]
-              [--privileged] [--no-privileged] [--terminal] [--no-terminal]
-              [--hostfiles] [--no-hostfiles] [--large-shm] [--no-large-shm]
-              [--ipc] [--no-ipc] [--x11] [--no-x11] [--pulseaudio]
-              [--no-pulseaudio] [--git] [--no-git] [--editor] [--no-editor]
-              [--ssh] [--no-ssh] [--gpg] [--no-gpg] [--webcam] [--no-webcam]
-              [--alsa] [--no-alsa] [--dri] [--no-dri] [--kvm] [--no-kvm]
-              [--tun] [--no-tun] [--seccomp] [--no-seccomp] [--selinux]
-              [--no-selinux] [--setuid] [--no-setuid] [--ptrace] [--no-ptrace]
-              [--network] [--no-network] [--foreground] [--no-foreground]
-              [--mount-cwd] [--no-mount-cwd] [--mount-home] [--no-mount-home]
-              [--mount-run] [--no-mount-run] [--uidmap] [--no-uidmap]
-              [env] [args [args ...]]
+usage: podenv [--verbose] [--debug] [--config FILE] [--expr EXPR]
+              [--show] [--list] [--list-caps] [--rebuild ENV] [--update ENV]
+              [--shell] [--net NAME] [--home PATH] [--image IMAGE] [--environ KEY=VALUE]
 
 podenv - a podman wrapper
 
-positional arguments:
-  env
-  args
+commands:
+  --list          List the environments
+  --list-caps     List available capabilities
+  --show          Print the environments
+  --update ENV    Update environment image
+  --rebuild ENV   Rebuild environment image
+  ENV [ARGS]      Execute an environment
 
-optional arguments:
-  -h, --help            show this help message and exit
-  --verbose
-  --debug
-  -c CONFIG, --config CONFIG
-                        The config path
-  -E EXPR, --expr EXPR  A dhall config expression
-  --show                Print the environment info and exit
-  --list                List available environments
-  --shell               Run bash instead of the profile command
-  --net NET             Set the network (host or env name)
-  --home HOME           Set the home directory path
-  -e ENVIRON, --environ ENVIRON
-                        Set an environ variable
-  -i IMAGE, --image IMAGE
-                        Override the image name
-  --rebuild             Rebuilt the image
-  --update              Update the image
-  --root                Enable capability: run as root
-  --no-root             Disable root capibility
-  --privileged          Enable capability: run as privileged container
-  --no-privileged       Disable privileged capibility
-  --terminal            Enable capability: interactive mode
-  --no-terminal         Disable terminal capibility
-  --hostfiles           Enable capability: enable host files access
-  --no-hostfiles        Disable hostfiles capibility
-  --large-shm           Enable capability: mount a 4gb shm
-  --no-large-shm        Disable large-shm capibility
-  --ipc                 Enable capability: share host ipc
-  --no-ipc              Disable ipc capibility
-  --x11                 Enable capability: share x11 socket
-  --no-x11              Disable x11 capibility
-  --pulseaudio          Enable capability: share pulseaudio socket
-  --no-pulseaudio       Disable pulseaudio capibility
-  --git                 Enable capability: share .gitconfig and excludesfile
-  --no-git              Disable git capibility
-  --editor              Enable capability: setup editor env
-  --no-editor           Disable editor capibility
-  --ssh                 Enable capability: share ssh agent and keys
-  --no-ssh              Disable ssh capibility
-  --gpg                 Enable capability: share gpg agent
-  --no-gpg              Disable gpg capibility
-  --webcam              Enable capability: share webcam device
-  --no-webcam           Disable webcam capibility
-  --alsa                Enable capability: share alsa device
-  --no-alsa             Disable alsa capibility
-  --dri                 Enable capability: share graphic device
-  --no-dri              Disable dri capibility
-  --kvm                 Enable capability: share kvm device
-  --no-kvm              Disable kvm capibility
-  --tun                 Enable capability: share tun device
-  --no-tun              Disable tun capibility
-  --seccomp             Enable capability: enable seccomp
-  --no-seccomp          Disable seccomp capibility
-  --selinux             Enable capability: enable SELinux
-  --no-selinux          Disable selinux capibility
-  --setuid              Enable capability: enable setuid
-  --no-setuid           Disable setuid capibility
-  --ptrace              Enable capability: enable ptrace
-  --no-ptrace           Disable ptrace capibility
-  --network             Enable capability: enable network
-  --no-network          Disable network capibility
-  --foreground          Enable capability: work around application that goes
-                        into background
-  --no-foreground       Disable foreground capibility
-  --mount-cwd           Enable capability: mount cwd to /data
-  --no-mount-cwd        Disable mount-cwd capibility
-  --mount-home          Enable capability: mount home to host home
-  --no-mount-home       Disable mount-home capibility
-  --mount-run           Enable capability: mount home and tmp to host tmpfs
-  --no-mount-run        Disable mount-run capibility
-  --uidmap              Enable capability: map host uid
-  --no-uidmap           Disable uidmap capibility
+environment execution arguments:
+  --home PATH     Set environment home directory
+  --net  NAME     Set environment network
+  --image IMAGE   Set environment image
+  --shell         Run a shell instead of the default command
+  --environ K=V   Add an environ(5) variable
+  --CAP           Activate a capability
+  --no-CAP        Disable a capability
+
+flags:
+  --verbose       Prints logs such as exec argv
+  --debug         Prints even more log
+  --config PATH   Set the config file path,
+                  (defaults to PODENV_CONFIG or ~/.config/podenv/config.dhall)
+  --expr EXPR     Evaluate a config expression from the command line
 ```

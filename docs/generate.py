@@ -21,7 +21,7 @@ from dataclasses import fields
 from pathlib import Path
 from podenv.env import Env
 from podenv.capabilities import Capabilities
-from podenv.main import usageParser
+from podenv.main import formatHelp
 
 dirty = False
 
@@ -77,13 +77,10 @@ def writeReferences() -> None:
 
 
 def writeCommandLine() -> None:
-    import sys
-    sys.argv = ['podenv']
     path = Path("docs/references/command-line.md")
     doc = path.read_text().split('\n')
     clistart = doc.index('```bash')
-    newdoc = doc[:clistart + 1] + (
-        usageParser().format_help().split('\n')[:-1]) + ["```"]
+    newdoc = doc[:clistart + 1] + (formatHelp().split('\n')[:-1]) + ["```"]
     update(path, "\n".join(newdoc))
 
 
