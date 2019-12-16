@@ -111,6 +111,7 @@ def usageParser() -> argparse.ArgumentParser:
                         default="~/.config/podenv/config.dhall")
     parser.add_argument("-E", "--expr")
     parser.add_argument("--show", action='store_true')
+    parser.add_argument("--show-containerfile", action='store_true')
     parser.add_argument("--list", action='store_true')
     parser.add_argument("--shell", action='store_true')
     parser.add_argument("--dry", action='store_true',
@@ -264,6 +265,9 @@ def run(argv: ExecArgs = sys.argv[1:]) -> None:
         if args.debug:
             raise
         fail(notifyUserProc, str(e))
+
+    if args.show_containerfile:
+        return print(ctx.containerFile)
 
     if args.show:
         return showEnv(args.verbose, args.debug, env, ctx)

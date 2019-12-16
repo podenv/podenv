@@ -20,6 +20,7 @@ from __future__ import annotations
 import copy
 import os
 import shlex
+from sys import stderr
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -250,7 +251,7 @@ def loadEnv(schema: Any, debug: bool = False) -> Env:
 def validateEnv(env: Env, ctx: ExecContext) -> None:
     """Sanity check and warn user about missing setting"""
     def warn(msg: str) -> None:
-        print(f"\033[93m{msg}\033[m")
+        print(f"\033[93m{msg}\033[m", file=stderr)
 
     # Check if SELinux will block socket access
     if env.capabilities.get("selinux"):
