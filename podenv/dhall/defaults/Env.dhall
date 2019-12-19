@@ -14,6 +14,7 @@
 , command = None (List Text)
 , user = None ../types/User.dhall
 , mounts = None (List ../types/Mount.dhall)
+, volumes = None (List ../types/Volume.dhall)
 , add-hosts = None (List { Name : Text, IP : Text })
 , pre-tasks = None (List ../types/Task.dhall)
 }

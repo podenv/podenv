@@ -33,10 +33,18 @@ class User:
 
 
 @dataclass
+class File:
+    """A volume file"""
+    name: str
+    content: str
+
+
+@dataclass
 class Volume:
     """A volume information"""
     name: str
     readOnly: bool = False
+    files: Optional[List[File]] = None
 
 
 @dataclass

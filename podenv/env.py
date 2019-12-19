@@ -30,7 +30,7 @@ import podenv.capabilities as Cap
 import podenv.tasks
 from podenv.security import selinux, HAS_SELINUX
 from podenv.context import BuildContext, DesktopEntry, ExecArgs, ExecContext, \
-    ContainerPath, HostPath, Mounts, Task, User, Volume, Volumes
+    File, ContainerPath, HostPath, Mounts, Task, User, Volume, Volumes
 
 
 HostName = str
@@ -197,9 +197,24 @@ def loadEnv(schema: Any, debug: bool = False) -> Env:
             return (Path(item[0]), Path(item[1] if item[1] else item[0]))
         return dict(map(convert, mounts.items()))
 
-    def volumesToMap(volumes: List[Dict[str, str]]) -> Volumes:
-        def convert(d: Dict[str, str]) -> Tuple[ContainerPath, Volume]:
-            return (Path(d["ContainerPath"]), Volume(d["name"]))
+    FileSchema = Dict[str, str]
+    VolumeSchema = Dict[str, Union[str, List[FileSchema]]]
+
+    def volumesToMap(volumes: List[VolumeSchema]) -> Volumes:
+        def convertFiles(d: FileSchema) -> File:
+            return File(d['name'], d['content'])
+
+        def convert(d: VolumeSchema) -> Tuple[ContainerPath, Volume]:
+            if not isinstance(d['name'], str):
+                raise RuntimeError("Invalid volume name")
+            if not isinstance(d['container-path'], str):
+                raise RuntimeError("Invalid volume path")
+            d.setdefault('files', [])
+            return (Path(d["container-path"]), Volume(
+                d['name'],
+                bool(d.get('read-only', False)),
+                list(map(convertFiles, d['files']))
+                if isinstance(d['files'], list) else []))
         return dict(map(convert, volumes))
 
     def strMapToVolumesMap(volumes: Dict[str, str]) -> Volumes:

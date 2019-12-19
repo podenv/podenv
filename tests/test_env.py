@@ -40,7 +40,7 @@ class TestConfig(TestCase):
     def test_volumes(self):
         env = fakeEnv("gertty", dict(
             capabilities=dict(uidmap=True),
-            volumes=[{"ContainerPath": "~/git", "name": "git"}]))
+            volumes=[{"container-path": "~/git", "name": "git"}]))
         with self.assertRaises(RuntimeError):
             podenv.env.prepareEnv(env, [])
         env.user = User("user", Path("/home/user"), 1000)

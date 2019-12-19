@@ -162,15 +162,23 @@ def setupRunDir(ctx: ExecContext) -> None:
 
 def setupVolumes(volumes: Volumes) -> None:
     """Create volume first to ensure proper owner"""
-    volumes = readProcessJson(["podman", "volume", "ls", "--format", "json"])
+    volumesList = readProcessJson(
+        ["podman", "volume", "ls", "--format", "json"])
     existingVolumes: Set[str] = set()
-    if volumes:
-        for volume in volumes.values():
-            existingVolumes.add(volume.name)
+    if volumesList:
+        for volume in volumesList:
+            existingVolumes.add(volume['name'])
     for volume in volumes.values():
         if volume.name not in existingVolumes:
             log.info(f"Creating volume {volume.name}")
             execute(["podman", "volume", "create", volume.name])
+        if volume.files:
+            for file in volume.files:
+                path = Path("~/.local/share/containers/storage/volumes/"
+                            f"{volume.name}/_data/{file.name}").expanduser()
+                if not path.exists():
+                    log.info(f"Writting {path}")
+                    path.write_text(file.content)
 
 
 def build(filePath: Path, localName: str, ctx: Optional[BuildContext]) -> None:
