@@ -225,6 +225,9 @@ def showEnv(verbose: bool, debug: bool, env: Env, ctx: ExecContext) -> None:
     if verbose and localImage and ctx.containerUpdate:
         log.info("Containerfile for update:")
         print(f"{ctx.containerUpdate.strip()}\n")
+    log.info("Capabilities:")
+    print("%s\n" % " ".join(sorted(list(map(lambda x: x[0], filter(
+        lambda x: x[1], env.capabilities.items()))))))
     log.info("Command line:")
     print("podman run " + prettyCmd(
         ctx.getArgs() + [ctx.imageName] + ctx.commandArgs))
