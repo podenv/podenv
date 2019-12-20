@@ -169,7 +169,7 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
     if args.net:
         env.network = args.net
     if args.home:
-        env.home = str(Path(args.home).expanduser().resolve(strict=True))
+        env.home = str(Path(args.home).expanduser().resolve())
 
 
 def setupLogging(debug: bool) -> None:
