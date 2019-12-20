@@ -17,6 +17,7 @@ The main environment declaration.
 , volumes : Optional (List ./Volume.dhall)
 , packages : Optional (List Text)
 , hostname : Optional Text
+, work-dir : Optional Text
 , command : Optional (List Text)
 , user : Optional ./User.dhall
 , environ : Optional ./Environ.dhall

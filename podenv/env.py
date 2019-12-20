@@ -174,7 +174,7 @@ def loadEnv(schema: Any, debug: bool = False) -> Env:
             'updateFileStr']
 
     # Convert to camelCase
-    for key in ("pre-tasks", "post-tasks",
+    for key in ("pre-tasks", "post-tasks", "work-dir",
                 "container-file", "container-update"):
         if schema.get(key):
             x, xs = key.split('-', 1)
@@ -336,6 +336,7 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
         network=env.network,
         dns=env.dns,
         hostname=env.hostname,
+        cwd=env.workDir,
         user=env.user,
         runDir=Path("/tmp/podenv") / env.name,
         commandArgs=env.command if env.command else [],
