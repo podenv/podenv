@@ -33,6 +33,7 @@ These guides help you get your hands dirty with working examples:
 * [Install and use podenv](./docs/tutorials/install.md)
 * [Create an environment](./docs/tutorials/create.md)
 * [Use an environment](./docs/tutorials/use.md)
+* [Edit the configuration](./docs/tutorials/edit.md)
 
 ## Howtos
 
