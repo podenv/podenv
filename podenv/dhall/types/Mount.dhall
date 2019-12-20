@@ -1,1 +1,1 @@
-{ HostPath : Text, ContainerPath : Text }
+{ host-path : Text, container-path : Text }

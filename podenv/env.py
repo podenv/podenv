@@ -189,7 +189,7 @@ def loadEnv(schema: Any, debug: bool = False) -> Env:
 
     def mountsToMap(mounts: List[Dict[str, str]]) -> Mounts:
         def convert(d: Dict[str, str]) -> Tuple[ContainerPath, HostPath]:
-            return (Path(d["ContainerPath"]), Path(d["HostPath"]))
+            return (Path(d["container-path"]), Path(d["host-path"]))
         return dict(map(convert, mounts))
 
     def strMapToPathsMap(mounts: Dict[str, str]) -> Mounts:

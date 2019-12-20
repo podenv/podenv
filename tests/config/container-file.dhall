@@ -8,7 +8,7 @@ let mkBuildEnv =
 let mkMount =
           \(container : Text)
       ->  \(host : Text)
-      ->  { HostPath = host, ContainerPath = container }
+      ->  { host-path = host, container-path = container }
 
 let fedoraImage =
           \(packages : List Text)
