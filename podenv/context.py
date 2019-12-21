@@ -116,7 +116,7 @@ class ExecContext:
 
     # home and xdgDir are always set by the root cap function
     home: Optional[Path] = None
-    xdgDir: Path = field(default_factory=Path)
+    xdgDir: Optional[Path] = None
 
     cwd: Optional[Path] = None
     runDir: Optional[Path] = None
@@ -196,6 +196,9 @@ class ExecContext:
 
         for ctl in set(self.sysctls):
             args.extend(["--sysctl", ctl])
+
+        if self.xdgDir:
+            args.extend(["-e", f"XDG_RUNTIME_DIR={self.xdgDir}"])
 
         for e, v in sorted(self.environ.items()):
             args.extend(["-e", "%s=%s" % (e, v)])

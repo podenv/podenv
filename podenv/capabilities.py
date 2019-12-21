@@ -126,6 +126,8 @@ def x11Cap(active: bool, ctx: ExecContext) -> None:
 def pulseaudioCap(active: bool, ctx: ExecContext) -> None:
     "share pulseaudio socket"
     if active:
+        if not ctx.xdgDir:
+            return needUser("pulseaudio")
         ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
         ctx.mounts[ctx.xdgDir / "pulse"] = \
             Path(os.environ["XDG_RUNTIME_DIR"]) / "pulse"
@@ -194,7 +196,7 @@ def sshCap(active: bool, ctx: ExecContext) -> None:
 def gpgCap(active: bool, ctx: ExecContext) -> None:
     "share gpg agent"
     if active:
-        if not ctx.home:
+        if not ctx.home or not ctx.xdgDir:
             return needUser("gpg")
         gpgSockDir = Path(os.environ["XDG_RUNTIME_DIR"]) / "gnupg"
         ctx.mounts[ctx.xdgDir / "gnupg"] = gpgSockDir
