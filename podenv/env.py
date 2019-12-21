@@ -328,7 +328,7 @@ def validateEnv(env: Env, ctx: ExecContext) -> None:
 def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
     """Generate podman exec args based on capabilities"""
     ctx = ExecContext(
-        name=env.envName,
+        name=env.name,
         imageName=env.image,
         volumes=env.volumes,
         desktop=env.desktop,
