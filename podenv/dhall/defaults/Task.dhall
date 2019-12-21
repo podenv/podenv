@@ -4,4 +4,5 @@
 , command = None Text
 , when = None Text
 , unless = None Text
+, delegate_to = None Text
 }

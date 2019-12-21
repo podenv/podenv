@@ -5,4 +5,5 @@
 , command : Optional Text
 , when : Optional Text
 , unless : Optional Text
+, delegate_to : Optional Text
 }
