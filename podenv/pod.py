@@ -228,7 +228,7 @@ def setupContainerFile(
         buildReasons.append("--rebuild set")
     if not localFile.exists():
         buildReasons.append(f"{localFile} doesn't exists")
-    elif localFile.read_text() != ctx.containerFile:
+    elif localFile.read_text().strip() != ctx.containerFile.strip():
         if inPlace:
             # TODO: generalize this
             containerFileCopy = ctx.containerFile
