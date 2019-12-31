@@ -19,6 +19,7 @@
 , selinux = Some True
 , setuid = None Bool
 , ptrace = None Bool
+, local-network = None Bool
 , network = None Bool
 , foreground = None Bool
 , mount-cwd = None Bool

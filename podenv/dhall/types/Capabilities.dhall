@@ -19,6 +19,7 @@
 , selinux : Optional Bool
 , setuid : Optional Bool
 , ptrace : Optional Bool
+, local-network : Optional Bool
 , network : Optional Bool
 , foreground : Optional Bool
 , mount-cwd : Optional Bool

@@ -68,6 +68,14 @@ def largeShmCap(active: bool, ctx: ExecContext) -> None:
     ctx.shmsize = "4g" if active else None
 
 
+def localNetworkCap(active: bool, ctx: ExecContext) -> None:
+    "setup localhost network"
+    # A workaround podman not configuring loopback
+    if active:
+        ctx.network = None
+        ctx.syscaps.append("NET_ADMIN")
+
+
 def networkCap(active: bool, ctx: ExecContext) -> None:
     "enable network"
     nsName = ""
@@ -302,6 +310,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         selinuxCap,
         setuidCap,
         ptraceCap,
+        localNetworkCap,
         networkCap,
         foregroundCap,
         mountCwdCap,

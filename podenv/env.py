@@ -404,6 +404,15 @@ def prepareEnv(env: Env, cliArgs: List[str]) -> ExecContext:
             newArgs.append(arg)
         cliArgs = newArgs
 
+    # Workaround unconfigured loopback
+    if env.capabilities.get('local-network'):
+        task: Task = dict(
+            command="ip a a 127.0.0.1/32 dev lo; ip link set lo up")
+        if not env.preTasks:
+            env.preTasks = [task]
+        else:
+            env.preTasks = [task] + env.preTasks
+
     # Only use cli args when env isn't a shell
     if not ctx.commandArgs or ctx.commandArgs[-1] != "/bin/bash":
         for arg in cliArgs:

@@ -62,6 +62,7 @@ seccomp              | enable seccomp                                           
 selinux              | enable SELinux                                               |
 setuid               | enable setuid                                                |
 ptrace               | enable ptrace                                                |
+local-network        | setup localhost network                                      |
 network              | enable network                                               |
 foreground           | work around application that goes into background            |
 mount-cwd            | mount cwd to /data                                           |
