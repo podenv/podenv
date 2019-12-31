@@ -322,7 +322,8 @@ def setupPod(
         ctx: ExecContext,
         rebuild: bool) -> None:
 
-    if ctx.network:
+    if ctx.network and ctx.network != "host" and \
+       not ctx.network.startswith("container:"):
         setupInfraNetwork(ctx.network, ctx.imageName, ctx)
 
     if ctx.volumes:

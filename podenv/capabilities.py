@@ -74,6 +74,8 @@ def networkCap(active: bool, ctx: ExecContext) -> None:
     if ctx.network:
         if ctx.network == "host":
             nsName = "host"
+        elif ctx.network.startswith("container:"):
+            nsName = ctx.network
         else:
             nsName = f"container:net-{ctx.network}"
 
