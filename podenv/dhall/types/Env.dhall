@@ -22,6 +22,7 @@ The main environment declaration.
 , command : Optional (List Text)
 , user : Optional ./User.dhall
 , environ : Optional ./Environ.dhall
+, dns : Optional Text
 , network : Optional Text
 , ports : Optional (List Text)
 , syscaps : Optional (List Text)

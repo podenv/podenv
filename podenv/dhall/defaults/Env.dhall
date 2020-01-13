@@ -7,6 +7,7 @@
 , build-env = None ../types/BuildEnv.dhall
 , environ = None ../types/Environ.dhall
 , packages = None (List Text)
+, dns = None Text
 , network = None Text
 , ports = None (List Text)
 , syscaps = None (List Text)
