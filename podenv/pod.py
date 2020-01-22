@@ -182,7 +182,6 @@ def setupVolumes(volumes: Volumes) -> None:
 
 
 def build(filePath: Path, localName: str, ctx: Optional[BuildContext]) -> None:
-    # TODO: add image build mount cache
     buildCommand = ["buildah", "bud"]
     if ctx and ctx.mounts:
         for containerPath, hostPath in ctx.mounts.items():
@@ -194,7 +193,7 @@ def build(filePath: Path, localName: str, ctx: Optional[BuildContext]) -> None:
                         str(hostPath), "system_u:object_r:container_file_t:s0")
             if str(containerPath).startswith("~/"):
                 containerPath = Path("/root") / str(containerPath)[2:]
-            buildCommand.append(f"--volume={hostPath}:{containerPath}")
+            buildCommand.append(f"--volume={hostPath}:{containerPath}:Z")
     with lock(filePath):
         execute(buildCommand +
                 ["-f", filePath.name, "-t", localName, str(filePath.parent)])
