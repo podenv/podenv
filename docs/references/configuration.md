@@ -51,6 +51,7 @@ x11                  | share x11 socket                                         
 pulseaudio           | share pulseaudio socket                                      |
 git                  | share .gitconfig and excludesfile                            |
 editor               | setup editor env                                             |
+netrc                | share ~/.netrc file                                          |
 ssh                  | share ssh agent and keys                                     |
 gpg                  | share gpg agent                                              |
 webcam               | share webcam device                                          |

@@ -181,6 +181,12 @@ def editorCap(active: bool, ctx: ExecContext) -> None:
         ctx.environ["EDITOR"] = os.environ.get("EDITOR", "vi")
 
 
+def netrcCap(active: bool, ctx: ExecContext) -> None:
+    "share ~/.netrc file"
+    if active:
+        ctx.mounts[ctx.home / ".netrc"] = Path("~/.netrc")
+
+
 def sshCap(active: bool, ctx: ExecContext) -> None:
     "share ssh agent and keys"
     if active:
@@ -299,6 +305,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         pulseaudioCap,
         gitCap,
         editorCap,
+        netrcCap,
         sshCap,
         gpgCap,
         webcamCap,

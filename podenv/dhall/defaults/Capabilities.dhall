@@ -8,6 +8,7 @@
 , pulseaudio = None Bool
 , git = None Bool
 , editor = None Bool
+, netrc = None Bool
 , ssh = None Bool
 , gpg = None Bool
 , webcam = None Bool

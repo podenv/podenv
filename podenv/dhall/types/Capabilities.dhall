@@ -8,6 +8,7 @@
 , pulseaudio : Optional Bool
 , git : Optional Bool
 , editor : Optional Bool
+, netrc : Optional Bool
 , ssh : Optional Bool
 , gpg : Optional Bool
 , webcam : Optional Bool
