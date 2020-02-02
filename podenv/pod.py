@@ -182,7 +182,7 @@ def setupVolumes(volumes: Volumes) -> None:
 
 
 def build(filePath: Path, localName: str, ctx: Optional[BuildContext]) -> None:
-    buildCommand = ["buildah", "bud"]
+    buildCommand = ["buildah", "bud", "--layers"]
     if ctx and ctx.mounts:
         for containerPath, hostPath in ctx.mounts.items():
             hostPath = hostPath.expanduser()
