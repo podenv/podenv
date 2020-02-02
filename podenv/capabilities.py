@@ -184,6 +184,8 @@ def editorCap(active: bool, ctx: ExecContext) -> None:
 def netrcCap(active: bool, ctx: ExecContext) -> None:
     "share ~/.netrc file"
     if active:
+        if not ctx.home:
+            return needUser("netrc")
         ctx.mounts[ctx.home / ".netrc"] = Path("~/.netrc")
 
 
