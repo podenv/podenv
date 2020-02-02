@@ -4,30 +4,43 @@ let Podenv = env:PODENV_PRELUDE
 let Hub = env:PODENV_HUB
 
 let packages =
-      [ "python3-mypy", "python3-flake8", "python3-pyyaml", "make", "bzip2" ]
+      [ "python3-mypy"
+      , "python3-flake8"
+      , "python3-pyyaml"
+      , "make"
+      , "bzip2"
+      , "findutils"
+      ]
 
-let dhall =
+let dhall-json =
       { url =
-          "https://github.com/dhall-lang/dhall-haskell/releases/download/1.28.0/dhall-json-1.6.0-x86_64-linux.tar.bz2"
+          "https://github.com/dhall-lang/dhall-haskell/releases/download/1.29.0/dhall-json-1.6.1-x86_64-linux.tar.bz2"
       , hash =
-          "b9917603fa58295f211dde384c073f8482343d445ad9bfab8919ae2eaca6bda7"
+          "7e65f933fb215629d18d23bc774688c598d4c11b62865f3546ee23ae36b25290"
       , dest = "/usr/local/bin"
       , archive = Some "--strip-components=2 -j --mode='a+x'"
       }
 
+let dhall =
+          dhall-json
+      //  { url =
+              "https://github.com/dhall-lang/dhall-haskell/releases/download/1.29.0/dhall-1.29.0-x86_64-linux.tar.bz2"
+          , hash =
+              "e273db3a83919aac183cf3273e262446d89da3f61690d7a1a6299748377855d1"
+          }
+
 in  Podenv.Schemas.Env::{
     , name = "podenv-unittests"
     , description = Some "Run podenv unittests"
-    , mounts =
-        Some
-          [ Hub.Functions.mkMountMap "~/.cache/dhall"
-          , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
-          ]
-    , capabilities =
-        Podenv.Schemas.Capabilities::{
-        , mount-cwd = Some True
-        , uidmap = Some True
-        }
+    , mounts = Some
+        [ Hub.Functions.mkMountMap "~/.cache/dhall"
+        , Hub.Functions.mkMountMap "~/.cache/dhall-haskell"
+        , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
+        ]
+    , capabilities = Podenv.Schemas.Capabilities::{
+      , mount-cwd = Some True
+      , uidmap = Some True
+      }
     , user = Some { name = "user", uid = 1000, home = "/home/user" }
     , environ = Some (toMap { HOME = "/home/user" })
     , container-file =
@@ -40,15 +53,17 @@ in  Podenv.Schemas.Env::{
                     RUN useradd -u 1000 -m user
                     ''
                 ++  Hub.Functions.download "~/.cache/podenv/buildStore" dhall
+                ++  "\n"
+                ++  Hub.Functions.download
+                      "~/.cache/podenv/buildStore"
+                      dhall-json
               )
     , container-update = Hub.Functions.containerFromText "RUN dnf update -y"
-    , build-env =
-        Some
-          Podenv.Schemas.BuildEnv::{
-          , mounts =
-              [ Hub.Functions.mkMountMap "~/.cache/podenv/buildStore"
-              , Hub.Functions.mkMount "/var/cache/dnf" "~/.cache/podenv/dnf"
-              ]
-          }
+    , build-env = Some Podenv.Schemas.BuildEnv::{
+      , mounts =
+        [ Hub.Functions.mkMountMap "~/.cache/podenv/buildStore"
+        , Hub.Functions.mkMount "/var/cache/dnf" "~/.cache/podenv/dnf"
+        ]
+      }
     , command = Some [ "make" ]
     }
