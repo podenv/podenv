@@ -42,6 +42,8 @@ def loadDhallConfig(configFile: Union[str, Path], debug: bool = False) -> Any:
         "~/git/github.com/podenv/podenv/podenv/dhall/package.dhall")
     if not prelude.exists():
         prelude = Path(__file__).parent / "dhall" / "package.dhall"
+    if not hub.exists():
+        hub = Path("/usr/share/podenv/hub/package.dhall")
     try:
         dhallPackage = dict(
             HOME=environ["HOME"],
