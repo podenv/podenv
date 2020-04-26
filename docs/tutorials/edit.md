@@ -84,7 +84,7 @@ let Hub = env:PODENV_HUB
 
 let default-envs = Hub.Defaults
 
-in default-envs : List Podenv.Types.Env
+in default-envs : List Podenv.Env.Type
 ```
 
 In the above example we used the ` : ` symbol to provide a type annotation.
@@ -117,11 +117,11 @@ let default-envs = Hub.Defaults
 
 let my-new-env = { name = "my-new-env" }
 
-in  my-new-env : Podenv.Types.Env
+in  my-new-env : Podenv.Env.Type
 ```
 
 We added a new symbol named `my-new-env` which is a record with a single key `name`.
-Then the `in` expression indicate that the evaluation of this configuration is a `Types.Env`.
+Then the `in` expression indicate that the evaluation of this configuration is a `Env.Type`.
 
 Pressing `F5` to evaluate the configuration results in this error:
 
@@ -135,12 +135,12 @@ Error: Expression doesn't match annotation
 }
 ```
 
-Each element prefixed with a `-` indicate that our record is missing a key. That is because a `Types.Env`
-is composed of many attributes that we didn't set. To fix that, we use the `Schemas.Env` to provides
+Each element prefixed with a `-` indicate that our record is missing a key. That is because a `Env.Type`
+is composed of many attributes that we didn't set. To fix that, we use the `Env` schema to provides
 default values. Replace the `my-new-env` value by:
 
 ```dhall
-let my-new-env = Podenv.Schemas.Env::{ name = "my-new-env" }
+let my-new-env = Podenv.Env::{ name = "my-new-env" }
 ```
 
 That evaluates without error because the schemas took care of setting the default value.
@@ -148,7 +148,7 @@ That evaluates without error because the schemas took care of setting the defaul
 If you made a typo like so:
 
 ```dhall
-let my-new-env = Podenv.Schemas.Env::{ nam = "my-new-env" }
+let my-new-env = Podenv.Env::{ nam = "my-new-env" }
 ```
 
 Then the evaluation fails with:

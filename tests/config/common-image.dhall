@@ -1,12 +1,12 @@
 {- Change the image of envs to use another dhall config -}
 let Podenv = env:PODENV_PRELUDE
 
-let Env = Podenv.Types.Env
+let Env = Podenv.Env.Type
 
 let basic-env
     : forall (name : Text) -> Env
     =     \(name : Text)
-      ->  Podenv.Schemas.Env::{
+      ->  Podenv.Env::{
           , name = name
           , image = Some name
           , command = Some [ name ]

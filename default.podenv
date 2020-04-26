@@ -29,7 +29,7 @@ let dhall =
               "e273db3a83919aac183cf3273e262446d89da3f61690d7a1a6299748377855d1"
           }
 
-in  Podenv.Schemas.Env::{
+in  Podenv.Env::{
     , name = "podenv-unittests"
     , description = Some "Run podenv unittests"
     , mounts = Some
@@ -37,7 +37,7 @@ in  Podenv.Schemas.Env::{
         , Hub.Functions.mkMountMap "~/.cache/dhall-haskell"
         , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
         ]
-    , capabilities = Podenv.Schemas.Capabilities::{
+    , capabilities = Podenv.Capabilities::{
       , mount-cwd = Some True
       , uidmap = Some True
       }
@@ -59,7 +59,7 @@ in  Podenv.Schemas.Env::{
                       dhall-json
               )
     , container-update = Hub.Functions.containerFromText "RUN dnf update -y"
-    , build-env = Some Podenv.Schemas.BuildEnv::{
+    , build-env = Some Podenv.BuildEnv::{
       , mounts =
         [ Hub.Functions.mkMountMap "~/.cache/podenv/buildStore"
         , Hub.Functions.mkMount "/var/cache/dnf" "~/.cache/podenv/dnf"

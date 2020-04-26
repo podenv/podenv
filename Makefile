@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-all: test dhall doc
+all: dhall test doc
 
 dhall: dhall-lint dhall-freeze
 
@@ -20,7 +20,7 @@ dhall-lint:
 	find . -name "*.dhall" -exec dhall --ascii format --inplace {} \;
 
 dhall-freeze:
-	dhall freeze --inplace podenv/dhall/package.dhall --all
+	dhall --ascii freeze --inplace podenv/dhall/package.dhall --all
 
 test: test-type test-unit test-lint
 

@@ -2,8 +2,7 @@
 let Podenv = env:PODENV_PRELUDE
 
 let mkBuildEnv =
-          \(mounts : List Podenv.Types.Mount)
-      ->  Podenv.Schemas.BuildEnv::{ mounts = mounts }
+      \(mounts : List Podenv.Mount.Type) -> Podenv.BuildEnv::{ mounts = mounts }
 
 let mkMount =
           \(container : Text)
@@ -15,7 +14,7 @@ let fedoraImage =
       ->  let concat = (env:PODENV_HUB).Prelude.Text.concatSep
 
           in  { container-file = Some
-                  [ Podenv.Schemas.Task::{
+                  [ Podenv.Task::{
                     , name = Some "TODO: expand this..."
                     , command = Some
                         ''
@@ -26,7 +25,7 @@ let fedoraImage =
                     }
                   ]
               , container-update = Some
-                  [ Podenv.Schemas.Task::{
+                  [ Podenv.Task::{
                     , name = Some "Update package"
                     , command = Some "dnf update -y"
                     }

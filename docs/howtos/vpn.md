@@ -107,7 +107,7 @@ let vpn-envs =
 
 let work-envs =
       Hub.Functions.mapEnv
-        (     \(env : Podenv.Types.Env)
+        (     \(env : Podenv.Env.Type)
           ->  Hub.Runtimes.Fedora.Create.Latest
                 (env // { name = "work-" ++ env.name, network = Some "work" })
         )

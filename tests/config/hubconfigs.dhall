@@ -1,12 +1,12 @@
 {- Import of podenv/hub envs -}
 let Podenv = env:PODENV_PRELUDE
 
-let Cap = Podenv.Schemas.Capabilities
+let Cap = Podenv.Capabilities
 
-let Task = Podenv.Schemas.Task
+let Task = Podenv.Task
 
 let Fedora =
-      Podenv.Schemas.Env::{
+      Podenv.Env::{
       , url = Some "https://fedoraproject.org/"
       , image = Some "registry.fedoraproject.org/fedora:30"
       , name = "fedora"

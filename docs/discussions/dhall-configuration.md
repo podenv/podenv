@@ -165,7 +165,7 @@ that can be used to prevent such mistakes:
 {- ./test.dhall -}
 let Podenv = ./podenv/dhall/package.dhall
 
-in  Podenv.Schemas.Env::{ name = "firefox", image-oops = Some "firefox" }
+in  Podenv.Env::{ name = "firefox", image-oops = Some "firefox" }
 ```
 ```console
 $ dhall-to-yaml --file ./test.dhall
@@ -182,7 +182,7 @@ The above example is incorrect because the `image` attribute name is misspelled:
 {- ./test.dhall -}
 let Podenv = ./podenv/dhall/package.dhall
 
-in  Podenv.Schemas.Env::{ name = "firefox", image = Some "firefox" }
+in  Podenv.Env::{ name = "firefox", image = Some "firefox" }
 ```
 ```console
 $ dhall-to-yaml --file ./test.dhall
