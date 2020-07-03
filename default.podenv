@@ -12,31 +12,14 @@ let packages =
       , "findutils"
       ]
 
-let dhall-json =
-      { url =
-          "https://github.com/dhall-lang/dhall-haskell/releases/download/1.29.0/dhall-json-1.6.1-x86_64-linux.tar.bz2"
-      , hash =
-          "7e65f933fb215629d18d23bc774688c598d4c11b62865f3546ee23ae36b25290"
-      , dest = "/usr/local/bin"
-      , archive = Some "--strip-components=2 -j --mode='a+x'"
-      }
-
-let dhall =
-          dhall-json
-      //  { url =
-              "https://github.com/dhall-lang/dhall-haskell/releases/download/1.29.0/dhall-1.29.0-x86_64-linux.tar.bz2"
-          , hash =
-              "e273db3a83919aac183cf3273e262446d89da3f61690d7a1a6299748377855d1"
-          }
-
 in  Podenv.Env::{
     , name = "podenv-unittests"
     , description = Some "Run podenv unittests"
     , mounts = Some
-        [ Hub.Functions.mkMountMap "~/.cache/dhall"
-        , Hub.Functions.mkMountMap "~/.cache/dhall-haskell"
-        , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
-        ]
+      [ Hub.Functions.mkMountMap "~/.cache/dhall"
+      , Hub.Functions.mkMountMap "~/.cache/dhall-haskell"
+      , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
+      ]
     , capabilities = Podenv.Capabilities::{
       , mount-cwd = Some True
       , uidmap = Some True
@@ -48,22 +31,18 @@ in  Podenv.Env::{
 
         in  Hub.Functions.containerFromText
               (     ''
-                    FROM registry.fedoraproject.org/fedora:30
+                    FROM registry.fedoraproject.org/fedora:latest
                     RUN dnf install -y ${concat " " packages}
                     RUN useradd -u 1000 -m user
                     ''
-                ++  Hub.Functions.download "~/.cache/podenv/buildStore" dhall
+                ++  Hub.Environments.Dhall.Commands.`1.33`.base
                 ++  "\n"
-                ++  Hub.Functions.download
-                      "~/.cache/podenv/buildStore"
-                      dhall-json
+                ++  Hub.Environments.Dhall.Commands.`1.33`.json
               )
     , container-update = Hub.Functions.containerFromText "RUN dnf update -y"
     , build-env = Some Podenv.BuildEnv::{
       , mounts =
-        [ Hub.Functions.mkMountMap "~/.cache/podenv/buildStore"
-        , Hub.Functions.mkMount "/var/cache/dnf" "~/.cache/podenv/dnf"
-        ]
+        [ Hub.Functions.mkMount "/var/cache/dnf" "~/.cache/podenv/dnf" ]
       }
     , command = Some [ "make" ]
     }

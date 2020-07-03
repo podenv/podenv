@@ -62,6 +62,7 @@ class TestConfig(TestCase):
 
 
 @skipIf(not Path("/usr/local/bin/dhall-to-json").expanduser().exists() and
+        not Path("/usr/bin/dhall-to-json").expanduser().exists() and
         not Path("~/.local/bin/dhall-to-json").expanduser().exists(),
         "dhall-to-json is missing")
 class TestDhallConfig(TestCase):
