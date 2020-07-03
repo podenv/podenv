@@ -18,8 +18,9 @@ This module defines the capabilities
 
 import os
 import re
+from pathlib import Path
 from typing import Tuple, List, Set, Optional
-from podenv.context import ExecContext, Path, Capability
+from podenv.context import ExecContext, Capability
 
 
 def needUser(capability: str) -> None:
