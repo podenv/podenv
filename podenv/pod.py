@@ -167,7 +167,8 @@ def setupVolumes(volumes: Volumes) -> None:
     existingVolumes: Set[str] = set()
     if volumesList:
         for volume in volumesList:
-            existingVolumes.add(volume['name'])
+            volume_name = volume.get('Name') or volume.get('name')
+            existingVolumes.add(volume_name)
     for volume in volumes.values():
         if volume.name not in existingVolumes:
             log.info(f"Creating volume {volume.name}")
