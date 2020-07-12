@@ -16,7 +16,6 @@
 This module handles the configuration schema.
 """
 
-from __future__ import annotations
 from os import environ
 from pathlib import Path
 from typing import Any, Dict, Union

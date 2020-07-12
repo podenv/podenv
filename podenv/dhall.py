@@ -60,6 +60,8 @@ def _load(input: Input, env: Env = None, debug: bool = False) -> Any:
     if isinstance(input, str):
         proc = Popen(
             cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
+        if proc.stdin is None:
+            raise RuntimeError("Process doesn't have stdin!")
         proc.stdin.write(input.encode('utf-8'))
     else:
         proc = Popen(

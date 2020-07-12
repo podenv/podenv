@@ -16,7 +16,6 @@
 This module handles environment definitions.
 """
 
-from __future__ import annotations
 import copy
 import os
 import shlex

@@ -16,7 +16,6 @@
 This module defines types
 """
 
-from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,7 +49,7 @@ class Volume:
 @dataclass
 class BuildContext:
     """Minimal execution context to be used for image building"""
-    mounts: Optional[Dict[HostPath, ContainerPath]] = None
+    mounts: Optional[Dict['HostPath', 'ContainerPath']] = None
 
 
 @dataclass
@@ -96,7 +95,7 @@ class ExecContext:
     """The intermediary execution context representation"""
     name: str
     imageName: str
-    volumes: Optional[Volumes]
+    volumes: Optional['Volumes']
     desktop: Optional[DesktopEntry]
     commandArgs: List[str]
     imageBuildCtx: Optional[BuildContext] = None
@@ -137,7 +136,7 @@ class ExecContext:
     privileged: bool = False
     uidmaps: bool = False
 
-    def getUidMaps(self) -> ExecArgs:
+    def getUidMaps(self) -> 'ExecArgs':
         return ["--uidmap", "1000:0:1", "--uidmap", "0:1:1000",
                 "--uidmap", "1001:1001:%s" % (2**16 - 1001)]
 
@@ -149,13 +148,13 @@ class ExecContext:
         return not self.namespaces.get("network") or \
             self.namespaces["network"] == "host"
 
-    def getHosts(self) -> ExecArgs:
+    def getHosts(self) -> 'ExecArgs':
         args = []
         for hostName, hostIp in self.addHosts.items():
             args.extend(["--add-host", f"{hostName}:{hostIp}"])
         return args
 
-    def getArgs(self) -> ExecArgs:
+    def getArgs(self) -> 'ExecArgs':
         args = copy.copy(self.podmanArgs)
 
         if self.hostname:

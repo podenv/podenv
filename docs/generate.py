@@ -64,9 +64,29 @@ def writeReferences() -> None:
         '                                         |') + 2
     capblockend = doc[capblockstart:].index('') + capblockstart
 
+    def typeToStr(type):
+        typeStr = str(type)
+        typeStr = typeStr.replace('podenv.context.', '')
+        typeStr = typeStr.replace('pathlib.Path', 'Path')
+        if typeStr == "<class 'str'>":
+            typeStr = 'str'
+        elif typeStr.startswith('typing.'):
+            typeStr = typeStr.replace('typing.', '')
+            typeStr = typeStr.replace(
+                'Dict[str, Union[str, Dict[str, str]]]', 'Task')
+            typeStr = typeStr.replace('Dict[Path, Volume]', 'Volumes')
+            typeStr = typeStr.replace('Dict[Path, Path]', 'Mounts')
+            typeStr = re.sub(
+                r'Union\[(.*), NoneType\]', r'Optional[\1]', typeStr)
+            if ', List[' in typeStr:
+                typeStr = typeStr.replace('Optional', 'Optional[Union') + ']'
+        else:
+            raise RuntimeError("Unknown type: %s" % typeStr)
+        return typeStr
+
     envblock = ['{name:20s} | {type:15s} | {doc:40s} |'.format(
         name=(lambda s: re.sub('([A-Z]+)', r'-\1', s).lower())(f.name),
-        type=f.type, doc=f.metadata.get('doc', ''))  # type: ignore
+        type=typeToStr(f.type), doc=f.metadata.get('doc', ''))  # type: ignore
                 for f in fields(Env)
                 if not f.metadata.get('internal', False)]  # type: ignore
     capblock = ['{name:20s} | {doc:60s} |'.format(

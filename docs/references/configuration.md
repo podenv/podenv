@@ -17,7 +17,7 @@ container-file       | Optional[Union[str, List[Task]]] | Containerfile content 
 container-update     | Optional[Union[str, List[Task]]] | Containerfile update content             |
 packages             | Optional[List[str]] | List of required packages                |
 user                 | Optional[User]  | Container user information               |
-command              | Optional[ExecArgs] | Container starting command               |
+command              | Optional[List[str]] | Container starting command               |
 pre-tasks            | Optional[List[Task]] | List of ansible like command to run before the command |
 post-tasks           | Optional[List[Task]] | List of ansible like command to run after the pod exited |
 work-dir             | Optional[Path]  | The container workdir                    |
