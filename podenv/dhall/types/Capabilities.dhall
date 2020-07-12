@@ -6,6 +6,7 @@
 , ipc : Optional Bool
 , x11 : Optional Bool
 , input-dev : Optional Bool
+, usb : Optional Bool
 , pulseaudio : Optional Bool
 , git : Optional Bool
 , editor : Optional Bool

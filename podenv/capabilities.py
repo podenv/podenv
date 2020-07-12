@@ -142,6 +142,12 @@ def inputDevCap(active: bool, ctx: ExecContext) -> None:
         ctx.devices.append(Path("/dev/input"))
 
 
+def usbCap(active: bool, ctx: ExecContext) -> None:
+    "share usb devices"
+    if active:
+        ctx.devices.append(Path("/dev/bus/usb"))
+
+
 def pulseaudioCap(active: bool, ctx: ExecContext) -> None:
     "share pulseaudio socket"
     if active:
@@ -324,6 +330,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         ipcCap,
         x11Cap,
         inputDevCap,
+        usbCap,
         pulseaudioCap,
         gitCap,
         editorCap,
