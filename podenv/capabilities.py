@@ -134,6 +134,14 @@ def x11Cap(active: bool, ctx: ExecContext) -> None:
         ctx.environ["DISPLAY"] = os.environ["DISPLAY"]
 
 
+def inputDevCap(active: bool, ctx: ExecContext) -> None:
+    "share input device"
+    if active:
+        ctx.mounts[Path("/dev/input")] = Path("/dev/input")
+        ctx.devices.append(Path("/dev/uinput"))
+        ctx.devices.append(Path("/dev/input"))
+
+
 def pulseaudioCap(active: bool, ctx: ExecContext) -> None:
     "share pulseaudio socket"
     if active:
@@ -315,6 +323,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         largeShmCap,
         ipcCap,
         x11Cap,
+        inputDevCap,
         pulseaudioCap,
         gitCap,
         editorCap,

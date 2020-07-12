@@ -5,6 +5,7 @@
 , large-shm = None Bool
 , ipc = None Bool
 , x11 = None Bool
+, input-dev = None Bool
 , pulseaudio = None Bool
 , git = None Bool
 , editor = None Bool

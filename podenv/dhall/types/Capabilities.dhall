@@ -5,6 +5,7 @@
 , large-shm : Optional Bool
 , ipc : Optional Bool
 , x11 : Optional Bool
+, input-dev : Optional Bool
 , pulseaudio : Optional Bool
 , git : Optional Bool
 , editor : Optional Bool

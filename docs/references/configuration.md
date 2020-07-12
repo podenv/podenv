@@ -48,6 +48,7 @@ hostfiles            | enable host files access                                 
 large-shm            | mount a 4gb shm                                              |
 ipc                  | share host ipc                                               |
 x11                  | share x11 socket                                             |
+input-dev            | share input device                                           |
 pulseaudio           | share pulseaudio socket                                      |
 git                  | share .gitconfig and excludesfile                            |
 editor               | setup editor env                                             |
