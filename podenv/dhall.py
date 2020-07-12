@@ -23,9 +23,9 @@ from typing import Any, Dict, Optional, Union
 
 DEFAULT_PATH = Path("~/.local/bin/dhall-to-json").expanduser()
 DEFAULT_URL = "https://github.com/dhall-lang/dhall-haskell/releases/download/"\
-    "1.30.0/dhall-json-1.6.2-x86_64-linux.tar.bz2"
+    "1.33.1/dhall-json-1.7.0-x86_64-linux.tar.bz2"
 DEFAULT_HASH = \
-    "ea37627c4e19789af33def099d4cb145b874c03b4d5b98cb33ce06be1debf4f3"
+    "cc9fc70e492d35a3986183b589a435653e782f67cda51d33a935dff1ddd15aec"
 
 Input = Union[Path, str]
 Env = Optional[Dict[str, str]]

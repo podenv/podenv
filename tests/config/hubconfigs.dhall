@@ -14,13 +14,13 @@ let Fedora =
       }
 
 let {- When the env, package and command is a single name -} mkSimple =
-          \(name : Text)
-      ->  \(description : Text)
-      ->  { name = name
-          , description = Some description
-          , packages = Some [ name ]
-          , command = Some [ name ]
-          }
+      \(name : Text) ->
+      \(description : Text) ->
+        { name
+        , description = Some description
+        , packages = Some [ name ]
+        , command = Some [ name ]
+        }
 
 let X11 = { x11 = Some True }
 

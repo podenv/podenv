@@ -35,7 +35,8 @@ class TestConfig(TestCase):
         env.user = User("user", Path("/home/user"), 1000)
         ctx = podenv.env.prepareEnv(env, [])
         execCommand = " ".join(ctx.getArgs())
-        self.assertIn("-v /home/user/git:/home/user/git", execCommand)
+        hostPath = str(Path("~/git").expanduser().resolve())
+        self.assertIn("-v %s:/home/user/git" % hostPath, execCommand)
 
     def test_volumes(self):
         env = fakeEnv("gertty", dict(
