@@ -57,6 +57,7 @@ gpg                  | share gpg agent                                          
 webcam               | share webcam device                                          |
 alsa                 | share alsa device                                            |
 dri                  | share graphic device                                         |
+nvidia               | share nvidia device                                          |
 kvm                  | share kvm device                                             |
 tun                  | share tun device                                             |
 seccomp              | enable seccomp                                               |

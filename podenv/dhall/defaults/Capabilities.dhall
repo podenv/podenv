@@ -14,6 +14,7 @@
 , webcam = None Bool
 , alsa = None Bool
 , dri = None Bool
+, nvidia = None Bool
 , kvm = None Bool
 , tun = None Bool
 , seccomp = Some True

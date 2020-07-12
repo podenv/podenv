@@ -14,6 +14,7 @@
 , webcam : Optional Bool
 , alsa : Optional Bool
 , dri : Optional Bool
+, nvidia : Optional Bool
 , kvm : Optional Bool
 , tun : Optional Bool
 , seccomp : Optional Bool

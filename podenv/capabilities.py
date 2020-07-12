@@ -242,6 +242,16 @@ def driCap(active: bool, ctx: ExecContext) -> None:
         ctx.devices.append(Path("/dev/dri"))
 
 
+def nvidiaCap(active: bool, ctx: ExecContext) -> None:
+    "share nvidia device"
+    if active:
+        for nv in ("nvidia0", "nvidiactl", "nvidia-modeset",
+                   "nvidia-uvm", "nvidia-uvm-tools"):
+            nvPath = Path("/dev") / nv
+            if nvPath.exists():
+                ctx.devices.append(nvPath)
+
+
 def kvmCap(active: bool, ctx: ExecContext) -> None:
     "share kvm device"
     if active:
@@ -314,6 +324,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         webcamCap,
         alsaCap,
         driCap,
+        nvidiaCap,
         kvmCap,
         tunCap,
         seccompCap,
