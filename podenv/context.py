@@ -164,6 +164,8 @@ class ExecContext:
             args.extend(["--security-opt", f"label={self.seLinuxLabel}"])
         if self.seccomp:
             args.extend(["--security-opt", f"seccomp={self.seccomp}"])
+        if self.devices:
+            args.extend(["--security-opt", "unmask=ALL"])
 
         for ns, val in self.namespaces.items():
             args.extend([f"--{ns}", val])
