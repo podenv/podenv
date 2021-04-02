@@ -68,7 +68,7 @@ def _load(input: Input, env: Env = None, debug: bool = False) -> Any:
             cmd + ["--file", str(input)], stdout=PIPE, stderr=PIPE, env=env)
     stdout, stderr = proc.communicate()
     if stderr:
-        raise RuntimeError(f"Dhall error:" + stderr.decode('utf-8'))
+        raise RuntimeError("Dhall error:" + stderr.decode('utf-8'))
     return json.loads(stdout.decode('utf-8'))
 
 

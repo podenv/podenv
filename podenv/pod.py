@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 from subprocess import Popen, PIPE
 
-from podenv.security import selinux, HAS_SELINUX
+from podenv.security import selinux, HAS_SELINUX  # type: ignore
 from podenv.context import UserNotif, BuildContext, DesktopEntry, ExecArgs, \
     Volume, Volumes, ExecContext
 

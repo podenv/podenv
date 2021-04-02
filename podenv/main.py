@@ -44,8 +44,8 @@ def formatUsage() -> str:
         "--environ KEY=VALUE"
     ]
 
-    def opt(l: List[str]) -> List[str]:
-        return list(map(lambda x: f"[{x}]", l))
+    def opt(xs: List[str]) -> List[str]:
+        return list(map(lambda x: f"[{x}]", xs))
 
     prefix = len("usage: podenv ")
     return ("\n" + " " * prefix).join(

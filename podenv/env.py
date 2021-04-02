@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import podenv.capabilities as Cap
 import podenv.tasks
-from podenv.security import selinux, HAS_SELINUX
+from podenv.security import selinux, HAS_SELINUX  # type: ignore
 from podenv.context import BuildContext, DesktopEntry, ExecArgs, ExecContext, \
     File, ContainerPath, HostPath, Mounts, Task, User, Volume, Volumes
 
@@ -289,7 +289,7 @@ def validateEnv(env: Env, ctx: ExecContext) -> None:
 
     # Check for system capabilities
     if env.capabilities.get("tun") and "NET_ADMIN" not in ctx.syscaps:
-        warn(f"NET_ADMIN capability is needed by the tun device")
+        warn("NET_ADMIN capability is needed by the tun device")
         ctx.syscaps.append("NET_ADMIN")
 
     # Check mount points labels
