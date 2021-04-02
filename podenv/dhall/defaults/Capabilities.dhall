@@ -8,6 +8,7 @@
 , input-dev = None Bool
 , usb = None Bool
 , pulseaudio = None Bool
+, pipewire = None Bool
 , git = None Bool
 , editor = None Bool
 , netrc = None Bool

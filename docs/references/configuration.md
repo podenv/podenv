@@ -51,6 +51,7 @@ x11                  | share x11 socket                                         
 input-dev            | share input device                                           |
 usb                  | share usb devices                                            |
 pulseaudio           | share pulseaudio socket                                      |
+pipewire             | share pipewire socket                                        |
 git                  | share .gitconfig and excludesfile                            |
 editor               | setup editor env                                             |
 netrc                | share ~/.netrc file                                          |

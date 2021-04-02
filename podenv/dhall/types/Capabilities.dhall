@@ -8,6 +8,7 @@
 , input-dev : Optional Bool
 , usb : Optional Bool
 , pulseaudio : Optional Bool
+, pipewire : Optional Bool
 , git : Optional Bool
 , editor : Optional Bool
 , netrc : Optional Bool

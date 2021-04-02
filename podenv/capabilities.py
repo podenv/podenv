@@ -161,6 +161,18 @@ def pulseaudioCap(active: bool, ctx: ExecContext) -> None:
         ctx.environ["PULSE_SERVER"] = str(ctx.xdgDir / "pulse" / "native")
 
 
+def pipewireCap(active: bool, ctx: ExecContext) -> None:
+    "share pipewire socket"
+    if active:
+        if not ctx.xdgDir:
+            return needUser("pipewire")
+        ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
+        # TODO: check socket number
+        skt = "pipewire-0"
+        ctx.mounts[ctx.xdgDir / skt] = \
+            Path(os.environ["XDG_RUNTIME_DIR"]) / skt
+
+
 def gitCap(active: bool, ctx: ExecContext) -> None:
     "share .gitconfig and excludesfile"
     if active:
@@ -332,6 +344,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         inputDevCap,
         usbCap,
         pulseaudioCap,
+        pipewireCap,
         gitCap,
         editorCap,
         netrcCap,
