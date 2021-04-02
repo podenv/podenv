@@ -11,7 +11,7 @@ Podenv may also uses PyYAML and [buildah](https://buildah.io).
 For example, on a [fedora](https://getfedora.org) workstation, run this command to install the requirements:
 
 ```bash
-sudo dnf install -y python3-pyyaml podman buildah
+sudo dnf install -y python3-pyyaml podman buildah dhall-json
 ```
 
 ## Installation in PATH
@@ -53,8 +53,9 @@ On the first invocation, podenv creates a default configuration in `~/.config/po
 
 ```bash
 $ podenv --list
-NAME                 PARENT          REGISTRY                DESCRIPTION
-emacs                emacs-nox       github.com/podenv/hub   Extensible text editor
+NAME                 DESCRIPTION
+audacity             Sound editor with graphical UI
+centos               Centos 8 root shell
 ...
 ```
 
