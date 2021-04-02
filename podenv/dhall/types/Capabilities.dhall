@@ -5,6 +5,7 @@
 , large-shm : Optional Bool
 , ipc : Optional Bool
 , x11 : Optional Bool
+, wayland : Optional Bool
 , input-dev : Optional Bool
 , usb : Optional Bool
 , pulseaudio : Optional Bool

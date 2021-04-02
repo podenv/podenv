@@ -48,6 +48,7 @@ hostfiles            | enable host files access                                 
 large-shm            | mount a 4gb shm                                              |
 ipc                  | share host ipc                                               |
 x11                  | share x11 socket                                             |
+wayland              | share wayland socket                                         |
 input-dev            | share input device                                           |
 usb                  | share usb devices                                            |
 pulseaudio           | share pulseaudio socket                                      |

@@ -173,6 +173,18 @@ def pipewireCap(active: bool, ctx: ExecContext) -> None:
             Path(os.environ["XDG_RUNTIME_DIR"]) / skt
 
 
+def waylandCap(active: bool, ctx: ExecContext) -> None:
+    "share wayland socket"
+    if active:
+        if not ctx.xdgDir:
+            return needUser("wayland")
+        ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
+        # TODO: check socket number
+        skt = "wayland-0"
+        ctx.mounts[ctx.xdgDir / skt] = \
+            Path(os.environ["XDG_RUNTIME_DIR"]) / skt
+
+
 def gitCap(active: bool, ctx: ExecContext) -> None:
     "share .gitconfig and excludesfile"
     if active:
@@ -341,6 +353,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         largeShmCap,
         ipcCap,
         x11Cap,
+        waylandCap,
         inputDevCap,
         usbCap,
         pulseaudioCap,

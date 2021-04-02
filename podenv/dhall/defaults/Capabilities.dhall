@@ -5,6 +5,7 @@
 , large-shm = None Bool
 , ipc = None Bool
 , x11 = None Bool
+, wayland = None Bool
 , input-dev = None Bool
 , usb = None Bool
 , pulseaudio = None Bool
