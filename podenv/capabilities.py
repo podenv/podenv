@@ -161,6 +161,20 @@ def pulseaudioCap(active: bool, ctx: ExecContext) -> None:
         ctx.environ["PULSE_SERVER"] = str(ctx.xdgDir / "pulse" / "native")
 
 
+def dbusCap(active: bool, ctx: ExecContext) -> None:
+    "share dbus socket"
+    if active:
+        if not ctx.xdgDir:
+            return needUser("dbus")
+        ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
+        # TODO: check socket number
+        skt = "bus"
+        skt_path = ctx.xdgDir / skt
+        ctx.mounts[skt_path] = \
+            Path(os.environ["XDG_RUNTIME_DIR"]) / skt
+        ctx.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=" + str(skt_path)
+
+
 def pipewireCap(active: bool, ctx: ExecContext) -> None:
     "share pipewire socket"
     if active:
@@ -356,6 +370,7 @@ Capabilities: List[Tuple[str, Optional[str], Capability]] = [
         waylandCap,
         inputDevCap,
         usbCap,
+        dbusCap,
         pulseaudioCap,
         pipewireCap,
         gitCap,

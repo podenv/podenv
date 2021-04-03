@@ -8,6 +8,7 @@
 , wayland : Optional Bool
 , input-dev : Optional Bool
 , usb : Optional Bool
+, dbus : Optional Bool
 , pulseaudio : Optional Bool
 , pipewire : Optional Bool
 , git : Optional Bool

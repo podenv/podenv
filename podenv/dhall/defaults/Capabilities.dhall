@@ -8,6 +8,7 @@
 , wayland = None Bool
 , input-dev = None Bool
 , usb = None Bool
+, dbus = None Bool
 , pulseaudio = None Bool
 , pipewire = None Bool
 , git = None Bool

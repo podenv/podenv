@@ -51,6 +51,7 @@ x11                  | share x11 socket                                         
 wayland              | share wayland socket                                         |
 input-dev            | share input device                                           |
 usb                  | share usb devices                                            |
+dbus                 | share dbus socket                                            |
 pulseaudio           | share pulseaudio socket                                      |
 pipewire             | share pipewire socket                                        |
 git                  | share .gitconfig and excludesfile                            |
