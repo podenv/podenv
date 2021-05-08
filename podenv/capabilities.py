@@ -195,6 +195,10 @@ def waylandCap(active: bool, ctx: ExecContext) -> None:
         ctx.mounts[Path("/etc/machine-id:ro")] = Path("/etc/machine-id")
         # TODO: check socket number
         skt = "wayland-0"
+        ctx.environ["WAYLAND_DISPLAY"] = skt
+        ctx.environ["XDG_SESSION_TYPE"] = "wayland"
+        ctx.environ["GDK_BACKEND"] = "wayland"
+        ctx.environ["MOZ_ENABLE_WAYLAND"] = "1"
         ctx.mounts[ctx.xdgDir / skt] = \
             Path(os.environ["XDG_RUNTIME_DIR"]) / skt
 
