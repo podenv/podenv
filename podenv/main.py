@@ -18,6 +18,7 @@ This module is the command line interface entrypoint.
 
 import argparse
 import logging
+import shlex
 import sys
 from os import environ
 from pathlib import Path
@@ -114,6 +115,8 @@ def usageParser() -> argparse.ArgumentParser:
     parser.add_argument("--show-containerfile", action='store_true')
     parser.add_argument("--list", action='store_true')
     parser.add_argument("--shell", action='store_true')
+    parser.add_argument("--cwd")
+    parser.add_argument("--command")
     parser.add_argument("--dry", action='store_true',
                         help="Do not execute the environment")
     parser.add_argument("--net")
@@ -170,6 +173,10 @@ def applyCommandLineOverride(args: argparse.Namespace, env: Env) -> None:
         env.network = args.net
     if args.home:
         env.home = str(Path(args.home).expanduser().resolve())
+    if args.cwd:
+        env.workDir = args.cwd
+    if args.command:
+        env.command = shlex.split(args.command)
 
 
 def setupLogging(debug: bool) -> None:
