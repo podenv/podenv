@@ -35,10 +35,10 @@ def loadDhallConfig(configFile: Union[str, Path], debug: bool = False) -> Any:
                     environ[env]).expanduser()
 
     hub = pathEnv(
-        "PODENV_HUB", "~/git/github.com/podenv/hub/package.dhall")
+        "PODENV_HUB", "~/src/github.com/podenv/hub/package.dhall")
     prelude = pathEnv(
         "PODENV_PRELUDE",
-        "~/git/github.com/podenv/podenv/podenv/dhall/package.dhall")
+        "~/src/github.com/podenv/podenv/podenv/dhall/package.dhall")
     if not prelude.exists():
         prelude = Path(__file__).parent / "dhall" / "package.dhall"
     if not hub.exists():

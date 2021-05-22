@@ -20,10 +20,10 @@ Podenv is in early development without any release.
 To install it you have to clone the projects:
 
 ```bash
-mkdir -p ~/git/github.com/podenv/
-git clone https://github.com/podenv/podenv ~/git/github.com/podenv/podenv
-git clone https://github.com/podenv/hub ~/git/github.com/podenv/hub
-python3 -mpip install --user ~/git/github.com/podenv/podenv
+mkdir -p ~/src/github.com/podenv/
+git clone https://github.com/podenv/podenv ~/src/github.com/podenv/podenv
+git clone https://github.com/podenv/hub ~/src/github.com/podenv/hub
+python3 -mpip install --user ~/src/github.com/podenv/podenv
 ```
 
 > Note: if you clone the podenv/hub project to a different location, set this
@@ -41,7 +41,7 @@ $ type -p podenv
 Podenv can also be executed directly from the checkout with this alias:
 
 ```bash
-alias podenv='env PYTHONPATH=~/git/github.com/podenv/podenv python3 ~/git/github.com/podenv/podenv/podenv/main.py'
+alias podenv='env PYTHONPATH=~/src/github.com/podenv/podenv python3 ~/git/github.com/podenv/podenv/podenv/main.py'
 ```
 
 

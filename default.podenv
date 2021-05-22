@@ -18,7 +18,7 @@ in  Podenv.Env::{
     , mounts = Some
       [ Hub.Functions.mkMountMap "~/.cache/dhall"
       , Hub.Functions.mkMountMap "~/.cache/dhall-haskell"
-      , Hub.Functions.mkMount "~/git/github.com/podenv/hub" "../hub"
+      , Hub.Functions.mkMount "~/src/github.com/podenv/hub" "../hub"
       ]
     , capabilities = Podenv.Capabilities::{
       , mount-cwd = Some True
