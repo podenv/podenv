@@ -279,7 +279,7 @@ def validateEnv(env: Env, ctx: ExecContext) -> None:
 
     # Check for uid permissions
     if not env.capabilities.get("root") and not env.capabilities.get("uidmap"):
-        for cap in ("x11", "pulseaudio", "ssh", "gpg"):
+        for cap in ("x11", "pulseaudio", "ssh", "gpg", "wayland"):
             if env.capabilities.get(cap):
                 warn(
                     f"UIDMap is required because '{cap}' need "
