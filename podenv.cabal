@@ -1,0 +1,80 @@
+cabal-version:      3.0
+name:               podenv
+version:            0.1.0.0
+homepage:           https://github.com/podenv/podenv#readme
+bug-reports:        https://github.com/podenv/podenv/issues
+license:            Apache-2.0
+license-file:       LICENSE
+extra-doc-files:    README.md
+author:             Tristan Cacqueray
+maintainer:         tdecacqu@redhat.com
+copyright:          2021 Red Hat
+category:           Development
+extra-source-files: test/*.dhall
+
+source-repository head
+  type:             git
+  location:         https://github.com/podenv/podenv.git
+
+flag ci
+  description: Make warnings error
+  default:     False
+  manual:      True
+
+common common
+  if flag(ci)
+    ghc-options:    -Werror
+  ghc-options:      -Wall
+                    -Wcompat
+                    -Widentities
+                    -Wincomplete-uni-patterns
+                    -Wincomplete-record-updates
+                    -Wno-missing-pattern-synonym-signatures
+  if impl(ghc >= 8.0)
+    ghc-options:    -Wredundant-constraints
+  if impl(ghc >= 8.2)
+    ghc-options:    -fhide-source-paths
+  if impl(ghc >= 8.4)
+    ghc-options:    -Wpartial-fields
+  if impl(ghc >= 8.10)
+    ghc-options:    -Wunused-packages
+  default-language: Haskell2010
+
+library
+  import:           common
+  build-depends:    base < 5
+                  , SHA
+                  , dhall
+                  , directory
+                  , either
+                  , filepath
+                  , lens-family-core
+                  , lens-family-th
+                  , linux-capabilities
+                  , optparse-applicative
+                  , relude
+                  , typed-process
+                  , unix
+  hs-source-dirs:   src
+  exposed-modules:  Podenv.Application
+                  , Podenv.Build
+                  , Podenv.Config
+                  , Podenv.Context
+                  , Podenv.Dhall
+                  , Podenv.Main
+                  , Podenv.Prelude
+                  , Podenv.Runtime
+
+executable podenv
+  import:           common
+  hs-source-dirs:   app
+  main-is:          Main.hs
+  build-depends:    base, podenv
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+
+test-suite tests
+  import:           common
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Spec.hs
+  build-depends:    base, hspec, optparse-applicative, podenv, text
