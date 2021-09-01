@@ -6,48 +6,42 @@ Podenv is a free software in early development. Issues or changes are most welco
 * Inacurate documentation or found a typo, please click the **edit** button to propose a fix.
 * Create a pull request for missing features.
 
-## Update podenv
+## Source install
 
-For example, to add a new capability, first create a branch:
+To work on this project you need a Haskell toolchain, for example on fedora:
 
-```bash
-$ git branch new-cap-name
+```ShellSession
+$ sudo dnf install -y ghc cabal-install && cabal update
 ```
 
-Update the code:
+Build and run the project:
 
-```bash
-$ $EDITOR podenv/env.py
+```ShellSession
+$ cabal run podenv -- --help
 ```
 
-Test the change using the [Developper installation](../tutorials/install.md):
+## Run tests
 
-```bash
-$ alias podenv="env PYTHONPATH=$(pwd) python3 $(pwd)/podenv/main.py"
-$ podenv --new-cap-name shell --verbose
+```ShellSession
+$ cabal test
 ```
 
-Run the tests by using the `podenv` command at the root of the project:
+Re-run a single test with:
 
-```bash
-$ podenv  # this just uses make to run the tests
+```ShellSession
+$ cabal test --test-option=--match --test-option="/unit tests/$name/"
 ```
 
-Open a pull request using [git-pull-request](https://github.com/Mergifyio/git-pull-request).
+## Nix shell
 
-```bash
-$ python3 -mpip install --user git-pull-request
-$ git pull-request
+Run local hoogle service:
+
+```ShellSession
+$ nix-shell --arg withHoogle true --command "hoogle server -p 8080 --local --haskell"
 ```
 
-Or using the `git-pull-request` environment:
+Auto run the tests with ghcid:
 
-```bash
-$ podenv git-pull-request
-```
-
-To save git pull-request passwords, use this git config:
-
-```bash
-$ git config --global credential.helper 'store --file ~/.config/git/credentials'
+```ShellSession
+$ nix-shell --command "ghcid --command='cabal v2-repl test:tests' --test 'Main.main'"
 ```

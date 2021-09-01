@@ -7,7 +7,7 @@ however, it is effective for the following reasons:
 
 Dhall enables an efficient configuration schema that can be programmed
 to reduce podenv runtime complexicity.
-Here is a comparaison between the legacy format and dhall configuration:
+Here is a comparaison between the legacy format and the new dhall configuration:
 
 ### Legacy format
 
@@ -64,13 +64,6 @@ RUN dnf install -y https://download1.rpmfusion.org/free/...
 RUN dnf install -y firefox ffmpeg mesa-dri-drivers
 ```
 
-And it updated the image using:
-
-```Dockerfile
-FROM podenv/firefox
-RUN dnf update -y
-```
-
 While this configuration format is easy to use, it requires a lot of
 work from the podenv runtime:
 
@@ -85,48 +78,6 @@ reduced memory usage.
 
 ### Dhall schema
 
-The equivalent dhall configuration looks like this:
-
-```dhall
-[ { name = "firefox"
-  , container-file =
-      ''
-      FROM registry.fedoraproject.org/fedora:30
-      RUN dnf install -y https://download1.rpmfusion.org/free/...
-      RUN dnf install -y firefox ffmpeg mesa-dri-drivers
-      ''
-  , container-update = "RUN dnf update -y"
-  , capabilities = { x11 = True, dri = True }
-  }
-]
-```
-
-The syntax looks odd because it is a new language;
-it seems like podenv just lost the ability to share an image with
-multiple environments. However, as you can see below, this isn't the case.
-
-Dhall, a [programmable configuration language](https://docs.dhall-lang.org/discussions/Programmable-configuration-files.html),
-can implement functions:
-
-```dhall
-let fedoraImage =
-          \(packages : List Text)
-      ->  let concat = https://prelude.dhall-lang.org/Text/concatSep
-
-          in  { container-file =
-                  ''
-                  FROM registry.fedoraproject.org/fedora:30
-                  RUN dnf install -y https://dowload1.rpmfusion.org/free/...
-                  RUN dnf install -y ${concat " " packages}
-                  ''
-              , container-update = "RUN dnf update -y"
-              }
-
-in  [     fedoraImage [ "firefox", "ffmpeg", "mesa-dri-drivers" ]
-      //  { name = "firefox", capabilities = { x11 = True, dri = True } }
-    ]
-```
-
 We can now explicitely define how images are built, while being
 able to combine multiple environment when needed.
 
@@ -138,10 +89,6 @@ simplifying the runtime.
 
 Dhall makes podenv's previous registry system obsolete
 as dhall can natively import configurations.
-
-The user doesn't have to implement the above `fedoraImage` function,
-as the function could be imported from a remote location.
-
 
 ## Safety
 
@@ -157,57 +104,7 @@ Error: List elements should all have the same type
 }
 ```
 
-Dhall's list elements shall all have the same signature.
-Podenv package includes [schemas](https://github.com/podenv/podenv/blob/master/podenv/dhall/types/Env.dhall)
-that can be used to prevent such mistakes:
-
-```dhall
-{- ./test.dhall -}
-let Podenv = ./podenv/dhall/package.dhall
-
-in  Podenv.Env::{ name = "firefox", image-oops = Some "firefox" }
-```
-```console
-$ dhall-to-yaml --file ./test.dhall
-Error: Expression doesn't match annotation
-
-{ + image-oops : …
-, …
-}
-```
-
-The above example is incorrect because the `image` attribute name is misspelled:
-
-```dhall
-{- ./test.dhall -}
-let Podenv = ./podenv/dhall/package.dhall
-
-in  Podenv.Env::{ name = "firefox", image = Some "firefox" }
-```
-```console
-$ dhall-to-yaml --file ./test.dhall
-capabilities:
-  seccomp: true
-  selinux: true
-image: firefox
-name: firefox
-```
-
-This is incredibly powerful when refactoring a configuration or when
-an import changes un-expectedly: dhall ensures the resulting configuration
-is consistent with the excepted type.
-
 ## Conclusion
 
-Dhall produces a configuration object and this can still
-be written in plain YAML. However, using dhall to program the environments
-definition is much more flexible.
-
-Dhall renders most of the legacy podenv logic obsolete while enabling more
-use cases, for example:
-
-* A less obscure image management that supports simple Containerfile,
-* Custom configurations such as assigning a home volume and network to a group of environments, and
-* Dynamic environment definition.
-
-Please note that is still a work in progress and dhall implementation maybe subject to change.
+Dhall renders most of the legacy podenv logic obsolete while enabling
+functional configuration.

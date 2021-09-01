@@ -1,8 +1,7 @@
 # Configure a VPN
 
-Podenv enables network to be shared between multiple environments.
-In this how-to guide we'll see how to use podenv to start openvpn and how
-to start further environment inside the new network.
+In this how-to guide we'll see how to use podenv to run the openvpn application
+from the [podenv/hub](https://github.com/podenv/hub).
 
 ## Create an openvpn container
 
@@ -10,7 +9,7 @@ The first thing we need to do is setup the openvpn configuration file.
 Create a directory named *~/.config/openvpn* and write a configuration file
 such as:
 
-```console
+```bash
 mkdir -p ~/.config/openvpn
 cat << EOF > ~/.config/openvpn/ovpn.conf
 client
@@ -19,34 +18,33 @@ dev-type tun
 nobind
 user nobody
 group nobody
-# Copy the certificate in ~/.config/openvpn/localhost.pem
-ca localhost.pem
+# Copy the certificate in ~/.config/openvpn/example.pem
+ca example.pem
 # Set the remote host here
-remote localhost
+remote vpn.example.com
 # Auth option
 auth-user-pass
 EOF
 ```
 
-Then you can start the environment using this command:
+Then start the application using this command:
 
-```console
+```ShellSession
 $ podenv --home ~/.config/openvpn openvpn ovpn.conf
 Enter Auth Username:
 ```
 
 Note that the openvpn process is started in a container namespace.
-That means the new network interface and its routes are not
-available from the host namespace.
+That means the new network interface is not available from the host namespace.
 
-## Join the network namespace
+## Join the network namespace manually
 
 There are multiple ways to join the openvpn namespace.
 
 Using the podman exec command:
 
 ```console
-$ podman exec -it openvpn ip link show vpn0
+$ podman exec -it openvpn bash
 ```
 
 Using the podman run command:
@@ -61,92 +59,80 @@ Using the nsenter command:
 $ sudo nsenter --net --target $(pidof openvpn) -- ip link show vpn0
 ```
 
-## Share environment network
+## Share network between applications
 
-When joining network directly, the process may loose connectivity when
+When joining the network manually, the session may loose connectivity when
 the openvpn container dies. And when openvpn get restarted, the foreign processes
 need to rejoin the new namespace.
 
 Podenv can provide a persistent network namespace by using an *infra*
 container to keep the namespace alive. This can be activated by using the
-`--net` command line with an arbritary name.
+`--namespace` command line.
+
 Restart the **openvpn** container using:
 
 ```console
-$ podenv --home ~/.config/openvpn --net ovpn openvpn ovpn.conf
+$ podenv --home ~/.config/openvpn --namespace ovpn openvpn ovpn.conf
 ```
 
-Then other environment can join the namespace, for example:
+Then other application can join the namespace, for example:
 
 ```console
-$ podenv --net ovpn firefox
+$ podenv --namespace ovpn firefox
 ```
 
-With that setup, the openvpn container can be restarted when needed, and
-the other environment will recover the connectivity transparently.
+Using podenv namespace, the openvpn container can be restarted when needed, and
+the other applications will recover the connectivity transparently.
 
 
 ## Persist the configuration
 
-Using command line arguments to manage network can become difficult.
-To simplify podenv usage, it's better to specify the configuration
-of commonly used environment.
+Using command line arguments to manage network can be difficult.
+To simplify podenv usage, it is recommended to create a static configuration.
 
-Here is an example configuration for such setup:
+Write this configuration file in `~/.config/podenv/corp.dhall`:
 
 ```dhall
-let Podenv = env:PODENV_PRELUDE
+-- | Load the podenv/hub configuration
+let Hub = ./Hub.dhall
 
-let Hub = env:PODENV_HUB
+-- | An application setting for the namespace
+let ns = { namespace = Some "corp-vpn" }
 
-let vpn-envs =
-      [ Hub.Environments.OpenVPN // { home = Some "~/.config/openvpn" }
-      , Hub.Environments.Firefox.Extended
-      , Hub.Environments.Shell
-      ]
-
-let work-envs =
-      Hub.Functions.mapEnv
-        (     \(env : Podenv.Env.Type)
-          ->  Hub.Runtimes.Fedora.Create.Latest
-                (env // { name = "work-" ++ env.name, network = Some "work" })
-        )
-
-in Hub.Defaults # work-envs vpn-envs
+-- | The resulting applications tree
+in {
+  vpn = Hub.openvpn         // { volumes = [ "~/.config/openvpn:~/" ] }    // ns,
+  web = Hub.firefox.default // { volumes = [ "~/.config/firefox-vpn:~" ] } // ns,
+  bridge = Hub.ssh.client "user@internal-host"                             // ns
+}
 ```
 
-The statements mean:
+Then add the applications tree to the main configuration in `~/.config/podenv/config.dhall`:
 
-* Podenv is the provided types and Hub is the podenv/hub package
-* vpn-envs is a list of environment we want to use inside our vpn
-* work-envs is a function that will apply a function to each environments using the `mapEnv` function.
-* work-envs is applied to vpn-envs and the results is added to the list of environments.
+```dhall
+./Hub.dhall // { corp = ./corp.dhall }
+```
 
-work-envs does three things to it's parameter:
+Three new applications are now configured to share the namespace:
 
-* Setup a Fedora runtime
-* Change the environment name to be prefixed by "work-"
-* Configure the network to be "work"
-
-We now have three new environments:
-
-```console
+```ShellSession
 $ podenv --list
-NAME                 DESCRIPTION
-[...]
-work-firefox         Mozilla Firefox
-work-openvpn         VPN solutions
-work-shell           A simple terminal
+corp.bridge: Application (OpenSSH client)
+corp.vpn: Application (VPN solution)
+corp.web: Application (Mozilla Firefox)
 ```
 
-That we can use like so:
+That can be used like so:
 
-```console
-$ podenv work-openvpn ovpn.conf
+```ShellSession
+$ podenv corp.vpn ovpn.conf
 [vpn connection dialog]
 ```
 
-```console
-$ podenv work-firefox
-[firefox window started in work vpn]
+```ShellSession
+$ podenv corp.web
+[firefox window started in vpn]
 ```
+
+You might want to customize the image to include extra tools and internal CA.
+Checkout the [Custom Image](./image.md) howto next.

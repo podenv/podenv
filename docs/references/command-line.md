@@ -15,33 +15,25 @@ to enable or disable network access use `--network` or `--no-network`.
 Here is the output of the `--help`:
 
 ```bash
-usage: podenv [--verbose] [--debug] [--config FILE] [--expr EXPR]
-              [--show] [--list] [--list-caps] [--rebuild ENV] [--update ENV]
-              [--shell] [--net NAME] [--home PATH] [--image IMAGE] [--environ KEY=VALUE]
-
 podenv - a podman wrapper
 
-commands:
-  --list          List the environments
-  --list-caps     List available capabilities
-  --show          Print the environments
-  --update ENV    Update environment image
-  --rebuild ENV   Rebuild environment image
-  ENV [ARGS]      Execute an environment
+Usage: podenv [--list] [--list-caps] [--show] [--config ARG] [--update]
+              [--verbose] [--shell] [--namespace ARG] [--home PATH]
+              [--name NAME] [--env ENV] [--volume VOLUME] [APP] [ARGS]
 
-environment execution arguments:
-  --home PATH     Set environment home directory
-  --net  NAME     Set environment network
-  --image IMAGE   Set environment image
-  --shell         Run a shell instead of the default command
-  --environ K=V   Add an environ(5) variable
-  --CAP           Activate a capability
-  --no-CAP        Disable a capability
-
-flags:
-  --verbose       Prints logs such as exec argv
-  --debug         Prints even more log
-  --config PATH   Set the config file path,
-                  (defaults to PODENV_CONFIG or ~/.config/podenv/config.dhall)
-  --expr EXPR     Evaluate a config expression from the command line
+Available options:
+  --list                   List available applications
+  --list-caps              List available capabilities
+  --show                   Show the environment without running it
+  --update                 Update the runtime
+  --verbose                Increase verbosity
+  --shell                  Start a shell instead of the application command
+  --namespace ARG          Share a network ns
+  --home PATH              Host path for application home
+  --name NAME              Container name
+  --env ENV                Extra env 'KEY=VALUE'
+  --volume VOLUME          Extra volumes 'volume|hostPath[:containerPath]'
+  APP                      Application config name or image:name or nix:expr
+  ARGS                     Application args
+  -h,--help                Show this help text
 ```
