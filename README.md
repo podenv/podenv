@@ -1,24 +1,42 @@
 # podenv: a podman wrapper
 
-> Please note that this is a work in progress,
-> the schema maybe subject to change.
+> Note that this is a work in progress, please get in touch if you are interested.
 
-Podenv provides a declarative interface to manage containers' environment.
+Podenv provides a declarative interface to manage containerized application.
+Using rootless containers, podenv let you run applications seamlessly.
 
 ## Overview and scope
 
+The main goal of podenv is to convert an application definition into a podman command.
+
 At a high level, the scope of podenv is the following:
 
-* Highlevel capability system to define container resources.
-* Automatic image management to optimize as much as possible the runtime memory.
-* Support desktop application and custom network isolation for VPNs.
-* Convenient command line and configuration files.
+* Highlevel capability system to define generic container resources.
+* Support desktop application with VPN network namespace.
+* User friendly command line interface.
+* Functional configuration.
 
-Podenv is similar to [toolbox](https://github.com/debarshiray/toolbox) or
-[flatpak](https://flatpak.org/) and it is inspired by
-[nix-shell](https://nixos.org/nixos/nix-pills/developing-with-nix-shell.html)
-and [guix environment](https://guix.gnu.org/manual/en/html_node/Invoking-guix-environment.html).
+## Usage
 
+Here are some demo use cases:
+
+### Container image
+
+Run a container image: `podenv --cwd --shell image:ubi8`
+
+… starts the following command: `podman run -it --detach-keys '' --network none --rm --volume $(pwd):/data:Z --workdir /data ubi8 /bin/bash`
+
+### Nix packages
+
+Run a nix package: `podenv nix:"(import <nixpkgs> {}).hello" hello`
+
+… instantiates the expression and runs the `hello` command in a container.
+
+### Applications
+
+Run a podenv application: `podenv gimp ./image.png`
+
+… builds a container and starts the following command: `podman run [wayland args] --volume $(pwd)/image.png:/data/image.png gimp /data/image.png`
 
 # Documentation
 
@@ -31,9 +49,8 @@ Podenv documentation is organized into the following [four sections][documentati
 These guides help you get your hands dirty with working examples:
 
 * [Install and use podenv](./docs/tutorials/install.md)
-* [Create an environment](./docs/tutorials/create.md)
-* [Use an environment](./docs/tutorials/use.md)
-* [Edit the configuration](./docs/tutorials/edit.md)
+* [Use an application](./docs/tutorials/use.md)
+* [Create an application](./docs/tutorials/create.md)
 
 ## Howtos
 
@@ -47,7 +64,7 @@ These cookbooks teach you how to solve specific tasks:
 These posts explain the context and motivation behind this tool:
 
 * [Declarative containers](./docs/discussions/declarative-containers.md)
-* [Using dhall for configuration?](./docs/discussions/dhall-configuration.md)
+* [Using dhall for configuration](./docs/discussions/dhall-configuration.md)
 * [Roadmap](./docs/discussions/roadmap.md)
 
 ## References

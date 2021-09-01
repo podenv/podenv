@@ -2,66 +2,38 @@
 
 This tutorial teachs you how to install and use podenv.
 
+## Binary installation
 
-## Requirements
-
-To use podenv you need a Linux system with at least python-3.7 and [podman](https://podman.io).
-Podenv may also uses PyYAML and [buildah](https://buildah.io).
-
-For example, on a [fedora](https://getfedora.org) workstation, run this command to install the requirements:
-
-```bash
-sudo dnf install -y python3-pyyaml podman buildah dhall-json
-```
-
-## Installation in PATH
-
-Podenv is in early development without any release.
-To install it you have to clone the projects:
-
-```bash
-mkdir -p ~/src/github.com/podenv/
-git clone https://github.com/podenv/podenv ~/src/github.com/podenv/podenv
-git clone https://github.com/podenv/hub ~/src/github.com/podenv/hub
-python3 -mpip install --user ~/src/github.com/podenv/podenv
-```
-
-> Note: if you clone the podenv/hub project to a different location, set this
-> environment variable: PODENV_HUB=~/path/of/hub/package.dhall
+Download the `x86_64-podenv` binary from the release page and put in your PATH.
 
 You can verify the podenv command is successfully installed by running:
 
-```bash
-$ type -p podenv
-/home/tristanc/.local/bin/podenv
+```ShellSession
+$ podenv --help
 ```
 
-## Developper installation
-
-Podenv can also be executed directly from the checkout with this alias:
-
-```bash
-alias podenv='env PYTHONPATH=~/src/github.com/podenv/podenv python3 ~/git/github.com/podenv/podenv/podenv/main.py'
-```
-
+> Checkout the [contribute](../howtos/contribute.md) documentation for source install instructions.
 
 ## Usage
 
-Podenv is designed to be used from the command line or behind a desktop shortcut.
+At its simplest form, a podenv application is defined by its image name.
+Such application can be loaded directly from the command line:
 
-On the first invocation, podenv creates a default configuration in `~/.config/podenv`:
-
-```bash
-$ podenv --list
-NAME                 DESCRIPTION
-audacity             Sound editor with graphical UI
-centos               Centos 8 root shell
-...
+```ShellSession
+$ podenv --shell image:ubi8
 ```
 
-The `--list` argument just list the available environments.
-To start an environment, use its name as the argument.
-Try using the environment named `xeyes` to verify your installation is correct:
+Podenv can use pre-configured applications.
+
+> On first run, podenv setup the one defined in the [podenv/hub](https://github.com/podenv/hub).
+
+```ShellSession
+$ podenv --list
+```
+
+… that can be executed by their name instead of `image:`.
+
+Try running the application named `xeyes` to verify your installation is correct:
 
 ```bash
 $ podenv xeyes
@@ -69,8 +41,8 @@ $ podenv xeyes
 ```
 
 This should display the `xeyes` window. To do that, podenv built a container
-image as described by the `xeyes` environment, then it used the podman command
+image as described by the `xeyes` application, then it used the podman command
 to run the image by giving it access to your graphical desktop.
 
-Checkout the next tutorials to learn how to create a new environment:
+Checkout the next tutorials to learn how to create a new application:
 [Create an enviroment](./create.md).

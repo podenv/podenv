@@ -2,12 +2,8 @@
 
 ## Podenv design
 
-Podenv mainly generates podman command line arguments.
-When necessary, podenv may also:
+Podenv converts an application into a runtime configuration:
 
-* build and update image with buildah.
-* create infra pod to persist namespaces.
-* create and set runtime directory labels.
-
-The `podenv.env` module contains the main capability logic,
-while the `podenv.pod` module does all the IO.
+- `Podenv.Application` module contains the main capability logic,
+- `Podenv.Build` module describes how to build optional runtime,
+- `Podenv.Runtime` module executes the application.
