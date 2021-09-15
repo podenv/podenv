@@ -57,6 +57,7 @@ These guides help you get your hands dirty with working examples:
 These cookbooks teach you how to solve specific tasks:
 
 * [Configure a VPN](./docs/howtos/vpn.md)
+* [Setup a custom image](./docs/howtos/image.md)
 * [Contribute to podenv](./docs/howtos/contribute.md)
 
 ## Discussions

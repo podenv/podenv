@@ -7,7 +7,7 @@ the [GIMP - GNU Image Manipulation Program](https://gimp.org) application.
 ## Create the gimp application definition
 
 We don't want to define the application each time we use it, thus we record
-it's configuration in a file, for example at **~/.config/podenv/gimp.dhall**
+it's configuration in a file, for example at *~/.config/podenv/gimp.dhall*
 write this content:
 
 ```dhall
@@ -47,7 +47,7 @@ STEP 2: RUN dnf install -y gimp
 However, the application didn't start because the podenv default configuration
 doesn't give access to the terminal.
 
-Get the actual podman command by using the **--show** argument:
+Get the actual podman command by using the `--show` argument:
 
 ```ShellSession
 $ podenv-gimp --show
@@ -58,7 +58,7 @@ As you can see, podenv also disables network access by default (`--network none`
 Next we see how to add capabilities.
 
 
-## Activate the terminal capability
+## Start a shell with the terminal capability
 
 It is often useful to get a shell terminal in a container. We can add the `terminal` capability
 by using the `--terminal` command line argument:
@@ -84,11 +84,11 @@ window system. While we could fix that by using the `--x11` capability on the
 command line, we'll see how to properly configure the gimp application next.
 
 
-## Configure the application capabilities
+## Configure the application
 
 We would like to be able to use the gimp application without special command line argument.
 Since the gimp application will always need the `x11` capability, you update the
-configuration file **~/.config/podenv/gimp.dhall** to:
+configuration file *~/.config/podenv/gimp.dhall* to:
 
 ```dhall
 (env:PODENV).Application::{
@@ -127,13 +127,13 @@ However, the application doesn't have access to the host filesystem.
 Any file modifications are trashed when the application die.
 
 
-## Access files from the applications
+## Provide access to the host files
 
 We would like our application to be able to access and modify files from the host
 filesystem. The `--hostfile` capability takes care of exposing host path
 command line argument to the container.
 
-You can open a single file using:
+You can access a file using:
 
 ```ShellSession
 $ podenv-gimp --hostfile /usr/share/pixmaps/fedora-logo.png

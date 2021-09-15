@@ -27,7 +27,8 @@ When the application needs a parameter to be useful, for example a file viewer n
 ```dhall
 -- mupdf.dhall
 let mupdf = \(file : Text) -> (env:PODENV).Application::{
-  command = ["mupdf", file]
+  command = ["mupdf", file],
+  runtime = (env:PODENV).Image "localhost/mupdf"
 }
 in mupdf
 ```

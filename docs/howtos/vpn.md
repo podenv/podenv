@@ -69,7 +69,7 @@ Podenv can provide a persistent network namespace by using an *infra*
 container to keep the namespace alive. This can be activated by using the
 `--namespace` command line.
 
-Restart the **openvpn** container using:
+Restart the `openvpn` container using:
 
 ```console
 $ podenv --home ~/.config/openvpn --namespace ovpn openvpn ovpn.conf
@@ -90,7 +90,7 @@ the other applications will recover the connectivity transparently.
 Using command line arguments to manage network can be difficult.
 To simplify podenv usage, it is recommended to create a static configuration.
 
-Write this configuration file in `~/.config/podenv/corp.dhall`:
+Write this configuration file in *~/.config/podenv/corp.dhall*:
 
 ```dhall
 -- | Load the podenv/hub configuration
@@ -107,7 +107,7 @@ in {
 }
 ```
 
-Then add the applications tree to the main configuration in `~/.config/podenv/config.dhall`:
+Then add the applications tree to the main configuration in *~/.config/podenv/config.dhall*:
 
 ```dhall
 ./Hub.dhall // { corp = ./corp.dhall }

@@ -1,4 +1,4 @@
-# Custom Image
+# Setup a Custom Image
 
 In this how-to guide we'll see how to use a custom image.
 
@@ -65,7 +65,7 @@ in  Podenv.Container (Hub.fedora.useImage ver extra packages // set-image)
 
 In a file named *~/.config/podenv/local.dhall* write:
 
-```
+```dhall
 -- | My applications
 let Hub = ./Hub.dhall
 
@@ -78,7 +78,7 @@ in { firefox = Hub.firefox.default // my-image
 
 And update the default set, in *~/.config/podenv/config.dhall*:
 
-```
+```dhall
 ./Hub.dhall // ./local.dhall
 ```
 

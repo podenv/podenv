@@ -1,4 +1,4 @@
-# Using dhall for configuration?
+# Using dhall for configuration
 
 Using dhall for podenv configuration might sound a bit hipster,
 however, it is effective for the following reasons:

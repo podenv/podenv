@@ -81,7 +81,7 @@ localhost/podenv/firefox                    latest                622df31ab30b  
 $ podman tag 713d6fa70a9f localhost/podenv/firefox
 ```
 
-Finally you can force clean rebuild by cleaning up the `~/.cache/podenv` directory.
+Finally you can force clean rebuild by cleaning up the *~/.cache/podenv* directory.
 
 This conclude the tutorial on how to use an application.
 By this point you should understand how podenv manage the runtime and how update works.
