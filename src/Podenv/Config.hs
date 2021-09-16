@@ -234,12 +234,7 @@ defaultApp = case Dhall.extract Dhall.auto $(Dhall.TH.staticDhallExpression "(./
   Failure v -> error $ "Invalid default application: " <> show v
 
 defaultNixBuilder :: BuilderNix
-defaultNixBuilder = case loadApp
-  $( -- TODO: improve default location, when building podenv with nix, run
-     -- `dhall <<< ../hub/Builders/nix.dhall > schemas/nix.dhall`
-     let loc = "env:HUB_NIX_BUILDER ? ../hub/Builders/nix.dhall ? ./schemas/nix.dhall"
-      in Dhall.TH.staticDhallExpression loc
-   ) of
+defaultNixBuilder = case loadApp $(Dhall.TH.staticDhallExpression "./schemas/nix.dhall") of
   (Success (Lit a)) -> BuilderNix "default" a
   _ -> error "Can't load default nix builder."
 

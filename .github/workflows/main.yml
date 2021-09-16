@@ -15,9 +15,6 @@ jobs:
       with:
         repository: podenv/hub
         path: hub
-    - uses: dhall-lang/setup-dhall@v4
-    # TODO: improve build to avoid such dependency
-    - run: echo ./hub/Builders/nix.dhall | dhall > podenv/schemas/nix.dhall
     - uses: cachix/install-nix-action@v13
     - run: cd podenv; nix-build --attr podenv
     - run: ./podenv/result/bin/podenv --config ./hub/package.dhall --list
