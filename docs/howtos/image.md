@@ -54,7 +54,7 @@ let ver = "34"
 let extra =
       ''
       RUN dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${ver}.noarch.rpm
-      RUN echo ${ca} > /etc/pki/ca-trust/source/anchors/corp.pem && update-ca-trust
+      RUN echo -e ${ca} > /etc/pki/ca-trust/source/anchors/corp.pem && update-ca-trust
       ENV KRB5CCNAME=/home/fedora/.ticket
       ''
 
