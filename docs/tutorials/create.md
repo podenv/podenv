@@ -140,6 +140,21 @@ $ podenv-gimp --hostfile /usr/share/pixmaps/fedora-logo.png
 [fedora logo appears in gimp]
 ```
 
+## Add the application to the global configuration
+
+We would like to be able to run the new application directly using `podenv`.
+You can add it to the global config by adding `// { gimp = ./gimp.dhall }` to
+the *~/.config.podenv/config.dhall* file, for example:
+
+```dhall
+./Hub.dhall // { gimp = ./gimp.dhall }
+```
+
+… then you can now run:
+
+```ShellSession
+$ podenv gimp --show
+```
 
 This concludes the tutorial on how to create a new application.
 By this point you should understand how podenv can be configured and how
