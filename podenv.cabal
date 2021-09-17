@@ -44,6 +44,7 @@ library
   import:           common
   build-depends:    base < 5
                   , SHA
+                  , containers
                   , dhall
                   , directory
                   , either
@@ -53,6 +54,7 @@ library
                   , linux-capabilities
                   , optparse-applicative
                   , relude
+                  , text
                   , typed-process
                   , unix
   hs-source-dirs:   src
