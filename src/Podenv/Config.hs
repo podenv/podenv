@@ -31,10 +31,11 @@ import qualified Data.Text.IO as Text
 import qualified Dhall
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Freeze as Dhall
+import qualified Dhall.Import (writeExpressionToSemanticCache)
 import qualified Dhall.Map as DM
 import qualified Dhall.Src
 import qualified Dhall.TH
-import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime)
+import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime, version)
 import Podenv.Prelude
 import System.Directory
 import System.Environment (setEnv, unsetEnv)
@@ -81,11 +82,11 @@ load selectorM exprTxt = case defaultSelector of
 withDhallEnv :: IO a -> IO a
 withDhallEnv =
   bracket_
-    (setEnv "PODENV" (toString $ Dhall.pretty package))
+    (setEnv "PODENV" (toString $ Dhall.pretty dhallPackage))
     (unsetEnv "PODENV")
-  where
-    package :: Dhall.Expr Dhall.Src.Src Void
-    package = $(Dhall.TH.staticDhallExpression "./package.dhall")
+
+dhallPackage :: Dhall.Expr Void Void
+dhallPackage = $(Dhall.TH.staticDhallExpression "./package.dhall")
 
 -- | Pure config load
 load' :: DhallExpr -> Config
@@ -200,19 +201,21 @@ ensureDefault expr
     -- write unless file already exists
     maybeWrite fp action = do
       exist <- doesFileExist fp
+      -- TODO: check if Hub.dhall contents is using an old schemas version
       unless exist $ do
         content <- action
         Text.writeFile fp content
     hubUrl =
-      let path = Dhall.File (Dhall.Directory ["master", "hub", "podenv"]) "package.dhall"
+      let path = Dhall.File (Dhall.Directory ["schemas-v" <> show Podenv.Dhall.version, "hub", "podenv"]) "package.dhall"
        in Dhall.URL Dhall.HTTPS "raw.githubusercontent.com" path Nothing Nothing
     hubImport = Dhall.Import (Dhall.ImportHashed Nothing (Dhall.Remote hubUrl)) Dhall.Code
     freezeHub baseDir = do
       putTextLn $ "Initializing " <> toText (baseDir </> "Hub.dhall") <> ", this may take some time..."
-      -- TODO: fix withDhallEnv
       -- We can't use withDhallEnv here because remote import can't access env: or ~/ path.
       -- Instead we should look into using `Dhall.Import.loadWith` and a custom substituer to inject (env:PODENV)
-      finalImport <- withDhallEnv (Dhall.freezeImport "." hubImport)
+      -- Until then, we can write the schemas to the cache
+      Dhall.Import.writeExpressionToSemanticCache dhallPackage
+      finalImport <- Dhall.freezeImport "." hubImport
       pure $
         unlines
           [ "-- | The default dhall hub. Replace it by a local copy, e.g. `~/src/github.com/podenv/hub/package.dhall`",
