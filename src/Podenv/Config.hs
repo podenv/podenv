@@ -195,20 +195,20 @@ ensureDefault expr
     baseDir <- getConfigDir
     createDirectoryIfMissing True baseDir
     maybeWrite (baseDir </> "config.dhall") (pure $ unlines defaultConfigContent)
-    maybeWrite (baseDir </> "Hub.dhall") freezeHub
+    maybeWrite (baseDir </> "Hub.dhall") (freezeHub baseDir)
   where
     -- write unless file already exists
     maybeWrite fp action = do
       exist <- doesFileExist fp
       unless exist $ do
-        putTextLn $ "Initializing " <> toText fp
         content <- action
         Text.writeFile fp content
     hubUrl =
       let path = Dhall.File (Dhall.Directory ["master", "hub", "podenv"]) "package.dhall"
        in Dhall.URL Dhall.HTTPS "raw.githubusercontent.com" path Nothing Nothing
     hubImport = Dhall.Import (Dhall.ImportHashed Nothing (Dhall.Remote hubUrl)) Dhall.Code
-    freezeHub = do
+    freezeHub baseDir = do
+      putTextLn $ "Initializing " <> toText (baseDir </> "Hub.dhall") <> ", this may take some time..."
       -- TODO: fix withDhallEnv
       -- We can't use withDhallEnv here because remote import can't access env: or ~/ path.
       -- Instead we should look into using `Dhall.Import.loadWith` and a custom substituer to inject (env:PODENV)
