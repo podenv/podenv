@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
@@ -23,6 +24,9 @@ import qualified Data.Text.IO as Text
 import Podenv.Dhall
 import Podenv.Prelude
 import qualified Podenv.Runtime as Ctx
+#if !MIN_VERSION_relude(1,0,0)
+import System.Environment
+#endif
 
 -- | The reader env required to prepare the Context
 data AppEnv = AppEnv
