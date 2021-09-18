@@ -32,6 +32,7 @@ import qualified Dhall
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Freeze as Dhall
 import qualified Dhall.Map as DM
+import Dhall.Marshal.Decode (extractError)
 import qualified Dhall.Src
 import qualified Dhall.TH
 import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime)
@@ -124,7 +125,7 @@ loadConfig baseSelector expr = case expr of
         | baseSelector == mempty = name
         | name == "default" = baseSelector
         | otherwise = baseSelector <> "." <> name
-  _ -> error $ "Bad config: " <> Text.take 256 (show expr)
+  _ -> extractError $ "Bad config: " <> Text.take 256 (show expr)
 
 data Builder
   = NixBuilder BuilderNix
@@ -141,49 +142,52 @@ data BuilderContainer = BuilderContainer
   }
 
 -- | Select the application, returning the unused cli args.
-select :: Config -> [Text] -> ([Text], (Maybe Builder, Application))
+select :: Config -> [Text] -> Either Text ([Text], (Maybe Builder, Application))
 select config args = case config of
   -- config default is always selected, drop the first args
-  ConfigDefault app -> (tail (fromList args), ensureBuilder [] app)
+  ConfigDefault app -> ensureBuilder [] app >>= \appB -> pure (tail (fromList args), appB)
   -- config has only one application, don't touch the args
   ConfigApplication atom -> selectApp [] args atom
   -- config has some applications, the first arg is a selector
   ConfigApplications atoms -> case args of
-    (selector : xs) ->
-      let app = fromMaybe (error $ selector <> ": not found") $ lookup selector atoms
-          name' = selector -- todo mappend the extra selector arg
-       in fmap (ensureName name') <$> selectApp atoms xs app
-    [] -> error "Multiple apps configured, provides a selector"
+    (selector : xs) -> do
+      atom <- lookup selector atoms `orDie` (selector <> ": not found")
+      (args', app) <- selectApp atoms xs atom
+      let name' = selector -- todo: mappend the extra selector arg
+      pure (args', ensureName name' <$> app)
+    [] -> Left "Multiple apps configured, provides a selector"
   where
     -- When an application define a builder, lookup its definition
-    ensureBuilder :: [(Text, Atom)] -> Application -> (Maybe Builder, Application)
-    ensureBuilder atoms app =
-      let builderM = case app ^. appRuntime of
-            Image name
-              | name == mempty -> error "Empty image"
-              | otherwise -> Nothing
-            Nix {} -> Just $ case lookup "nix.setup" atoms of
-              Just (Lit x) -> NixBuilder $ BuilderNix "nix.setup" x
-              Just _ -> error "Invalid nix.setup"
-              Nothing -> NixBuilder defaultNixBuilder
-            Container cb -> containerBuilder cb
-          containerBuilder cb = Just $ ContainerBuilder $ BuilderContainer "<inline>" cb
-       in (builderM, app)
+    ensureBuilder :: [(Text, Atom)] -> Application -> Either Text (Maybe Builder, Application)
+    ensureBuilder atoms app = do
+      builderM <-
+        case app ^. appRuntime of
+          Image name
+            | name == mempty -> Left "Empty image"
+            | otherwise -> Right Nothing
+          Nix {} -> case lookup "nix.setup" atoms of
+            Just (Lit x) -> Right $ Just $ NixBuilder $ BuilderNix "nix.setup" x
+            Just _ -> Left "Invalid nix.setup"
+            Nothing -> Right $ Just $ NixBuilder defaultNixBuilder
+          Container cb -> Right $ Just $ ContainerBuilder $ BuilderContainer "<inline>" cb
+      pure (builderM, app)
 
     selectApp atoms args' atom = case atom of
       -- App is not a function, don't touch the arg
-      Lit x -> (args', ensureBuilder atoms x)
+      Lit x -> ensureBuilder atoms x >>= \appB -> pure (args', appB)
       -- App needs an argument, the tail is the arg
       LamArg arg f -> case args' of
-        (x : xs) -> (xs, ensureBuilder atoms (f x))
-        [] -> error $ "Missing argument: " <> show arg
+        (x : xs) -> ensureBuilder atoms (f x) >>= \appB -> pure (xs, appB)
+        [] -> Left ("Missing argument: " <> show arg)
       LamApp f -> case args' of
-        (x : xs) ->
+        (x : xs) -> do
           -- Recursively select the app to eval arg `mod app arg` as `mod (app arg)`
           -- e.g. LamApp should be applied at the end.
-          let (rest, (_, app)) = selectApp atoms xs (fromMaybe (error $ "Unknown lam arg: " <> x) $ lookup x atoms)
-           in (rest, ensureBuilder atoms (f app))
-        [] -> error "Missing app argument"
+          atom' <- lookup x atoms `orDie` (x <> ": unknown lam arg")
+          (rest, (_, app)) <- selectApp atoms xs atom'
+          appb <- ensureBuilder atoms (f app)
+          pure (rest, appb)
+        [] -> Left "Missing app argument"
 
 defaultConfigPath :: Text
 defaultConfigPath = "~/.config/podenv/config.dhall"
