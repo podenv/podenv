@@ -1,4 +1,4 @@
-let Podenv = ../package.dhall
+let Podenv = ../hub/Podenv.dhall
 
 let fedora =
       \(pkgs : List Text) ->
