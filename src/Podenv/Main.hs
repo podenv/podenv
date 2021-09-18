@@ -40,9 +40,9 @@ main = do
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
 
-  (cliApp, be, re) <- cliConfigLoad cli
+  (cliApp, mode, be, re) <- cliConfigLoad cli
   (ready, app) <- Podenv.Build.prepare be cliApp
-  ctx <- Podenv.Application.prepare app
+  ctx <- Podenv.Application.prepare app mode
 
   if showApplication
     then putTextLn $ showApp app ctx be re
@@ -129,7 +129,7 @@ cliInfo =
     (fullDesc <> header "podenv - a podman wrapper")
 
 -- | Load the config
-cliConfigLoad :: CLI -> IO (Application, Maybe BuildEnv, RuntimeEnv)
+cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Maybe BuildEnv, RuntimeEnv)
 cliConfigLoad cli@CLI {..} = do
   system <- Podenv.Config.loadSystem
   config <- Podenv.Config.load selector configExpr
@@ -137,7 +137,8 @@ cliConfigLoad cli@CLI {..} = do
       app = cliPrepare cli args baseApp
       be = Podenv.Build.initBuildEnv app <$> builderM
       re = RuntimeEnv {detach, k8s, verbose, system}
-  pure (app, be, re)
+      mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
+  pure (app, mode, be, re)
 
 -- | Apply the CLI argument to the application
 cliPrepare :: CLI -> [Text] -> Application -> Application
@@ -151,8 +152,7 @@ cliPrepare CLI {..} args = modifiers
 
     setName = maybe id (appName .~) name
 
-    setShell = bool id (setShellCommand . setShellCap) shell
-    setShellCommand = appCommand .~ ["/bin/bash"]
+    setShell = bool id setShellCap shell
     setShellCap = appCapabilities %~ (capTerminal .~ True) . (capInteractive .~ True)
 
     setHome = maybe id (\n -> appVolumes %~ (toText n <> ":~/" :)) homePath

@@ -78,7 +78,16 @@ spec config = describe "unit tests" $ do
     it "run simple" $
       podmanCliTest
         ["--network", "--shell", "image:ubi8"]
-        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "localhost", "--name", "image-8bfbaa", "ubi8", "/bin/bash"]
+        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "localhost", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
+    it "shell override hostfile" $ do
+      let expected extra = ["run", "-i", "--detach-keys", "", "-t", "--rm", "--network", "none"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
+          cmd = ["--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"]
+      podmanCliTest
+        (["--shell"] <> cmd)
+        (expected [] <> ["/bin/sh"])
+      podmanCliTest
+        cmd
+        (expected ["--volume", "/etc/hosts:/data/hosts"] <> ["vi", "/data/hosts"])
     it "run many volumes" $
       podmanCliTest
         ["--volume", "/home/data:/tmp/data", "--volume", "/tmp", "--volume", "/old:/tmp/data", "image:ubi8"]
@@ -89,13 +98,13 @@ spec config = describe "unit tests" $ do
     defRe = Podenv.Runtime.defaultRuntimeEnv
 
     podmanCliTest args expected = do
-      (app, _, _) <- Podenv.Main.cliConfigLoad (parseCli args)
-      ctx <- Podenv.Application.prepare app
+      (app, mode, _, _) <- Podenv.Main.cliConfigLoad (parseCli args)
+      ctx <- Podenv.Application.prepare app mode
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True")
-      ctx <- Podenv.Application.prepare app
+      ctx <- Podenv.Application.prepare app Podenv.Application.Regular
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
     cliTest code args expectedCode = do
