@@ -90,7 +90,7 @@ the other applications will recover the connectivity transparently.
 Using command line arguments to manage network can be difficult.
 To simplify podenv usage, it is recommended to create a static configuration.
 
-Write this configuration file in *~/.config/podenv/corp.dhall*:
+Write this configuration file in *~/.config/podenv/local.d/corp.dhall*:
 
 ```dhall
 -- | Load the podenv/hub configuration
@@ -105,12 +105,6 @@ in {
   web = Hub.firefox.default // { volumes = [ "~/.config/firefox-vpn:~" ] } // ns,
   bridge = Hub.ssh.client "user@internal-host"                             // ns
 }
-```
-
-Then add the applications tree to the main configuration in *~/.config/podenv/config.dhall*:
-
-```dhall
-env:HUB // { corp = ./corp.dhall }
 ```
 
 Three new applications are now configured to share the namespace:

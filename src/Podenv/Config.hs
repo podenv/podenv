@@ -30,14 +30,17 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text (readFile)
 import qualified Dhall
 import qualified Dhall.Core as Dhall
+import qualified Dhall.Import
 import qualified Dhall.Map as DM
 import Dhall.Marshal.Decode (extractError)
+import qualified Dhall.Parser
 import qualified Dhall.Src
 import qualified Dhall.TH
 import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime)
 import Podenv.Prelude
 import System.Directory
 import System.Environment (setEnv, unsetEnv)
+import System.FilePath.Posix (dropExtension, isExtensionOf, splitPath)
 import qualified Text.Show
 
 data Config
@@ -94,7 +97,28 @@ loadExpr configTxt
     let configPath = baseDir </> "config.dhall"
     config <-
       bool (pure "env:HUB") (Text.readFile configPath) =<< doesFileExist configPath
-    Dhall.inputExpr config
+    case Dhall.Parser.exprFromText "~/.config/podenv/config.dhall" config of
+      Right configExpr -> do
+        -- lookup local.d configs
+        let locald = baseDir </> "local.d"
+        localFiles <- bool (pure []) (listDirectory locald) =<< doesPathExist locald
+        let localConfig = createLocalRecord locald localFiles
+        -- adds local.d to the main config using the `//` operator
+        let expr' = Dhall.Prefer Nothing Dhall.PreferFromSource configExpr localConfig
+        Dhall.normalize <$> Dhall.Import.loadRelativeTo baseDir Dhall.Import.UseSemanticCache expr'
+      Left e -> error $ "Invalid config: " <> show e
+
+-- | Create a record for local.d config
+createLocalRecord :: FilePath -> [FilePath] -> Dhall.Expr Dhall.Src.Src Dhall.Import
+createLocalRecord baseDir =
+  Dhall.RecordLit . fromList . map toRecord . filter (isExtensionOf ".dhall")
+  where
+    toRecord :: FilePath -> (Text, Dhall.RecordField Dhall.Src.Src Dhall.Import)
+    toRecord name = (toText $ dropExtension name, Dhall.makeRecordField (Dhall.Embed $ toImport name))
+    toImport :: FilePath -> Dhall.Import
+    toImport name =
+      let file = Dhall.File (Dhall.Directory $ reverse $ map toText $ splitPath baseDir) (toText name)
+       in Dhall.Import (Dhall.ImportHashed Nothing (Dhall.Local Dhall.Absolute file)) Dhall.Code
 
 dhallPackage :: Dhall.Expr Void Void
 dhallPackage = $(Dhall.TH.staticDhallExpression "./hub/schemas/package.dhall")
