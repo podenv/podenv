@@ -16,6 +16,7 @@ module Podenv.Application
   ( prepare,
     capsAll,
     Cap (..),
+    Mode (..),
   )
 where
 
@@ -40,9 +41,11 @@ data AppEnv = AppEnv
 
 type AppEnvT a = ReaderT AppEnv IO a
 
+data Mode = Regular | Shell
+
 -- | Converts an Application into a Context
-prepare :: Application -> IO Ctx.Context
-prepare app = do
+prepare :: Application -> Mode -> IO Ctx.Context
+prepare app mode = do
   appEnv <-
     AppEnv
       <$> lookupEnv "XDG_RUNTIME_DIR"
@@ -50,7 +53,7 @@ prepare app = do
       <*> getCurrentDirectory
       <*> getRealUserID
       <*> pure (toString <$> containerHome)
-  runReaderT (doPrepare app {home = containerHome}) appEnv
+  runReaderT (doPrepare app {home = containerHome} mode) appEnv
   where
     containerHome =
       -- The root cap needs to be applied first as it modifies the App
@@ -58,8 +61,8 @@ prepare app = do
         then Just "/root"
         else app ^. appHome
 
-doPrepare :: Application -> AppEnvT Ctx.Context
-doPrepare app = do
+doPrepare :: Application -> Mode -> AppEnvT Ctx.Context
+doPrepare app mode = do
   uid <- asks _hostUid
   let baseCtx =
         (Ctx.defaultContext (app ^. appName) image)
@@ -71,10 +74,12 @@ doPrepare app = do
     foldM addVolume baseCtx (app ^. appVolumes)
       >>= flip (foldM setCaps) capsAll
 
-  setCommand <-
-    if app ^. appCapabilities . capHostfile
-      then resolveFileArgs $ app ^. appCommand
-      else pure $ Ctx.command .~ app ^. appCommand
+  setCommand <- case mode of
+    Regular ->
+      if app ^. appCapabilities . capHostfile
+        then resolveFileArgs $ app ^. appCommand
+        else pure $ Ctx.command .~ app ^. appCommand
+    Shell -> pure $ Ctx.command .~ ["/bin/sh"]
   pure (setCommand . modifiers $ ctx)
   where
     image = case app ^. appRuntime of
