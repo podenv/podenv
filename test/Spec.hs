@@ -12,6 +12,7 @@ import qualified Podenv.Config
 import Podenv.Dhall (Application (..))
 import qualified Podenv.Dhall
 import qualified Podenv.Main
+import Podenv.Prelude (mayFail)
 import qualified Podenv.Runtime
 import System.Environment (getEnv, setEnv)
 import Test.Hspec
@@ -35,8 +36,8 @@ spec config = describe "unit tests" $ do
     it "load nested" $ loadTest "{ a = { b = env, c = env}, d = env}" ["a.b", "a.c", "d"]
   describe "builder config" $ do
     it "load firefox" $ do
-      let (_, (builderM, baseApp)) = Podenv.Config.select config ["firefox"]
-          be = Podenv.Build.initBuildEnv baseApp <$> builderM
+      (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
+      let be = Podenv.Build.initBuildEnv baseApp <$> builderM
       (_, app) <- Podenv.Build.prepare be baseApp
       runtime app `shouldBe` Podenv.Dhall.Image "localhost/firefox"
   -- ctx <- Podenv.Application.prepare app
@@ -94,7 +95,7 @@ spec config = describe "unit tests" $ do
         ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data", "--name", "image-8bfbaa", "ubi8"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
-    defImg = ""
+    defImg = "ubi8"
     defRe = Podenv.Runtime.defaultRuntimeEnv
 
     podmanCliTest args expected = do
@@ -110,7 +111,7 @@ spec config = describe "unit tests" $ do
     cliTest code args expectedCode = do
       let cli@Podenv.Main.CLI {..} = parseCli args
       config' <- loadConfig (Podenv.Main.selector cli) code
-      let (args', (_, baseApp)) = Podenv.Config.select config' (maybeToList selector <> extraArgs)
+      (args', (_, baseApp)) <- mayFail $ Podenv.Config.select config' (maybeToList selector <> extraArgs)
       expected <- loadOne expectedCode
 
       let got = Podenv.Main.cliPrepare cli args' baseApp
@@ -139,7 +140,7 @@ spec config = describe "unit tests" $ do
             unlines $
               [ "let Podenv = env:PODENV",
                 "let Nix = Podenv.Nix",
-                "let def = Podenv.Application.default // { runtime = Podenv.Image \"\" }",
+                "let def = Podenv.Application.default // { runtime = Podenv.Image \"ubi8\" }",
                 "let env = def // { name = \"env\" }",
                 "let env2 = env // { name = \"beta\" } in",
                 code
