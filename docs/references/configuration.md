@@ -6,15 +6,15 @@ This document references the configuration file format.
 
 ### Attributes
 
-See [Application.Type](../../schemas/Application.dhall)
+See [Application.Type](https://github.com/podenv/hub/blob/main/schemas/Application.dhall)
 
 ### Capabilities list
 
-See [Capabilities.Type](../../schemas/Capabilities.dhall)
+See [Capabilities.Type](https://github.com/podenv/hub/blob/main/schemas/Capabilities.dhall)
 
 ## Runtime
 
-Application defines a runtime, see [Runtime.Type](../../schemas/Runtime.dhall).
+Application defines a runtime, see [Runtime.Type](https://github.com/podenv/hub/blob/main/schemas/Runtime.dhall).
 
 ## Functional application
 

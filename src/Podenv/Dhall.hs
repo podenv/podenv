@@ -24,15 +24,15 @@ version = 1
 -- | Generate Haskell Types from Dhall Types.
 -- See: https://hackage.haskell.org/package/dhall-1.39.0/docs/Dhall-TH.html
 Dhall.TH.makeHaskellTypes
-  ( let mainPath name = "(./schemas/" <> name <> ".dhall).Type"
+  ( let mainPath name = "(./hub/schemas/" <> name <> ".dhall).Type"
         main' cname name = Dhall.TH.SingleConstructor cname cname $ mainPath name
         main name = main' name name
      in [ main "Capabilities",
           main "Application",
           main "ContainerBuild",
           main' "SystemConfig" "System",
-          Dhall.TH.MultipleConstructors "Provider" "./schemas/Provider.dhall",
-          Dhall.TH.MultipleConstructors "Runtime" "./schemas/Runtime.dhall"
+          Dhall.TH.MultipleConstructors "Provider" "./hub/schemas/Provider.dhall",
+          Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall"
         ]
   )
 

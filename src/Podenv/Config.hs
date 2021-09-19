@@ -87,7 +87,7 @@ withDhallEnv =
     (unsetEnv "PODENV")
 
 dhallPackage :: Dhall.Expr Void Void
-dhallPackage = $(Dhall.TH.staticDhallExpression "./package.dhall")
+dhallPackage = $(Dhall.TH.staticDhallExpression "./hub/schemas/package.dhall")
 
 -- | Pure config load
 load' :: DhallExpr -> Config
@@ -236,12 +236,16 @@ ensureDefault expr
 
 -- | The default app
 defaultApp :: Application
-defaultApp = case Dhall.extract Dhall.auto $(Dhall.TH.staticDhallExpression "(./package.dhall).Application.default // { runtime = (./package.dhall).Image \"\" }") of
+defaultApp = case Dhall.extract
+  Dhall.auto
+  $( let package = "(./hub/schemas/package.dhall)"
+      in Dhall.TH.staticDhallExpression (package <> ".Application.default // { runtime = " <> package <> ".Image \"\" }")
+   ) of
   Success app -> app
   Failure v -> error $ "Invalid default application: " <> show v
 
 defaultNixBuilder :: BuilderNix
-defaultNixBuilder = case loadApp $(Dhall.TH.staticDhallExpression "./schemas/nix.dhall") of
+defaultNixBuilder = case loadApp $(Dhall.TH.staticDhallExpression "./hub/Builders/nix.dhall") of
   (Success (Lit a)) -> BuilderNix "default" a
   _ -> error "Can't load default nix builder."
 
@@ -262,7 +266,7 @@ loadApp expr = case expr of
   where
     -- The type of an application
     typeApp :: DhallExpr
-    typeApp = $(Dhall.TH.staticDhallExpression "(./package.dhall).Application.Type")
+    typeApp = $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).Application.Type")
 
 loadSystem :: IO SystemConfig
 loadSystem = do
@@ -276,6 +280,6 @@ loadSystem = do
 -- | The default system config
 defaultSystemConfig :: SystemConfig
 defaultSystemConfig =
-  case Dhall.extract Dhall.auto $(Dhall.TH.staticDhallExpression "(./package.dhall).System.default") of
+  case Dhall.extract Dhall.auto $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).System.default") of
     Success x -> x
     Failure v -> error $ "Invalid default system config: " <> show v
