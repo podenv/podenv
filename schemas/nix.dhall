@@ -7,7 +7,6 @@
   , dri = False
   , gitroot = False
   , gpg = False
-  , host_network = False
   , hostfile = False
   , interactive = False
   , keep = False

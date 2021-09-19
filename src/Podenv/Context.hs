@@ -26,9 +26,6 @@ import System.Linux.Capabilities (Capability)
 newtype ImageName = ImageName {unImageName :: Text}
   deriving (Show)
 
-data Network = None | Private | Host
-  deriving (Show)
-
 data Mode = RO | RW
   deriving (Show)
 
@@ -52,7 +49,7 @@ data Context = Context
     -- | container image name
     _image :: ImageName,
     -- | network namespace name
-    _network :: Network,
+    _network :: Bool,
     _ports :: [Port],
     _runAs :: Maybe RunAs,
     _selinux :: Bool,
@@ -90,7 +87,7 @@ defaultContext _name _image =
       -- todo keep track of fresh uid
       _anyUid = 4242,
       _selinux = True,
-      _network = None,
+      _network = False,
       _ports = mempty,
       _runAs = Nothing,
       _environ = mempty,
