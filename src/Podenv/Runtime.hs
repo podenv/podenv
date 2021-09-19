@@ -79,13 +79,13 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
       PortUdp p -> p
 
     hostnameArg = ["--hostname", "localhost"]
-    networkArg = case _network of
-      None -> ["--network", "none"]
-      Private ->
+    networkArg
+      | _network =
         hostnameArg <> case _namespace of
+          Just "host" -> ["--network", "host"]
           Just ns -> ["--network", "container:" <> infraName ns]
           Nothing -> maybe [] (\dns -> ["--dns=" <> dns]) (system ^. sysDns) <> portArgs
-      Host -> hostnameArg <> ["--network", "host"]
+      | otherwise = ["--network", "none"]
 
     volumeArg :: (FilePath, Volume) -> [Text]
     volumeArg (fp, MkVolume mode vtype) = case vtype of
@@ -169,7 +169,7 @@ executePodman :: Context -> ContextEnvT ()
 executePodman ctx = do
   re <- ask
   case (ctx ^. namespace, ctx ^. network) of
-    (Just ns, Private) | ns /= mempty -> ensureInfraNet ns
+    (Just ns, True) | ns /= mempty -> ensureInfraNet ns
     _ -> pure ()
 
   status <- getPodmanStatus cname

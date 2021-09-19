@@ -166,8 +166,7 @@ capsToggle =
     Cap "x11" "share x11 socket" capX11 setX11,
     Cap "cwd" "mount cwd" capCwd setCwd,
     Cap "keep" "keep after run" capKeep (contextSet Ctx.keep True),
-    Cap "network" "enable network" capNetwork (contextSet Ctx.network Ctx.Private),
-    Cap "host-network" "enable host network" capHost_network (contextSet Ctx.network Ctx.Host),
+    Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
     Cap "hostfile" "mount command file arg" capHostfile pure
   ]
 

@@ -31,7 +31,6 @@
     , kvm : Bool
     , alsa : Bool
     , network : Bool
-    , host_network : Bool
     , tun : Bool
     , --
       -- Host filesystem
@@ -62,7 +61,6 @@
   , kvm = False
   , alsa = False
   , network = False
-  , host_network = False
   , tun = False
   , cwd = False
   , gitroot = False
