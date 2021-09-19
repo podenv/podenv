@@ -13,7 +13,7 @@ where
 
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Podenv.Application (prepare)
+import qualified Podenv.Application (Mode (Regular), prepare)
 import Podenv.Config (Builder (..), BuilderContainer (..), BuilderNix (..))
 import Podenv.Dhall
 import Podenv.Prelude
@@ -184,7 +184,7 @@ imageNameToFilePath imageName = "Containerfile_" <> toString (imageNameToFP imag
 
 runApp :: Application -> IO ()
 runApp app = do
-  ctx <- Podenv.Application.prepare app
+  ctx <- Podenv.Application.prepare app Podenv.Application.Regular
   Podenv.Runtime.execute Podenv.Runtime.defaultRuntimeEnv ctx
 
 checkIfBuilt :: FilePath -> Text -> IO Bool

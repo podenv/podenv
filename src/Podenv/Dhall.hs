@@ -17,6 +17,10 @@ import Data.Text ()
 import qualified Dhall.TH
 import Lens.Family.TH (makeLensesBy)
 
+-- | When updating the schemas, bump the version and branch the hub
+version :: Word
+version = 1
+
 -- | Generate Haskell Types from Dhall Types.
 -- See: https://hackage.haskell.org/package/dhall-1.39.0/docs/Dhall-TH.html
 Dhall.TH.makeHaskellTypes
