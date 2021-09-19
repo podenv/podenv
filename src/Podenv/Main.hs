@@ -133,8 +133,8 @@ cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Maybe BuildEnv
 cliConfigLoad cli@CLI {..} = do
   system <- Podenv.Config.loadSystem
   config <- Podenv.Config.load selector configExpr
-  let (args, (builderM, baseApp)) = Podenv.Config.select config (maybeToList selector <> extraArgs)
-      app = cliPrepare cli args baseApp
+  (args, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config (maybeToList selector <> extraArgs)
+  let app = cliPrepare cli args baseApp
       be = Podenv.Build.initBuildEnv app <$> builderM
       re = RuntimeEnv {detach, k8s, verbose, system}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular

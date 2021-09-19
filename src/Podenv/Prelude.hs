@@ -4,6 +4,8 @@ module Podenv.Prelude
     foldM,
     lookup,
     getEnv,
+    orDie,
+    mayFail,
 
     -- * xdg
     getCacheDir,
@@ -41,8 +43,17 @@ import Relude.Extra.Lens (Lens')
 import System.Directory
 import System.Environment (getEnv)
 import System.FilePath.Posix (hasTrailingPathSeparator, takeDirectory, takeFileName, (</>))
+import System.IO (hPutStrLn)
 import System.Posix.Types (UserID)
 import System.Posix.User (getRealUserID)
+
+orDie :: Maybe a -> Text -> Either Text a
+orDie (Just a) _ = Right a
+orDie Nothing e = Left e
+
+mayFail :: Either Text a -> IO a
+mayFail (Right a) = pure a
+mayFail (Left msg) = hPutStrLn stderr ("Error: " <> toString msg) >> exitFailure >> fail "over"
 
 (?~) :: ASetter s t a (Maybe b) -> b -> s -> t
 l ?~ b = set l (Just b)
