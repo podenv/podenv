@@ -178,8 +178,13 @@ executePodman ctx = do
     Running -> do
       pure $ podmanExecArgs ctx
     Stopped -> do
-      P.runProcess_ (podman ["rm", cname])
-      pure $ podmanRunArgs re ctx
+      if ctx ^. keep
+        then do
+        P.runProcess_ (podman ["start", cname])
+        pure $ podmanExecArgs ctx
+        else do
+        P.runProcess_ (podman ["rm", cname])
+        pure $ podmanRunArgs re ctx
     Unknown -> do
       pure $ podmanRunArgs re ctx
 
