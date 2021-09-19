@@ -8,6 +8,14 @@ Podenv is a free software in early development. Issues or changes are most welco
 
 ## Source install
 
+For all of the following instructions, make sure to first check out the
+`hub` submodule:
+
+```bash
+$ git submodule init
+$ git submodule update
+```
+
 To work on this project you need a Haskell toolchain, for example on fedora:
 
 ```ShellSession
