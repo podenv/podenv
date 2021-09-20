@@ -27,16 +27,14 @@ import Control.Exception (bracket_)
 import qualified Data.Digest.Pure.SHA as SHA
 import Data.Either.Validation
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import qualified Data.Text.IO as Text (readFile)
 import qualified Dhall
 import qualified Dhall.Core as Dhall
-import qualified Dhall.Freeze as Dhall
-import qualified Dhall.Import (writeExpressionToSemanticCache)
 import qualified Dhall.Map as DM
 import Dhall.Marshal.Decode (extractError)
 import qualified Dhall.Src
 import qualified Dhall.TH
-import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime, version)
+import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime)
 import Podenv.Prelude
 import System.Directory
 import System.Environment (setEnv, unsetEnv)
@@ -65,9 +63,9 @@ instance Text.Show.Show ArgName where
 
 -- | Config load entrypoint
 load :: Maybe Text -> Text -> IO Config
-load selectorM exprTxt = case defaultSelector of
+load selectorM configTxt = case defaultSelector of
   Just c -> pure $ ConfigDefault c
-  Nothing -> ensureDefault exprTxt >> load' <$> withDhallEnv (Dhall.inputExpr exprTxt)
+  Nothing -> load' <$> withDhallEnv (loadExpr configTxt)
   where
     defaultSelector :: Maybe Application
     defaultSelector = case selectorM of
@@ -83,11 +81,26 @@ load selectorM exprTxt = case defaultSelector of
 withDhallEnv :: IO a -> IO a
 withDhallEnv =
   bracket_
-    (setEnv "PODENV" (toString $ Dhall.pretty dhallPackage))
-    (unsetEnv "PODENV")
+    (setEnv' "PODENV" dhallPackage >> setEnv' "HUB" hubPackage)
+    (unsetEnv "PODENV" >> unsetEnv "HUB")
+  where
+    setEnv' env expr = setEnv env (toString $ Dhall.pretty expr)
+
+loadExpr :: Text -> IO DhallExpr
+loadExpr configTxt
+  | configTxt /= defaultConfigPath = Dhall.inputExpr configTxt
+  | otherwise = do
+    baseDir <- getConfigDir
+    let configPath = baseDir </> "config.dhall"
+    config <-
+      bool (pure "env:HUB") (Text.readFile configPath) =<< doesFileExist configPath
+    Dhall.inputExpr config
 
 dhallPackage :: Dhall.Expr Void Void
 dhallPackage = $(Dhall.TH.staticDhallExpression "./hub/schemas/package.dhall")
+
+hubPackage :: Dhall.Expr Void Void
+hubPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")
 
 -- | Pure config load
 load' :: DhallExpr -> Config
@@ -192,47 +205,6 @@ select config args = case config of
 
 defaultConfigPath :: Text
 defaultConfigPath = "~/.config/podenv/config.dhall"
-
-ensureDefault :: Text -> IO ()
-ensureDefault expr
-  | expr /= defaultConfigPath = pure ()
-  | otherwise = do
-    baseDir <- getConfigDir
-    createDirectoryIfMissing True baseDir
-    maybeWrite (baseDir </> "config.dhall") (pure $ unlines defaultConfigContent)
-    maybeWrite (baseDir </> "Hub.dhall") (freezeHub baseDir)
-  where
-    -- write unless file already exists
-    maybeWrite fp action = do
-      exist <- doesFileExist fp
-      -- TODO: check if Hub.dhall contents is using an old schemas version
-      unless exist $ do
-        content <- action
-        Text.writeFile fp content
-    hubUrl =
-      let path = Dhall.File (Dhall.Directory ["schemas-v" <> show Podenv.Dhall.version, "hub", "podenv"]) "package.dhall"
-       in Dhall.URL Dhall.HTTPS "raw.githubusercontent.com" path Nothing Nothing
-    hubImport = Dhall.Import (Dhall.ImportHashed Nothing (Dhall.Remote hubUrl)) Dhall.Code
-    freezeHub baseDir = do
-      putTextLn $ "Initializing " <> toText (baseDir </> "Hub.dhall") <> ", this may take some time..."
-      -- We can't use withDhallEnv here because remote import can't access env: or ~/ path.
-      -- Instead we should look into using `Dhall.Import.loadWith` and a custom substituer to inject (env:PODENV)
-      -- Until then, we can write the schemas to the cache
-      Dhall.Import.writeExpressionToSemanticCache dhallPackage
-      finalImport <- Dhall.freezeImport "." hubImport
-      pure $
-        unlines
-          [ "-- | The default dhall hub. Replace it by a local copy, e.g. `~/src/github.com/podenv/hub/package.dhall`",
-            "-- Or delete the file to update the reference.",
-            Dhall.pretty (Dhall.Embed finalImport)
-          ]
-    defaultConfigContent =
-      [ "-- | The initial podenv configuration.",
-        "-- Add your own applications:",
-        "-- let my-app = (env:PODENV).Application::{=} in ./Hub.dhall // { my-app }",
-        "",
-        "./Hub.dhall"
-      ]
 
 -- | The default app
 defaultApp :: Application

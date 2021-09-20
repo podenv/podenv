@@ -10,7 +10,7 @@ In a file named *~/.config/podenv/image.dhall* write:
 -- | A custom runtime
 let Podenv = env:PODENV
 
-let Hub = ./Hub.dhall
+let Hub = env:HUB
 
 let ca =
       Text/show
@@ -67,7 +67,7 @@ In a file named *~/.config/podenv/local.dhall* write:
 
 ```dhall
 -- | My applications
-let Hub = ./Hub.dhall
+let Hub = env:HUB
 
 let my-image = { runtime = ./image.dhall }
 
@@ -79,7 +79,7 @@ in { firefox = Hub.firefox.default // my-image
 And update the default set, in *~/.config/podenv/config.dhall*:
 
 ```dhall
-./Hub.dhall // ./local.dhall
+env:Hub // ./local.dhall
 ```
 
 Check that firefox uses the new image:
