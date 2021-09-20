@@ -94,7 +94,7 @@ Write this configuration file in *~/.config/podenv/corp.dhall*:
 
 ```dhall
 -- | Load the podenv/hub configuration
-let Hub = ./Hub.dhall
+let Hub = env:HUB
 
 -- | An application setting for the namespace
 let ns = { namespace = Some "corp-vpn" }
@@ -110,7 +110,7 @@ in {
 Then add the applications tree to the main configuration in *~/.config/podenv/config.dhall*:
 
 ```dhall
-./Hub.dhall // { corp = ./corp.dhall }
+env:HUB // { corp = ./corp.dhall }
 ```
 
 Three new applications are now configured to share the namespace:
