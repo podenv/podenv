@@ -10,11 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2.3.4
       with:
-        path: podenv
-    - uses: actions/checkout@v2
-      with:
-        repository: podenv/hub
-        path: hub
+        submodules: true
     - uses: cachix/install-nix-action@v13
-    - run: cd podenv; nix-build --attr podenv
-    - run: ./podenv/result/bin/podenv --config ./hub/package.dhall --list
+    - run: nix-build --attr podenv
+    - run: ./result/bin/podenv --list

@@ -29,6 +29,14 @@ let
   };
   easyHls = pkgs.callPackage easyHlsSrc { ghcVersions = [ "8.10.4" ]; };
 
+  # fetch the DHALL_PRELUDE to compile the podenv/hub without network access
+  preludeSrc = pkgs.fetchFromGitHub {
+    owner = "dhall-lang";
+    repo = "dhall-lang";
+    rev = "v17.0.0";
+    sha256 = "0jnqw50q26ksxkzs85a2svyhwd2cy858xhncq945bmirpqrhklwf";
+  };
+
   # update haskell dependencies
   compilerVersion = "8104";
   compiler = "ghc" + compilerVersion;
@@ -40,7 +48,14 @@ let
         sha256 = "0cw9a1gfvias4hr36ywdizhysnzbzxy20fb3jwmqmgjy40lzxp2g";
       };
 
-      podenv = hpPrev.callCabal2nix "podenv" (gitignoreSource ./.) { };
+      podenv =
+        (hpPrev.callCabal2nix "podenv" (gitignoreSource ./.) { }).overrideAttrs
+        (_: {
+          # Set build environment variable to avoid warnings
+          LANG = "en_US.UTF-8";
+          DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
+          XDG_CACHE_HOME = "/tmp";
+        });
     };
   };
 
