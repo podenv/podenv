@@ -147,7 +147,7 @@ You can add it to the global config by adding `// { gimp = ./gimp.dhall }` to
 the *~/.config.podenv/config.dhall* file, for example:
 
 ```dhall
-env:HUB // { gimp = ./gimp.dhall }
+(env:PODENV).Hub // { gimp = ./gimp.dhall }
 ```
 
 … then you can now run:

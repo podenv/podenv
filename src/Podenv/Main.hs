@@ -37,6 +37,7 @@ import qualified Podenv.Runtime
 main :: IO ()
 main = do
   cli@CLI {..} <- execParser cliInfo
+  when showDhallEnv (putTextLn Podenv.Config.podenvImportTxt >> exitSuccess)
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
 
@@ -55,8 +56,9 @@ data CLI = CLI
   { -- action modes:
     listApps :: Bool,
     listCaps :: Bool,
+    showDhallEnv :: Bool,
     showApplication :: Bool,
-    configExpr :: Text,
+    configExpr :: Maybe Text,
     -- runtime env:
     update :: Bool,
     verbose :: Bool,
@@ -81,8 +83,9 @@ cliParser =
     -- action modes:
     <$> switch (long "list" <> help "List available applications")
     <*> switch (long "list-caps" <> help "List available capabilities")
+    <*> switch (long "dhall-env" <> hidden)
     <*> switch (long "show" <> help "Show the environment without running it")
-    <*> strOption (long "config" <> value Podenv.Config.defaultConfigPath)
+    <*> optional (strOption (long "config" <> help "A config expression"))
     -- runtime env:
     <*> switch (long "update" <> help "Update the runtime")
     <*> switch (long "verbose" <> help "Increase verbosity")
@@ -182,9 +185,9 @@ printCaps = do
     showCap Podenv.Application.Cap {..} =
       capName <> "\t" <> capDescription
 
-printApps :: Text -> IO ()
-printApps expr = do
-  config <- Podenv.Config.load Nothing expr
+printApps :: Maybe Text -> IO ()
+printApps configTxt = do
+  config <- Podenv.Config.load Nothing configTxt
   let atoms = sortOn fst $ case config of
         Podenv.Config.ConfigDefault app -> [("default", Podenv.Config.Lit app)]
         Podenv.Config.ConfigApplication atom -> [("default", atom)]

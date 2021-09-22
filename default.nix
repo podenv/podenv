@@ -53,8 +53,10 @@ let
         (_: {
           # Set build environment variable to avoid warnings
           LANG = "en_US.UTF-8";
-          DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
           XDG_CACHE_HOME = "/tmp";
+          # Provide a local dhall prelude because build can't access network
+          DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
+          HUB_COMMIT = "${builtins.readFile ./.git/modules/hub/HEAD}";
         });
     };
   };

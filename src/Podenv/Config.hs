@@ -1,10 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 -- | This module contains the logic to load the dhall configuration
@@ -20,6 +15,7 @@ module Podenv.Config
     BuilderContainer (..),
     loadSystem,
     defaultSystemConfig,
+    podenvImportTxt,
   )
 where
 
@@ -35,8 +31,7 @@ import qualified Dhall.Map as DM
 import Dhall.Marshal.Decode (extractError)
 import qualified Dhall.Parser
 import qualified Dhall.Src
-import qualified Dhall.TH
-import Podenv.Dhall (Application (name, runtime), ContainerBuild, Runtime (..), SystemConfig, appName, appRuntime)
+import Podenv.Dhall hiding (name)
 import Podenv.Prelude
 import System.Directory
 import System.Environment (setEnv, unsetEnv)
@@ -65,47 +60,63 @@ instance Text.Show.Show ArgName where
   show (ArgName n) = toString n
 
 -- | Config load entrypoint
-load :: Maybe Text -> Text -> IO Config
+load :: Maybe Text -> Maybe Text -> IO Config
 load selectorM configTxt = case defaultSelector of
   Just c -> pure $ ConfigDefault c
-  Nothing -> load' <$> withDhallEnv (loadExpr configTxt)
+  Nothing -> load' . Dhall.normalize <$> loadExpr configTxt
   where
     defaultSelector :: Maybe Application
     defaultSelector = case selectorM of
       Just s
-        | "image:" `Text.isPrefixOf` s -> Just $ imageApp s
-        | "nix:" `Text.isPrefixOf` s -> Just $ nixApp s
+        | "image:" `Text.isPrefixOf` s -> imageApp s
+        | "nix:" `Text.isPrefixOf` s -> nixApp s
       _ -> Nothing
-    imageApp x = defaultApp {name = "image-" <> mkName x, runtime = Image $ Text.drop (Text.length "image:") x}
-    nixApp x = defaultApp {name = "nix-" <> mkName x, runtime = Nix $ Text.drop (Text.length "nix:") x}
+    imageApp x = mkApp ("image-" <> mkName x) (Image $ Text.drop (Text.length "image:") x)
+    nixApp x = mkApp ("nix-" <> mkName x) (Nix $ Text.drop (Text.length "nix:") x)
+    mkApp name runtime' = Just $ defaultApp & (appName .~ name) . (appRuntime .~ runtime')
     mkName = Text.take 6 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8
 
 -- | Inject the package.dhall into the environ so that config can use `env:PODENV`
-withDhallEnv :: IO a -> IO a
-withDhallEnv =
-  bracket_
-    (setEnv' "PODENV" dhallPackage >> setEnv' "HUB" hubPackage)
-    (unsetEnv "PODENV" >> unsetEnv "HUB")
+loadWithEnv :: FilePath -> Dhall.Expr Dhall.Src.Src Dhall.Import -> IO DhallExpr
+loadWithEnv baseDir expr = withEnv $ flip evalStateT initialState $ Dhall.Import.loadWith expr
   where
-    setEnv' env expr = setEnv env (toString $ Dhall.pretty expr)
+    -- Set the PODENV environment variable to the frozen url of the current hub
+    withEnv = bracket_ (setEnv "PODENV" (toString podenvImportTxt)) (unsetEnv "PODENV")
+    -- Then use a custom Dhall.Import.Status state that inject the static code
+    -- The goal is to only pretty print (text encode) the package when the cache is cold
+    initialState = baseStatus & Dhall.Import.remote .~ fetchUrl
+    baseStatus = Dhall.Import.emptyStatus baseDir
+    fetchUrl url
+      | url == podenvUrl = pure (Dhall.pretty podenvPackage)
+      | otherwise = (baseStatus ^. Dhall.Import.remote) url
 
-loadExpr :: Text -> IO DhallExpr
-loadExpr configTxt
-  | configTxt /= defaultConfigPath = Dhall.inputExpr configTxt
-  | otherwise = do
+-- | Helper function to parse the initial configuration
+loadExpr :: Maybe Text -> IO DhallExpr
+loadExpr configM = case configM of
+  Just configTxt -> do
+    cwd' <- getCurrentDirectory
+    loadWithEnv cwd' $ exprFromText' configTxt
+  Nothing -> do
     baseDir <- getConfigDir
     let configPath = baseDir </> "config.dhall"
-    config <-
-      bool (pure "env:HUB") (Text.readFile configPath) =<< doesFileExist configPath
-    case Dhall.Parser.exprFromText "~/.config/podenv/config.dhall" config of
-      Right configExpr -> do
-        -- lookup local.d configs
-        let locald = baseDir </> "local.d"
-        localFiles <- bool (pure []) (listDirectory locald) =<< doesPathExist locald
-        let localConfig = createLocalRecord locald localFiles
-        -- adds local.d to the main config using the `//` operator
-        let expr' = Dhall.Prefer Nothing Dhall.PreferFromSource configExpr localConfig
-        Dhall.normalize <$> Dhall.Import.loadRelativeTo baseDir Dhall.Import.UseSemanticCache expr'
+
+    -- load main config
+    configContent <-
+      bool (pure "(env:PODENV).Hub") (Text.readFile configPath) =<< doesFileExist configPath
+    let configExpr = exprFromText' configContent
+
+    -- lookup local.d configs
+    let locald = baseDir </> "local.d"
+    localFiles <- bool (pure []) (listDirectory locald) =<< doesPathExist locald
+    let localConfig = createLocalRecord locald localFiles
+
+    -- adds local.d to the main config using the `//` operator
+    let expr' = Dhall.Prefer Nothing Dhall.PreferFromSource configExpr localConfig
+    loadWithEnv baseDir expr'
+  where
+    exprFromText' :: Text -> Dhall.Expr Dhall.Src.Src Dhall.Import
+    exprFromText' configTxt = case Dhall.Parser.exprFromText "<config>" configTxt of
+      Right expr -> expr
       Left e -> error $ "Invalid config: " <> show e
 
 -- | Create a record for local.d config
@@ -120,11 +131,21 @@ createLocalRecord baseDir =
       let file = Dhall.File (Dhall.Directory $ reverse $ map toText $ splitPath baseDir) (toText name)
        in Dhall.Import (Dhall.ImportHashed Nothing (Dhall.Local Dhall.Absolute file)) Dhall.Code
 
-dhallPackage :: Dhall.Expr Void Void
-dhallPackage = $(Dhall.TH.staticDhallExpression "./hub/schemas/package.dhall")
+-- | The static hub package expression
+podenvUrl :: Dhall.URL
+podenvUrl =
+  Dhall.URL Dhall.HTTPS "raw.githubusercontent.com" path Nothing Nothing
+  where
+    path = Dhall.File (Dhall.Directory [hubVersion, "hub", "podenv"]) "package.dhall"
 
-hubPackage :: Dhall.Expr Void Void
-hubPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")
+podenvImport :: Dhall.Import
+podenvImport =
+  Dhall.Import (Dhall.ImportHashed (Just hash) (Dhall.Remote podenvUrl)) Dhall.Code
+  where
+    hash = Dhall.Import.hashExpression (Dhall.alphaNormalize podenvPackage)
+
+podenvImportTxt :: Text
+podenvImportTxt = Text.replace "\n " "" $ Dhall.pretty podenvImport
 
 -- | Pure config load
 load' :: DhallExpr -> Config
@@ -232,16 +253,12 @@ defaultConfigPath = "~/.config/podenv/config.dhall"
 
 -- | The default app
 defaultApp :: Application
-defaultApp = case Dhall.extract
-  Dhall.auto
-  $( let package = "(./hub/schemas/package.dhall)"
-      in Dhall.TH.staticDhallExpression (package <> ".Application.default // { runtime = " <> package <> ".Image \"\" }")
-   ) of
+defaultApp = case Dhall.extract Dhall.auto (Dhall.renote appDefault) of
   Success app -> app
   Failure v -> error $ "Invalid default application: " <> show v
 
 defaultNixBuilder :: BuilderNix
-defaultNixBuilder = case loadApp $(Dhall.TH.staticDhallExpression "./hub/Builders/nix.dhall") of
+defaultNixBuilder = case loadApp (Dhall.renote hubNixBuilder) of
   (Success (Lit a)) -> BuilderNix "default" a
   _ -> error "Can't load default nix builder."
 
@@ -255,14 +272,10 @@ type DhallExpr = Dhall.Expr Dhall.Src.Src Void
 loadApp :: DhallExpr -> DhallParser Atom
 loadApp expr = case expr of
   Dhall.Lam _ fb _
-    | Dhall.functionBindingAnnotation fb == typeApp ->
+    | Dhall.denote (Dhall.functionBindingAnnotation fb) == appType ->
       LamApp <$> Dhall.extract Dhall.auto expr
     | otherwise -> LamArg (ArgName $ Dhall.functionBindingVariable fb) <$> Dhall.extract Dhall.auto expr
   _ -> Lit <$> Dhall.extract Dhall.auto expr
-  where
-    -- The type of an application
-    typeApp :: DhallExpr
-    typeApp = $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).Application.Type")
 
 loadSystem :: IO SystemConfig
 loadSystem = do
@@ -275,7 +288,6 @@ loadSystem = do
 
 -- | The default system config
 defaultSystemConfig :: SystemConfig
-defaultSystemConfig =
-  case Dhall.extract Dhall.auto $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).System.default") of
-    Success x -> x
-    Failure v -> error $ "Invalid default system config: " <> show v
+defaultSystemConfig = case Dhall.extract Dhall.auto (Dhall.renote systemConfigDefault) of
+  Success x -> x
+  Failure v -> error $ "Invalid default system config: " <> show v
