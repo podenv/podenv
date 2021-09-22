@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ main ]
 jobs:
-  build:
+  nix:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2.3.4
@@ -14,3 +14,31 @@ jobs:
     - uses: cachix/install-nix-action@v13
     - run: nix-build --attr podenv
     - run: ./result/bin/podenv --list
+  cabal:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ghc: ['8.10']
+    name: Haskell GHC ${{ matrix.ghc }}
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: haskell/actions/setup@v1
+      with:
+        ghc-version: ${{ matrix.ghc }}
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cabal
+          dist-newstyle
+        key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal','**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-
+          ${{ runner.os }}-
+    - run: cabal update
+    - run: cabal build --enable-tests
+#     - run: cabal test --enable-tests --test-show-details=direct
+    - run: cabal haddock
+    - run: cabal sdist
+    - run: cabal check
