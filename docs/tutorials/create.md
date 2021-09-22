@@ -11,14 +11,12 @@ it's configuration in a file, for example at *~/.config/podenv/gimp.dhall*
 write this content:
 
 ```dhall
-(env:PODENV).Application::{
-, name = "gimp"
-, runtime =
-    (env:PODENV).Containerfile
-      ''
-      FROM registry.fedoraproject.org/fedora
-      RUN dnf install -y gimp
-      ''
+{ name = "gimp",
+  runtime.containerfile =
+    ''
+    FROM registry.fedoraproject.org/fedora
+    RUN dnf install -y gimp
+    ''
 }
 ```
 
@@ -91,16 +89,14 @@ Since the gimp application will always need the `x11` capability, you update the
 configuration file *~/.config/podenv/gimp.dhall* to:
 
 ```dhall
-(env:PODENV).Application::{
-, name = "gimp"
-, runtime =
-    (env:PODENV).Containerfile
-      ''
-      FROM registry.fedoraproject.org/fedora
-      RUN dnf install -y gimp
-      ''
-, capabilities = (env:PODENV).Capabilities::{ x11 = True }
-, command = [ "gimp" ]
+{ name = "gimp",
+  runtime.containerfile =
+    ''
+    FROM registry.fedoraproject.org/fedora
+    RUN dnf install -y gimp
+    '',
+  capabilities.x11 = True,
+  command = [ "gimp" ]
 }
 ```
 

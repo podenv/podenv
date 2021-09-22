@@ -10,8 +10,6 @@ In a file named *~/.config/podenv/image.dhall* write:
 -- | A custom runtime
 let Podenv = env:PODENV
 
-let Hub = Podenv.Hub
-
 let ca =
       Text/show
         ''
@@ -58,7 +56,7 @@ let extra =
       ENV KRB5CCNAME=/home/fedora/.ticket
       ''
 
-in  Podenv.Container (Hub.fedora.useImage ver extra packages // set-image)
+in  Podenv.Container (Podenv.Hub.fedora.useImage ver extra packages // set-image)
 ```
 
 ## Override applications

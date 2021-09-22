@@ -5,4 +5,4 @@ let fedora =
         Podenv.Container
           Podenv.ContainerBuild::{ containerfile = "FROM fedora" }
 
-in  { firefox = Podenv.Application::{ runtime = fedora [ "firefox" ] } }
+in  { firefox.runtime = fedora [ "firefox" ] }

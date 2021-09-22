@@ -26,20 +26,23 @@ hubCommit = $(Dhall.TH.staticDhallExpression "env:HUB_COMMIT as Text ? ./.git/mo
 podenvPackage :: Expr Void Void
 podenvPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")
 
-appType :: Expr Void Void
-appType = $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).Application.Type")
-
-appDefault :: Expr Void Void
+appType, appDefault, runtimeType, containerBuildDefault :: Expr Void Void
+appType = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Application.dhall).Type")
+runtimeType = $(Dhall.TH.staticDhallExpression "./hub/schemas/Runtime.dhall")
+containerBuildDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/ContainerBuild.dhall).default")
 appDefault =
   $( let package = "(./hub/schemas/package.dhall)"
       in Dhall.TH.staticDhallExpression (package <> ".Application.default // { runtime = " <> package <> ".Image \"\" }")
    )
 
+capsDefault :: Expr Void Void
+capsDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Capabilities.dhall).default")
+
 hubNixBuilder :: Expr Void Void
 hubNixBuilder = $(Dhall.TH.staticDhallExpression "./hub/Builders/nix.dhall")
 
 systemConfigDefault :: Expr Void Void
-systemConfigDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).System.default")
+systemConfigDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/System.dhall).default")
 
 -- | Generate Haskell Types from Dhall Types.
 -- See: https://hackage.haskell.org/package/dhall-1.39.0/docs/Dhall-TH.html
