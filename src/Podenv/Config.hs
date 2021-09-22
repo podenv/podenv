@@ -8,6 +8,7 @@ module Podenv.Config
     select,
     Config (..),
     Atom (..),
+    ApplicationRecord (..),
     defaultConfigPath,
     defaultApp,
     Builder (..),
@@ -40,7 +41,7 @@ import qualified Text.Show
 
 data Config
   = -- | A standalone application, e.g. defaultSelector
-    ConfigDefault Application
+    ConfigDefault ApplicationRecord
   | -- | A single application
     ConfigApplication Atom
   | -- | A collection of applications
@@ -48,11 +49,18 @@ data Config
 
 data Atom
   = -- | A literal application
-    Lit Application
+    Lit ApplicationRecord
   | -- | A paremeterized application
-    LamArg ArgName (Text -> Application)
+    LamArg ArgName (Text -> ApplicationRecord)
   | -- | A functional application
-    LamApp (Application -> Application)
+    LamApp (Application -> ApplicationRecord)
+
+-- | A wrapper around the true Application type to manage weakly typed configuration
+-- (e.g. so that `{ runtime.image = "ubi8" }` can be manually decoded)
+newtype ApplicationRecord = ApplicationRecord {unRecord :: Application}
+
+instance Dhall.FromDhall ApplicationRecord where
+  autoWith = const appRecordDecoder
 
 newtype ArgName = ArgName Text
 
@@ -62,7 +70,7 @@ instance Text.Show.Show ArgName where
 -- | Config load entrypoint
 load :: Maybe Text -> Maybe Text -> IO Config
 load selectorM configTxt = case defaultSelector of
-  Just c -> pure $ ConfigDefault c
+  Just c -> pure $ ConfigDefault (ApplicationRecord c)
   Nothing -> load' . Dhall.normalize <$> loadExpr configTxt
   where
     defaultSelector :: Maybe Application
@@ -159,9 +167,9 @@ load' expr = case loadConfig "" expr of
   Failure x -> error $ show x
 
 -- | When an application doesn't have a name, set it to the selector path
-ensureName :: Text -> Application -> Application
-ensureName x app = case app ^. appName of
-  "" -> app & appName .~ x
+ensureName :: Text -> ApplicationRecord -> ApplicationRecord
+ensureName x app = case unRecord app ^. appName of
+  "" -> ApplicationRecord $ unRecord app & appName .~ x
   _ -> app
 
 -- | The main config load function. It recursively descend the
@@ -171,8 +179,8 @@ loadConfig baseSelector expr = case expr of
   -- When the node is a function, assume it is an app.
   Dhall.Lam {} -> (\app -> [(baseSelector, app)]) <$> loadApp expr
   Dhall.RecordLit kv
-    | -- When the node has a "name" attribute, assume it is an app.
-      DM.member "name" kv ->
+    | -- When the node has a "runtime" attribute, assume it is an app.
+      DM.member "runtime" kv ->
       (\app -> [(baseSelector, app)]) <$> loadApp expr
     | -- Otherwise, traverse each attributes
       otherwise ->
@@ -205,7 +213,10 @@ data BuilderContainer = BuilderContainer
 
 -- | Select the application, returning the unused cli args.
 select :: Config -> [Text] -> Either Text ([Text], (Maybe Builder, Application))
-select config args = case config of
+select config args = (fmap . fmap) unRecord <$> select' config args
+
+select' :: Config -> [Text] -> Either Text ([Text], (Maybe Builder, ApplicationRecord))
+select' config args = case config of
   -- config default is always selected, drop the first args
   ConfigDefault app -> ensureBuilder [] app >>= \appB -> pure (tail (fromList args), appB)
   -- config has only one application, don't touch the args
@@ -220,15 +231,15 @@ select config args = case config of
     [] -> Left "Multiple apps configured, provides a selector"
   where
     -- When an application define a builder, lookup its definition
-    ensureBuilder :: [(Text, Atom)] -> Application -> Either Text (Maybe Builder, Application)
+    ensureBuilder :: [(Text, Atom)] -> ApplicationRecord -> Either Text (Maybe Builder, ApplicationRecord)
     ensureBuilder atoms app = do
       builderM <-
-        case app ^. appRuntime of
+        case unRecord app ^. appRuntime of
           Image name
             | name == mempty -> Left "Empty image"
             | otherwise -> Right Nothing
           Nix {} -> case lookup "nix.setup" atoms of
-            Just (Lit x) -> Right $ Just $ NixBuilder $ BuilderNix "nix.setup" x
+            Just (Lit x) -> Right $ Just $ NixBuilder $ BuilderNix "nix.setup" (unRecord x)
             Just _ -> Left "Invalid nix.setup"
             Nothing -> Right $ Just $ NixBuilder defaultNixBuilder
           Container cb -> Right $ Just $ ContainerBuilder $ BuilderContainer "<inline>" cb
@@ -247,7 +258,7 @@ select config args = case config of
           -- e.g. LamApp should be applied at the end.
           atom' <- lookup x atoms `orDie` (x <> ": unknown lam arg")
           (rest, (_, app)) <- selectApp atoms xs atom'
-          appb <- ensureBuilder atoms (f app)
+          appb <- ensureBuilder atoms (f (unRecord app))
           pure (rest, appb)
         [] -> Left "Missing app argument"
 
@@ -262,7 +273,7 @@ defaultApp = case Dhall.extract Dhall.auto (Dhall.renote appDefault) of
 
 defaultNixBuilder :: BuilderNix
 defaultNixBuilder = case loadApp (Dhall.renote hubNixBuilder) of
-  (Success (Lit a)) -> BuilderNix "default" a
+  (Success (Lit a)) -> BuilderNix "default" (unRecord a)
   _ -> error "Can't load default nix builder."
 
 -- | A type synonym to simplify function annotation.
@@ -270,6 +281,62 @@ type DhallParser a = Dhall.Extractor Dhall.Src.Src Void a
 
 -- | A type synonym to simplify function annotation.
 type DhallExpr = Dhall.Expr Dhall.Src.Src Void
+
+type DhallExtractor a = Dhall.Extractor Dhall.Src.Src Void a
+
+-- | The `//` dhall record update operation
+pref :: Dhall.Expr s a -> Dhall.Expr s a -> Dhall.Expr s a
+pref = Dhall.Prefer Nothing Dhall.PreferFromSource
+
+mkRecord :: [(Text, Dhall.Expr s a)] -> Dhall.Expr s a
+mkRecord kv = Dhall.RecordLit (Dhall.makeRecordField <$> DM.fromList kv)
+
+recordItems :: DM.Map Text (Dhall.RecordField s a) -> [(Text, Dhall.Expr Void a)]
+recordItems kv = fmap (Dhall.denote . Dhall.recordFieldValue) <$> DM.toList kv
+
+-- | A custom Dhall Decoder that can convert a weakly type Application
+-- This is done by modifying the 'base' Dhall.Expr with:
+--   App.default // (base // { capabilities = Caps.default // base.capabilities })
+-- so that the missing fields are automatically added.
+--
+-- For the runtime value, this convert may convert a tag record to an Union variant
+appRecordDecoder :: Dhall.Decoder ApplicationRecord
+appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
+  where
+    extract :: Dhall.Expr Dhall.Src.Src Void -> DhallExtractor Application
+    extract (Dhall.RecordLit kv) = case DM.lookup "runtime" kv of
+      Just (Dhall.RecordField _ (Dhall.RecordLit kv') _ _) -> extract' kv (runtimeFromRecord kv')
+      Just (Dhall.RecordField _ v _ _) -> extract' kv (Dhall.denote v)
+      Nothing -> Dhall.extractError "Application does not have a runtime"
+    extract _ = Dhall.extractError "Application is not a record"
+
+    runtimeFromRecord :: DM.Map Text (Dhall.RecordField s Void) -> Dhall.Expr Void Void
+    runtimeFromRecord kv = case recordItems kv of
+      [("image", x)] -> mkRuntime "Image" x
+      [("nix", x)] -> mkRuntime "Nix" x
+      [("containerfile", x)] -> mkRuntime "Container" (pref containerBuildDefault (mkRecord [("containerfile", x)]))
+      _ -> mkRuntime "Container" (pref containerBuildDefault (Dhall.denote (Dhall.RecordLit kv)))
+      where
+        mkRuntime field v =
+          Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing)) v
+
+    extract' :: DM.Map Text (Dhall.RecordField s Void) -> Dhall.Expr Void Void -> DhallExtractor Application
+    extract' kv runtimeExpr =
+      let capsExpr = case DM.lookup "capabilities" kv of
+            Just (Dhall.RecordField _ v _ _) -> pref capsDefault (Dhall.denote v)
+            _ -> capsDefault
+
+          -- capabilities and runtime are always added since they are nested schemas
+          nestedSchemas = [("capabilities", capsExpr), ("runtime", runtimeExpr)]
+
+          baseExpr = pref (Dhall.denote $ Dhall.RecordLit kv) (mkRecord nestedSchemas)
+          expr = pref appDefault baseExpr
+
+          -- The generic Application decoder
+          Dhall.Decoder appDecoder _ = Dhall.genericAuto
+       in appDecoder (Dhall.renote (Dhall.normalize expr))
+
+    expected = Success (Dhall.renote appType)
 
 -- | Parse and tag a DhallExpr with an Atom constructor
 loadApp :: DhallExpr -> DhallParser Atom

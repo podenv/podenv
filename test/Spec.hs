@@ -34,6 +34,7 @@ spec config = describe "unit tests" $ do
     it "load simple" $ loadTest "env" []
     it "load collection" $ loadTest "{ a = env, b = env}" ["a", "b"]
     it "load nested" $ loadTest "{ a = { b = env, c = env}, d = env}" ["a.b", "a.c", "d"]
+    it "load weak" $ loadTest "{ image = { runtime.image = \"ubi\" }, nix = { runtime.nix = \"n\" } }" ["image", "nix"]
   describe "builder config" $ do
     it "load firefox" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
@@ -52,7 +53,7 @@ spec config = describe "unit tests" $ do
     it "set home" $ cliTest "env" ["--home", "/var/app"] "env // { volumes = [\"/var/app:~/\"] }"
   describe "cli default" $ do
     it "image:name" $ cliTest "env" ["image:testy"] "def // { runtime = Podenv.Image \"testy\", name = \"image-b2effd\" }"
-    it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime = (Nix \"test\"), name = \"nix-1c3a91\", builder = Some \"nix\" }"
+    it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime.nix = \"test\", name = \"nix-1c3a91\" }"
   describe "podman ctx" $ do
     it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "localhost", "--name", "env", defImg]
     it "run keep" $ podmanTest (addCap "env" "keep = True") ["run", "--hostname", "localhost", "--name", "env", defImg]
@@ -141,7 +142,7 @@ spec config = describe "unit tests" $ do
             $ unlines
               [ "let Podenv = env:PODENV",
                 "let Nix = Podenv.Nix",
-                "let def = Podenv.Application.default // { runtime = Podenv.Image \"ubi8\" }",
+                "let def = { capabilities = {=}, runtime = Podenv.Image \"ubi8\" }",
                 "let env = def // { name = \"env\" }",
                 "let env2 = env // { name = \"beta\" } in",
                 code
@@ -151,5 +152,5 @@ spec config = describe "unit tests" $ do
     loadOne code = do
       config' <- loadConfig Nothing code
       case config' of
-        Podenv.Config.ConfigApplication (Podenv.Config.Lit x) -> pure x
+        Podenv.Config.ConfigApplication (Podenv.Config.Lit (Podenv.Config.ApplicationRecord x)) -> pure x
         _ -> error "Expected a single app"

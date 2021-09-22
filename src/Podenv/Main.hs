@@ -192,7 +192,8 @@ printApps configTxt = do
         Podenv.Config.ConfigDefault app -> [("default", Podenv.Config.Lit app)]
         Podenv.Config.ConfigApplication atom -> [("default", atom)]
         Podenv.Config.ConfigApplications xs -> xs
-      showApp' app = "Application" <> maybe "" (\desc -> " (" <> desc <> ")") (app ^. appDescription)
+      showApp' (Podenv.Config.ApplicationRecord app) =
+        "Application" <> maybe "" (\desc -> " (" <> desc <> ")") (app ^. appDescription)
       showConfig = \case
         Podenv.Config.Lit app -> showApp' app
         Podenv.Config.LamArg name f -> "λ " <> show name <> " → " <> showApp' (f ("<" <> show name <> ">"))
