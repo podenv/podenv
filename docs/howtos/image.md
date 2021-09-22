@@ -10,7 +10,7 @@ In a file named *~/.config/podenv/image.dhall* write:
 -- | A custom runtime
 let Podenv = env:PODENV
 
-let Hub = env:HUB
+let Hub = Podenv.Hub
 
 let ca =
       Text/show
@@ -67,7 +67,7 @@ In a file named *~/.config/podenv/local.dhall* write:
 
 ```dhall
 -- | My applications
-let Hub = env:HUB
+let Hub = (env:PODENV).Hub
 
 let my-image = { runtime = ./image.dhall }
 

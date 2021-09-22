@@ -94,7 +94,7 @@ Write this configuration file in *~/.config/podenv/local.d/corp.dhall*:
 
 ```dhall
 -- | Load the podenv/hub configuration
-let Hub = env:HUB
+let Hub = (env:PODENV).Hub
 
 -- | An application setting for the namespace
 let ns = { namespace = Some "corp-vpn" }

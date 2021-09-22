@@ -13,9 +13,35 @@
 module Podenv.Dhall where
 
 import Data.Char (toUpper)
-import Data.Text ()
+import Data.Text (Text, dropEnd)
+import Data.Void
+import Dhall.Core (Chunks (..), Expr (TextLit))
 import qualified Dhall.TH
 import Lens.Family.TH (makeLensesBy)
+
+-- | The hub submodule commit, this is only used for the PODENV environment value
+hubVersion :: Text
+hubVersion = case $(Dhall.TH.staticDhallExpression "env:HUB_COMMIT as Text ? ./.git/modules/hub/HEAD as Text") of
+  TextLit (Chunks _ v) -> dropEnd 1 v
+
+-- | Embed static dhall code
+podenvPackage :: Expr Void Void
+podenvPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")
+
+appType :: Expr Void Void
+appType = $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).Application.Type")
+
+appDefault :: Expr Void Void
+appDefault =
+  $( let package = "(./hub/schemas/package.dhall)"
+      in Dhall.TH.staticDhallExpression (package <> ".Application.default // { runtime = " <> package <> ".Image \"\" }")
+   )
+
+hubNixBuilder :: Expr Void Void
+hubNixBuilder = $(Dhall.TH.staticDhallExpression "./hub/Builders/nix.dhall")
+
+systemConfigDefault :: Expr Void Void
+systemConfigDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/package.dhall).System.default")
 
 -- | Generate Haskell Types from Dhall Types.
 -- See: https://hackage.haskell.org/package/dhall-1.39.0/docs/Dhall-TH.html

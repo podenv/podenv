@@ -20,7 +20,7 @@ import Test.Hspec
 main :: IO ()
 main = mockEnv >> loadConfig >>= hspec . spec
   where
-    loadConfig = Podenv.Config.load Nothing "./test/config.dhall"
+    loadConfig = Podenv.Config.load Nothing (Just "./test/config.dhall")
 
     -- Fix env values while keeping the host cache for dhall
     mockEnv = do
@@ -136,8 +136,9 @@ spec config = describe "unit tests" $ do
     loadConfig s code =
       Podenv.Config.load
         s
-        ( pack $
-            unlines $
+        ( Just
+            . pack
+            $ unlines
               [ "let Podenv = env:PODENV",
                 "let Nix = Podenv.Nix",
                 "let def = Podenv.Application.default // { runtime = Podenv.Image \"ubi8\" }",
