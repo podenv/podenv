@@ -54,7 +54,7 @@ library
   build-depends:    base < 5
                   , SHA
                   , containers
-                  , dhall >= 1.34
+                  , dhall >= 1.39
                   , directory
                   , either
                   , filepath
