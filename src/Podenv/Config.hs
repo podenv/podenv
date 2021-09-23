@@ -136,6 +136,9 @@ podenvUrl :: Dhall.URL
 podenvUrl =
   Dhall.URL Dhall.HTTPS "raw.githubusercontent.com" path Nothing Nothing
   where
+    hubVersion = case Dhall.extract Dhall.auto (Dhall.renote hubCommit) of
+      Success x -> Text.dropEnd 1 x
+      Failure v -> error $ "Unknown hub commit: " <> show v
     path = Dhall.File (Dhall.Directory [hubVersion, "hub", "podenv"]) "package.dhall"
 
 podenvImport :: Dhall.Import
