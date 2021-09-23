@@ -42,4 +42,4 @@ jobs:
     - run: cabal haddock
     - run: cabal sdist
     - run: cabal check
-    - run: cabal install
+    - run: cabal install --installdir=/tmp --overwrite-policy=always
