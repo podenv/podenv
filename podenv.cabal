@@ -20,6 +20,7 @@ extra-source-files: test/*.dhall
                     hub/*.dhall
                     hub/**/*.dhall
                     hub/Applications/*.nix
+                    .git/modules/hub/HEAD
 
 source-repository head
   type:             git
