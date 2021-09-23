@@ -13,16 +13,14 @@
 module Podenv.Dhall where
 
 import Data.Char (toUpper)
-import Data.Text (Text, dropEnd)
 import Data.Void
-import Dhall.Core (Chunks (..), Expr (TextLit))
+import Dhall.Core (Expr ())
 import qualified Dhall.TH
 import Lens.Family.TH (makeLensesBy)
 
 -- | The hub submodule commit, this is only used for the PODENV environment value
-hubVersion :: Text
-hubVersion = case $(Dhall.TH.staticDhallExpression "env:HUB_COMMIT as Text ? ./.git/modules/hub/HEAD as Text") of
-  TextLit (Chunks _ v) -> dropEnd 1 v
+hubCommit :: Expr Void Void
+hubCommit = $(Dhall.TH.staticDhallExpression "env:HUB_COMMIT as Text ? ./.git/modules/hub/HEAD as Text")
 
 -- | Embed static dhall code
 podenvPackage :: Expr Void Void
