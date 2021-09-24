@@ -3,6 +3,7 @@ pull_request_rules:
     conditions:
       - label=merge me
       - check-success=nix
+      - check-success=stack
       - check-success=Haskell GHC 8.10
     actions:
       merge:
