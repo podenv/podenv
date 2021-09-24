@@ -29,7 +29,6 @@ import Podenv.Build (BuildEnv (beInfos, beName, beUpdate))
 import qualified Podenv.Build
 import qualified Podenv.Config
 import Podenv.Dhall
-import qualified Podenv.Env
 import Podenv.Prelude
 import Podenv.Runtime (Context, RuntimeEnv (..))
 import qualified Podenv.Runtime
