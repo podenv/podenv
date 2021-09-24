@@ -73,6 +73,7 @@ library
                   , Podenv.Config
                   , Podenv.Context
                   , Podenv.Dhall
+                  , Podenv.Env
                   , Podenv.Main
                   , Podenv.Prelude
                   , Podenv.Runtime

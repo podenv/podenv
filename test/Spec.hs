@@ -11,6 +11,7 @@ import qualified Podenv.Build
 import qualified Podenv.Config
 import Podenv.Dhall (Application (..))
 import qualified Podenv.Dhall
+import Podenv.Env
 import qualified Podenv.Main
 import Podenv.Prelude (mayFail)
 import qualified Podenv.Runtime
@@ -99,9 +100,18 @@ spec config = describe "unit tests" $ do
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultRuntimeEnv
 
+    testEnv =
+      AppEnv
+        { _hostXdgRunDir = Just "/run/user/1000",
+          _hostHomeDir = Just "/home/user",
+          _hostCwd = "/usr/src/podenv",
+          _hostUid = 1000,
+          _appHomeDir = Just "/home/fedora"
+        }
+
     podmanCliTest args expected = do
       (app, mode, _, _) <- Podenv.Main.cliConfigLoad (parseCli args)
-      ctx <- Podenv.Application.prepare app mode
+      ctx <- Podenv.Application.preparePure testEnv app mode
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
     podmanTest code expected = do

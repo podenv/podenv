@@ -14,6 +14,7 @@
 -- This module performs read-only IO
 module Podenv.Application
   ( prepare,
+    preparePure,
     capsAll,
     Cap (..),
     Mode (..),
@@ -23,38 +24,28 @@ where
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Podenv.Dhall
+import Podenv.Env
 import Podenv.Prelude
 import qualified Podenv.Runtime as Ctx
+
 #if !MIN_VERSION_relude(1,0,0)
 import System.Environment
 #endif
-
--- | The reader env required to prepare the Context
-data AppEnv = AppEnv
-  { _hostXdgRunDir :: Maybe FilePath,
-    _hostHomeDir :: Maybe FilePath,
-    _hostCwd :: FilePath,
-    _hostUid :: UserID,
-    _appHomeDir :: Maybe FilePath
-  }
-  deriving (Show)
-
-type AppEnvT a = ReaderT AppEnv IO a
 
 data Mode = Regular | Shell
 
 -- | Converts an Application into a Context
 prepare :: Application -> Mode -> IO Ctx.Context
 prepare app mode = do
-  appEnv <-
-    AppEnv
-      <$> lookupEnv "XDG_RUNTIME_DIR"
-      <*> lookupEnv "HOME"
-      <*> getCurrentDirectory
-      <*> getRealUserID
-      <*> pure (toString <$> containerHome)
+  appEnv <- Podenv.Env.new
+  preparePure appEnv app mode
+
+-- TODO: make this stricly pure using a PodenvMonad similar to the PandocMonad
+preparePure :: AppEnv -> Application -> Mode -> IO Ctx.Context
+preparePure envBase app mode =
   runReaderT (doPrepare app {home = containerHome} mode) appEnv
   where
+    appEnv = envBase & appHomeDir .~ (toString <$> containerHome)
     containerHome =
       -- The root cap needs to be applied first as it modifies the App
       if app ^. appCapabilities . capRoot
@@ -225,14 +216,14 @@ setPulseaudio ctx = do
 
 getHomes :: Text -> AppEnvT (FilePath, FilePath)
 getHomes help = do
-  hostHomeDir <- fromMaybe (error $ "Need HOME for " <> help) <$> asks _hostHomeDir
-  appHomeDir <- fromMaybe (error $ "Application need home for " <> help) <$> asks _appHomeDir
-  pure (hostHomeDir, appHomeDir)
+  hostDir <- fromMaybe (error $ "Need HOME for " <> help) <$> asks _hostHomeDir
+  appDir <- fromMaybe (error $ "Application need home for " <> help) <$> asks _appHomeDir
+  pure (hostDir, appDir)
 
 mountHomeConfig :: Text -> FilePath -> AppEnvT (Ctx.Context -> Ctx.Context)
 mountHomeConfig help fp = do
-  (hostHomeDir, appHomeDir) <- getHomes help
-  pure $ Ctx.addMount (appHomeDir </> fp) (Ctx.roHostPath $ hostHomeDir </> fp)
+  (hostDir, appDir) <- getHomes help
+  pure $ Ctx.addMount (appDir </> fp) (Ctx.roHostPath $ hostDir </> fp)
 
 setAgent :: String -> IO (Ctx.Context -> Ctx.Context)
 setAgent var = do
