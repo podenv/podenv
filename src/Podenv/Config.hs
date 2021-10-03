@@ -29,7 +29,7 @@ import qualified Dhall
 import qualified Dhall.Core as Dhall
 import qualified Dhall.Import
 import qualified Dhall.Map as DM
-import Dhall.Marshal.Decode (extractError)
+import Dhall.Marshal.Decode (DhallErrors (..), extractError)
 import qualified Dhall.Parser
 import qualified Dhall.Src
 import Podenv.Dhall hiding (name)
@@ -163,8 +163,9 @@ load' :: DhallExpr -> Config
 load' expr = case loadConfig "" expr of
   Success [(selector, Lit app)] -> ConfigApplication $ Lit (ensureName selector app)
   Success [(_, x)] -> ConfigApplication x
+  Success [] -> error "No application found"
   Success xs -> ConfigApplications xs
-  Failure x -> error $ show x
+  Failure (DhallErrors (x :| _)) -> error $ show x
 
 -- | When an application doesn't have a name, set it to the selector path
 ensureName :: Text -> ApplicationRecord -> ApplicationRecord
@@ -195,7 +196,7 @@ loadConfig baseSelector expr = case expr of
         | baseSelector == mempty = name
         | name == "default" = baseSelector
         | otherwise = baseSelector <> "." <> name
-  _ -> extractError $ "Bad config: " <> Text.take 256 (show expr)
+  _ -> extractError $ baseSelector <> ": expected a record literal, but got: " <> Text.take 256 (show expr)
 
 data Builder
   = NixBuilder BuilderNix
