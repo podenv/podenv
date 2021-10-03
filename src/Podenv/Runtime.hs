@@ -132,17 +132,22 @@ podmanExecArgs ctx@Context {..} = toString <$> args
 podman :: [String] -> P.ProcessConfig () () ()
 podman = P.setDelegateCtlc True . P.proc "podman"
 
-data PodmanStatus = Running | Stopped | Unknown
-  deriving (Show)
+data PodmanStatus
+  = -- | The container does not exists, it needs to be created
+    NotFound
+  | -- | The container is already running
+    Running
+  | -- | The container ran and it is now stopped
+    Unknown Text
+  deriving (Show, Eq)
 
 getPodmanStatus :: String -> ContextEnvT PodmanStatus
 getPodmanStatus cname = do
   (_, stdout', _) <- P.readProcess (podman ["inspect", cname, "--format", "{{.State.Status}}"])
   pure $ case stdout' of
+    "" -> NotFound
     "running\n" -> Running
-    "exited\n" -> Stopped
-    "" -> Unknown
-    other -> error $ "Unknown container status: " <> show other
+    other -> Unknown (Text.dropWhileEnd (== '\n') $ decodeUtf8 other)
 
 ensureInfraNet :: Text -> ContextEnvT ()
 ensureInfraNet ns = do
@@ -151,8 +156,11 @@ ensureInfraNet ns = do
   infraStatus <- getPodmanStatus (toString pod)
   case infraStatus of
     Running -> pure ()
-    Stopped -> error "Infra net is stopped"
-    Unknown -> do
+    _ -> do
+      when (infraStatus /= NotFound) $
+        -- Try to delete any left-over infra container
+        P.runProcess_ (podman ["rm", toString pod])
+
       system' <- asks system
       let cmd =
             podman $
@@ -174,22 +182,26 @@ executePodman ctx = do
 
   status <- getPodmanStatus cname
   debug $ "Podman status of " <> toText cname <> ": " <> show status
-  args <- case status of
-    Running -> do
-      pure $ podmanExecArgs ctx
-    Stopped -> do
-      if ctx ^. keep
-        then do
-        P.runProcess_ (podman ["start", cname])
-        pure $ podmanExecArgs ctx
-        else do
-        P.runProcess_ (podman ["rm", cname])
-        pure $ podmanRunArgs re ctx
-    Unknown -> do
-      pure $ podmanRunArgs re ctx
-
+  let cfail err = liftIO . mayFail . Left $ toText cname <> ": " <> err
+  args <-
+    if ctx ^. keep
+      then case status of
+        NotFound -> pure $ podmanRunArgs re ctx
+        Running -> pure $ podmanExecArgs ctx
+        Unknown "exited" -> startContainer
+        Unknown cstate -> cfail $ "unknown container status: " <> cstate
+      else case status of
+        NotFound -> pure $ podmanRunArgs re ctx
+        Running -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
+        Unknown _ -> recreateContainer re
   let cmd = podman args
   debug $ show cmd
   P.runProcess_ cmd
   where
     cname = toString (ctx ^. name)
+    startContainer = do
+      P.runProcess_ (podman ["start", cname])
+      pure $ podmanExecArgs ctx
+    recreateContainer re = do
+      P.runProcess_ (podman ["rm", cname])
+      pure $ podmanRunArgs re ctx
