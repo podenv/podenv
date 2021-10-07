@@ -180,7 +180,7 @@ showApp Application {..} ctx beM re = unlines infos
 
 printCaps :: IO ()
 printCaps = do
-  putTextLn $ unlines $ map showCap Podenv.Application.capsAll
+  putText $ unlines $ sort $ map showCap Podenv.Application.capsAll
   where
     showCap Podenv.Application.Cap {..} =
       capName <> "\t" <> capDescription
