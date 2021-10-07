@@ -59,4 +59,4 @@ jobs:
         key: ${{ runner.os }}-${{ hashFiles('stack.yaml') }}
         restore-keys: |
           ${{ runner.os }}-
-    - run: stack test --fast --no-terminal --system-ghc --resolver=lts-18.10
+    - run: stack test --fast --no-terminal --system-ghc --resolver=lts-18.13

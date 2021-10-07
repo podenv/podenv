@@ -1,3 +1,1 @@
-resolver: lts-18.10
-extra-deps:
-  - linux-capabilities-0.1.0.0
+resolver: lts-18.13
