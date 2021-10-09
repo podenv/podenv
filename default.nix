@@ -47,9 +47,14 @@ let
         version = "1.0.0.1";
         sha256 = "0cw9a1gfvias4hr36ywdizhysnzbzxy20fb3jwmqmgjy40lzxp2g";
       };
+      # latest weeder
+      weeder = pkgs.haskell.lib.overrideCabal hpPrev.weeder {
+        version = "2.2.0";
+        sha256 = "sha256-Yhd1frxVjAi7BM7Dci7rgIl3v3aQTmV1EoSoXxFm1B8=";
+      };
 
       podenv =
-        (hpPrev.callCabal2nix "podenv" (gitignoreSource ./.) { }).overrideAttrs
+        (hpPrev.callCabal2nixWithOptions "podenv" (gitignoreSource ./.) "--flag=ci" { }).overrideAttrs
         (_: {
           # Set build environment variable to avoid warnings
           LANG = "en_US.UTF-8";
@@ -91,8 +96,7 @@ let
             }/lib"
           ]
   else
-  # TODO: fix test and provides HUB_NIX_BUILDER environment variable
-    drv: pkgs.haskell.lib.dontCheck drv);
+    drv: drv);
 
   hsPkgs = pkgs.haskell.packages.${compiler}.override haskellOverrides;
 
@@ -105,7 +109,6 @@ in {
       cabal-install
       hlint
       ghcid
-      doctest
       easyHls.nixosDrv
     ];
     withHoogle = withHoogle;

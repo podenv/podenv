@@ -9,7 +9,6 @@ module Podenv.Config
     Config (..),
     Atom (..),
     ApplicationRecord (..),
-    defaultConfigPath,
     defaultApp,
     Builder (..),
     BuilderNix (..),
@@ -263,9 +262,6 @@ select' config args = case config of
           pure (rest, appb)
         [] -> Left "Missing app argument"
 
-defaultConfigPath :: Text
-defaultConfigPath = "~/.config/podenv/config.dhall"
-
 -- | The default app
 defaultApp :: Application
 defaultApp = case Dhall.extract Dhall.auto (Dhall.renote appDefault) of
@@ -318,8 +314,8 @@ appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
       [("containerfile", x)] -> mkRuntime "Container" (pref containerBuildDefault (mkRecord [("containerfile", x)]))
       _ -> mkRuntime "Container" (pref containerBuildDefault (Dhall.denote (Dhall.RecordLit kv)))
       where
-        mkRuntime field v =
-          Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing)) v
+        mkRuntime field =
+          Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing))
 
     extract' :: DM.Map Text (Dhall.RecordField s Void) -> Dhall.Expr Void Void -> DhallExtractor Application
     extract' kv runtimeExpr =
