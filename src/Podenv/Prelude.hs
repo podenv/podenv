@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Common functions
 module Podenv.Prelude
   ( module Relude,
@@ -6,6 +7,12 @@ module Podenv.Prelude
     getEnv,
     orDie,
     mayFail,
+
+    -- * base env
+#if !MIN_VERSION_relude(1,0,0)
+    getArgs,
+    lookupEnv,
+#endif
 
     -- * xdg
     getCacheDir,
@@ -41,11 +48,11 @@ import Lens.Family (ASetter, set, (%~), (.~), (^.))
 import Relude
 import Relude.Extra.Lens (Lens')
 import System.Directory
-import System.Environment (getEnv)
 import System.FilePath.Posix (hasTrailingPathSeparator, takeDirectory, takeFileName, (</>))
 import System.IO (hPutStrLn)
 import System.Posix.Types (UserID)
 import System.Posix.User (getRealUserID)
+import System.Environment
 
 orDie :: Maybe a -> Text -> Either Text a
 orDie (Just a) _ = Right a
