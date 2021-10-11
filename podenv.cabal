@@ -90,4 +90,4 @@ test-suite tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Spec.hs
-  build-depends:    base, hspec, optparse-applicative, podenv, text
+  build-depends:    base, hspec, podenv, text

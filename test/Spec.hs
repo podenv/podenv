@@ -5,7 +5,6 @@ module Main where
 
 import Data.Maybe (maybeToList)
 import Data.Text (pack)
-import qualified Options.Applicative as Opts
 import qualified Podenv.Application
 import qualified Podenv.Build
 import qualified Podenv.Config
@@ -43,7 +42,13 @@ spec config = describe "unit tests" $ do
       (_, app) <- Podenv.Build.prepare be baseApp
       runtime app `shouldBe` Podenv.Dhall.Image "localhost/firefox"
   -- ctx <- Podenv.Application.prepare app
-
+  describe "cli parser" $ do
+    it "pass command args" $ do
+      cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "ls", "-la"]
+      Podenv.Main.extraArgs cli `shouldBe` ["ls", "-la"]
+    it "handle separator" $ do
+      cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "--", "ls", "-la"]
+      Podenv.Main.extraArgs cli `shouldBe` ["ls", "-la"]
   describe "cli with single config" $ do
     it "select app" $ cliTest "env" [] "env"
     it "add args" $ cliTest "env" ["ls"] "env // { command = [\"ls\"]}"
@@ -110,7 +115,8 @@ spec config = describe "unit tests" $ do
         }
 
     podmanCliTest args expected = do
-      (app, mode, _, _) <- Podenv.Main.cliConfigLoad (parseCli args)
+      cli <- Podenv.Main.usage args
+      (app, mode, _, _) <- Podenv.Main.cliConfigLoad cli
       ctx <- Podenv.Application.preparePure testEnv app mode
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
@@ -120,7 +126,7 @@ spec config = describe "unit tests" $ do
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
     cliTest code args expectedCode = do
-      let cli@Podenv.Main.CLI {..} = parseCli args
+      cli@Podenv.Main.CLI {..} <- Podenv.Main.usage args
       config' <- loadConfig (Podenv.Main.selector cli) code
       (args', (_, baseApp)) <- mayFail $ Podenv.Config.select config' (maybeToList selector <> extraArgs)
       expected <- loadOne expectedCode
@@ -135,11 +141,6 @@ spec config = describe "unit tests" $ do
             Podenv.Config.ConfigApplications xs -> map fst xs
             _ -> error "Bad test config"
       got `shouldBe` expected
-
-    parseCli args = case Opts.execParserPure Opts.defaultPrefs Podenv.Main.cliInfo args of
-      Opts.Success cli -> cli
-      Opts.Failure x -> error $ "Fail to parse cli: " <> show x
-      Opts.CompletionInvoked _ -> error "Unexpected completion"
 
     addCap code capCode =
       "( " <> code <> " // { capabilities = (" <> code <> ").capabilities // {" <> capCode <> "}})"
