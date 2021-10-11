@@ -16,6 +16,7 @@ module Podenv.Main
   ( main,
 
     -- * exports for tests
+    usage,
     cliConfigLoad,
     cliInfo,
     cliPrepare,
@@ -36,7 +37,7 @@ import qualified Podenv.Runtime
 -- | podenv entrypoint
 main :: IO ()
 main = do
-  cli@CLI {..} <- execParser cliInfo
+  cli@CLI {..} <- usage =<< getArgs
   when showDhallEnv (putTextLn Podenv.Config.podenvImportTxt >> exitSuccess)
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
@@ -51,6 +52,30 @@ main = do
       unless ready $ Podenv.Build.execute be
       when update $ beUpdate (fromMaybe (error "Need build env") be)
       Podenv.Runtime.execute re ctx
+
+usage :: [String] -> IO CLI
+usage args = do
+  cli <- handleParseResult $ execParserPure defaultPrefs cliInfo cliArgs
+  pure $ cli {extraArgs = map toText appArgs}
+  where
+    cliArgs = takeCliArgs [] args
+    appArgs = case drop (length cliArgs) args of
+      -- Drop any `--` prefix
+      ("--" : rest) -> rest
+      xs -> xs
+
+    -- Collect args until the selector, the rest should not be passed to optparse-applicative
+    takeCliArgs acc args' = case args' of
+      [] -> reverse acc
+      -- Handle toggle such as `"--name" : "app-name" : _`
+      (toggle : x : xs) | toggle `elem` strOptions -> takeCliArgs (x : toggle : acc) xs
+      (x : xs)
+        -- `--` is a hard separator, stop now.
+        | "--" == x -> takeCliArgs acc []
+        -- this is switch, keep on taking
+        | "--" `isPrefixOf` x -> takeCliArgs (x : acc) xs
+        -- otherwise the selector is found, stop now
+        | otherwise -> takeCliArgs (x : acc) []
 
 data CLI = CLI
   { -- action modes:
@@ -77,6 +102,7 @@ data CLI = CLI
     extraArgs :: [Text]
   }
 
+-- WARNING: when adding strOption, update the 'strOptions' list
 cliParser :: Parser CLI
 cliParser =
   CLI
@@ -101,6 +127,10 @@ cliParser =
     <*> many (strOption (long "volume" <> metavar "VOLUME" <> help "Extra volumes 'volume|hostPath[:containerPath]'"))
     <*> optional (strArgument (metavar "APP" <> help "Application config name or image:name or nix:expr"))
     <*> many (strArgument (metavar "ARGS" <> help "Application args"))
+
+-- | List of strOption that accept an argument (that is not the selector)
+strOptions :: [String]
+strOptions = ["--namespace", "--home", "--name", "--env", "--volume"]
 
 -- | Parse all capabilities toggles
 capsParser :: Parser [Capabilities -> Capabilities]
