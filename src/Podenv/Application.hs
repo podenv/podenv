@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
@@ -27,10 +26,6 @@ import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
 import qualified Podenv.Runtime as Ctx
-
-#if !MIN_VERSION_relude(1,0,0)
-import System.Environment
-#endif
 
 data Mode = Regular | Shell
 
