@@ -56,7 +56,7 @@ jobs:
     - uses: actions/cache@v2
       with:
         path: ~/.stack
-        key: ${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+        key: ${{ runner.os }}-${{ hashFiles('**/*.cabal','**/cabal.project', 'stack.yaml') }}
         restore-keys: |
           ${{ runner.os }}-
     - run: stack test --fast --no-terminal --system-ghc --resolver=lts-18.13
