@@ -24,7 +24,9 @@ module Podenv.Main
   )
 where
 
+import Data.Version (showVersion)
 import Options.Applicative hiding (command)
+import Paths_podenv (version)
 import qualified Podenv.Application
 import Podenv.Build (BuildEnv (beInfos, beName, beUpdate))
 import qualified Podenv.Build
@@ -33,6 +35,7 @@ import Podenv.Dhall
 import Podenv.Prelude
 import Podenv.Runtime (Context, RuntimeEnv (..))
 import qualified Podenv.Runtime
+import qualified Podenv.Version (version)
 
 -- | podenv entrypoint
 main :: IO ()
@@ -158,8 +161,13 @@ toggleCapParser Podenv.Application.Cap {..} isOn = setMaybeCap <$> flagParser
 cliInfo :: ParserInfo CLI
 cliInfo =
   info
-    (cliParser <**> helper)
+    (versionOption <*> cliParser <**> helper)
     (fullDesc <> header "podenv - a podman wrapper")
+  where
+    versionOption =
+      infoOption
+        (concat [showVersion version, " ", Podenv.Version.version])
+        (long "version" <> help "Show version")
 
 -- | Load the config
 cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Maybe BuildEnv, RuntimeEnv)
