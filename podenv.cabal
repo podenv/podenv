@@ -66,6 +66,7 @@ library
                   , optparse-applicative
                   , relude
                   , text
+                  , th-env
                   , typed-process
                   , unix
   hs-source-dirs:   src
