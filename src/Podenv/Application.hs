@@ -162,7 +162,13 @@ setTerminal ctx =
 
 setWayland :: Ctx.Context -> AppEnvT Ctx.Context
 setWayland ctx = do
-  let skt = "wayland-0" -- TODO discover skt name
+  sktM <- liftIO $ lookupEnv "WAYLAND_DISPLAY"
+  case sktM of
+    Nothing -> setX11 ctx
+    Just skt -> setWayland' skt ctx
+
+setWayland' :: FilePath -> Ctx.Context -> AppEnvT Ctx.Context
+setWayland' skt ctx = do
   shareSkt <- addXdgRun skt
   pure $
     ctx
