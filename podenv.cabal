@@ -59,6 +59,7 @@ library
                   , directory
                   , either
                   , filepath
+                  , gitrev
                   , lens-family-core
                   , lens-family-th
                   , linux-capabilities
@@ -77,6 +78,9 @@ library
                   , Podenv.Main
                   , Podenv.Prelude
                   , Podenv.Runtime
+                  , Podenv.Version
+  other-modules:    Paths_podenv
+  autogen-modules:  Paths_podenv
 
 executable podenv
   import:           common
