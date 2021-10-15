@@ -1,4 +1,5 @@
 # Nix expressions to work on podenv
+# Build release with: `PODENV_COMMIT=$(git show HEAD --format="format:%H" -q) nix-build --attr podenv --arg static true
 { withHoogle ? false, static ? false }:
 let
   # pin the upstream nixpkgs
@@ -57,6 +58,7 @@ let
           # Provide a local dhall prelude because build can't access network
           DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
           HUB_COMMIT = "${builtins.readFile ./.git/modules/hub/HEAD}";
+          PODENV_COMMIT = builtins.getEnv "PODENV_COMMIT";
         });
     };
   };
