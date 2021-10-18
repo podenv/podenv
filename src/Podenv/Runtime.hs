@@ -78,7 +78,7 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
       PortTcp p -> p
       PortUdp p -> p
 
-    hostnameArg = ["--hostname", "localhost"]
+    hostnameArg = ["--hostname", _name]
     networkArg
       | _network =
         hostnameArg <> case _namespace of

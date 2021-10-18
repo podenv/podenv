@@ -62,16 +62,16 @@ spec config = describe "unit tests" $ do
     it "image:name" $ cliTest "env" ["image:testy"] "def // { runtime = Podenv.Image \"testy\", name = \"image-b2effd\" }"
     it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime.nix = \"test\", name = \"nix-1c3a91\" }"
   describe "podman ctx" $ do
-    it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "localhost", "--name", "env", defImg]
-    it "run keep" $ podmanTest (addCap "env" "keep = True") ["run", "--hostname", "localhost", "--name", "env", defImg]
-    it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "localhost", "--cap-add", "NET_ADMIN"])
-    it "run volumes" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "localhost", "--volume", "/tmp/test:/tmp/test"])
+    it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
+    it "run keep" $ podmanTest (addCap "env" "keep = True") ["run", "--hostname", "env", "--name", "env", defImg]
+    it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "NET_ADMIN"])
+    it "run volumes" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp/test:/tmp/test"])
     it "run home volumes" $
-      podmanTest "env // { volumes = [\"~/src:/data\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "localhost", "--volume", "/home/user/src:/data"])
+      podmanTest "env // { volumes = [\"~/src:/data\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/home/user/src:/data"])
     it "run many volumes" $
       podmanTest
         "env // { volumes = [\"/home/data:/tmp/data\", \"/tmp\", \"/home/old-data:/tmp/data\"]}"
-        (defRun ["--security-opt", "label=disable", "--hostname", "localhost", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
+        (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
   describe "podman cli" $ do
     it "run minimal" $ podmanCliTest ["image:ubi8"] ["run", "--rm", "--network", "none", "--name", "image-8bfbaa", "ubi8"]
     it "wayland disable selinux" $
@@ -87,7 +87,7 @@ spec config = describe "unit tests" $ do
     it "run simple" $
       podmanCliTest
         ["--network", "--shell", "image:ubi8"]
-        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "localhost", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
+        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "image-8bfbaa", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
     it "shell override hostfile" $ do
       let expected extra = ["run", "-i", "--detach-keys", "", "-t", "--rm", "--network", "none"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
           cmd = ["--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"]
