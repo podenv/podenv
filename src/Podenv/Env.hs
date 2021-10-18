@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-missing-export-lists #-}
@@ -8,10 +7,6 @@ module Podenv.Env where
 
 import Lens.Family.TH (makeLenses)
 import Podenv.Prelude
-
-#if !MIN_VERSION_relude(1,0,0)
-import System.Environment
-#endif
 
 data AppEnv = AppEnv
   { _hostXdgRunDir :: Maybe FilePath,
