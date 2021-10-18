@@ -188,6 +188,7 @@ executePodman ctx = do
       then case status of
         NotFound -> pure $ podmanRunArgs re ctx
         Running -> pure $ podmanExecArgs ctx
+        Unknown "configured" -> startContainer
         Unknown "exited" -> startContainer
         Unknown cstate -> cfail $ "unknown container status: " <> cstate
       else case status of
