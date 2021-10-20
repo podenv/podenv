@@ -57,7 +57,6 @@ spec config = describe "unit tests" $ do
     it "set cap" $ cliTest "env" ["--wayland"] (addCap "env" "wayland = True")
     it "unset cap" $ cliTest (addCap "env" "wayland = True") ["--no-wayland"] "env"
     it "set volume" $ cliTest "env" ["--volume", "/tmp/test"] "env // { volumes = [\"/tmp/test\"]}"
-    it "set home" $ cliTest "env" ["--home", "/var/app"] "env // { volumes = [\"/var/app:~/\"] }"
   describe "cli default" $ do
     it "image:name" $ cliTest "env" ["image:testy"] "def // { runtime = Podenv.Image \"testy\", name = \"image-b2effd\" }"
     it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime.nix = \"test\", name = \"nix-1c3a91\" }"
