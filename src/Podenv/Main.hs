@@ -100,7 +100,6 @@ data CLI = CLI
     shell :: Bool,
     namespace :: Maybe Text,
     -- TODO: add namespaced :: Bool (when set, namespace is the app name head)
-    homePath :: Maybe FilePath,
     name :: Maybe Text,
     cliEnv :: [Text],
     volumes :: [Text],
@@ -127,16 +126,15 @@ cliParser =
     <*> capsParser
     <*> switch (long "shell" <> help "Start a shell instead of the application command")
     <*> optional (strOption (long "namespace" <> help "Share a network ns"))
-    <*> optional (strOption (long "home" <> metavar "PATH" <> help "Host path for application home"))
     <*> optional (strOption (long "name" <> metavar "NAME" <> help "Container name"))
     <*> many (strOption (long "env" <> metavar "ENV" <> help "Extra env 'KEY=VALUE'"))
-    <*> many (strOption (long "volume" <> metavar "VOLUME" <> help "Extra volumes 'volume|hostPath[:containerPath]'"))
+    <*> many (strOption (long "volume" <> short 'v' <> metavar "VOLUME" <> help "Extra volumes 'volume|hostPath[:containerPath]'"))
     <*> optional (strArgument (metavar "APP" <> help "Application config name or image:name or nix:expr"))
     <*> many (strArgument (metavar "ARGS" <> help "Application args"))
 
 -- | List of strOption that accept an argument (that is not the selector)
 strOptions :: [String]
-strOptions = ["--namespace", "--home", "--name", "--env", "--volume"]
+strOptions = ["--namespace", "--name", "--env", "--volume", "-v"]
 
 -- | Parse all capabilities toggles
 capsParser :: Parser [Capabilities -> Capabilities]
@@ -188,7 +186,7 @@ cliConfigLoad cli@CLI {..} = do
 cliPrepare :: CLI -> [Text] -> Application -> Application
 cliPrepare CLI {..} args = modifiers
   where
-    modifiers = setShell . setName . setEnvs . setVolumes . setHome . setCaps . setNS . addArgs
+    modifiers = setShell . setName . setEnvs . setVolumes . setCaps . setNS . addArgs
 
     addArgs = appCommand %~ (<> args)
 
@@ -198,8 +196,6 @@ cliPrepare CLI {..} args = modifiers
 
     setShell = bool id setShellCap shell
     setShellCap = appCapabilities %~ (capTerminal .~ True) . (capInteractive .~ True)
-
-    setHome = maybe id (\n -> appVolumes %~ (toText n <> ":~/" :)) homePath
 
     setEnvs app' = foldr (\v -> appEnviron %~ (v :)) app' cliEnv
 
