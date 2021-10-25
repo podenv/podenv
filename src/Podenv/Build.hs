@@ -110,9 +110,9 @@ initNix baseApp expr BuilderNix {..} = BuildEnv {..}
 
     -- update the application with nix requirements
     setImage = appRuntime .~ Image imageName
-    addVolumes = appVolumes %~ (\xs -> ("nix-profiles" <> ":/profile") : (containerBuild ^. cbImage_volumes) <> xs)
-    profileBase = toText $ "/profile" </> toString name
-    addEnv = appEnviron %~ ("PATH=" <> toText profileBase <> "/bin:/bin" :)
+    addVolumes = appVolumes %~ (\xs -> (containerBuild ^. cbImage_volumes) <> xs)
+    profileDir = toText $ "/nix/var/nix/profiles/podenv" </> toString name
+    addEnv = appEnviron %~ ("PATH=" <> toText profileDir <> "/bin:/bin" :)
 
     -- the app to run to setup the nix-store volume and instantiate the profile
     builderApp = buildNixApp & setImage . addVolumes
@@ -135,9 +135,16 @@ initNix baseApp expr BuilderNix {..} = BuildEnv {..}
         runApp builderApp
         Text.writeFile setupMark ""
 
+      -- prepare and cleanup leftover
       runApp $
-        builderApp
-          & (appCommand .~ ["nix-env", "-i", "-p", profileBase, "-E", "_: " <> expr])
+        builderApp & appCommand
+          .~ ["sh", "-c", "mkdir -p /nix/var/nix/profiles/podenv; rm -f " <> profileDir <> "-[0-9]-link"]
+
+      let installCommand =
+            ["nix-env", "--profile", profileDir, "--install"]
+              <> ["--remove-all", "-E", "_:" <> expr]
+
+      runApp $ builderApp & appCommand .~ installCommand
 
       -- save that the build succeeded
       Text.writeFile (cacheDir </> fileName) expr
