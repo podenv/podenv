@@ -11,6 +11,7 @@ module Podenv.Build
   )
 where
 
+import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Podenv.Application (Mode (Regular), prepare)
@@ -60,7 +61,9 @@ initContainer baseApp BuilderContainer {..} = BuildEnv {..}
     beName = bcName
     beInfos = "# Containerfile " <> imageName <> "\n" <> fileContent
     containerBuild = bcBuild
-    fileContent = containerfile containerBuild
+    fileContentBase = containerBuild ^. cbContainerfile
+    imageHash = (toText . SHA.showDigest . SHA.sha256 . encodeUtf8 $ fileContentBase) <> "\n"
+    fileContent = fileContentBase <> "\nLABEL podenv=" <> imageHash
 
     -- The image name can be set by the container build,
     -- otherwise it default to the app name (e.g. when using distro template)
@@ -74,8 +77,8 @@ initContainer baseApp BuilderContainer {..} = BuildEnv {..}
     setImage = appRuntime .~ Image imageName
 
     bePrepare = do
-      built <- checkIfBuilt fileName fileContent
-      pure (built, baseApp & setHome . setImage)
+      currentHash <- getImageHash imageName
+      pure (imageHash == currentHash, baseApp & setHome . setImage)
 
     beBuild = do
       buildImage imageName fileName fileContent (containerBuild ^. cbImage_volumes)
@@ -150,6 +153,14 @@ initNix baseApp expr BuilderNix {..} = BuildEnv {..}
       Text.writeFile (cacheDir </> fileName) expr
 
     beUpdate = error "Nix update is not implemented (yet)"
+
+-- | Get the podenv label value.
+getImageHash :: Text -> IO Text
+getImageHash iname = do
+  (_, stdout', _) <- P.readProcess (Podenv.Runtime.podman args)
+  pure $ decodeUtf8 stdout'
+  where
+    args = ["image", "inspect", toString iname, "--format", "{{.Labels.podenv}}"]
 
 -- | Build a container image
 buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()
