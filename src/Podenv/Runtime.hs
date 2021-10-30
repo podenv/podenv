@@ -42,15 +42,13 @@ showPodmanCmd :: RuntimeEnv -> Context -> Text
 showPodmanCmd re = show . P.proc "podman" . podmanRunArgs re
 
 data RuntimeEnv = RuntimeEnv
-  { detach :: Bool,
-    k8s :: Bool,
-    verbose :: Bool,
+  { verbose :: Bool,
     system :: SystemConfig
   }
   deriving (Show)
 
 defaultRuntimeEnv :: RuntimeEnv
-defaultRuntimeEnv = RuntimeEnv False False True defaultSystemConfig
+defaultRuntimeEnv = RuntimeEnv True defaultSystemConfig
 
 type ContextEnvT a = ReaderT RuntimeEnv IO a
 
