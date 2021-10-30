@@ -93,8 +93,6 @@ data CLI = CLI
     -- runtime env:
     update :: Bool,
     verbose :: Bool,
-    detach :: Bool,
-    k8s :: Bool,
     -- app modifiers:
     capsOverride :: [Capabilities -> Capabilities],
     shell :: Bool,
@@ -120,8 +118,6 @@ cliParser =
     -- runtime env:
     <*> switch (long "update" <> help "Update the runtime")
     <*> switch (long "verbose" <> help "Increase verbosity")
-    <*> pure False -- switch (long "detach" <> help "Start the application in tmux or kubernetes")
-    <*> pure False -- switch (long "k8s" <> help "Start the application in kubernetes and attach with kubectl logs or exec unless --detach")
     -- app modifiers:
     <*> capsParser
     <*> switch (long "shell" <> help "Start a shell instead of the application command")
@@ -178,7 +174,7 @@ cliConfigLoad cli@CLI {..} = do
   (args, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config (maybeToList selector <> extraArgs)
   let app = cliPrepare cli args baseApp
       be = Podenv.Build.initBuildEnv app <$> builderM
-      re = RuntimeEnv {detach, k8s, verbose, system}
+      re = RuntimeEnv {verbose, system}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
   pure (app, mode, be, re)
 
