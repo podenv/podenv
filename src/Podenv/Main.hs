@@ -68,10 +68,13 @@ usage args = do
       xs -> xs
 
     -- Collect args until the selector, the rest should not be passed to optparse-applicative
+    isPodenvArg arg
+      | arg `elem` strOptions || "--bash-completion-" `isPrefixOf` arg = True
+      | otherwise = False
     takeCliArgs acc args' = case args' of
       [] -> reverse acc
       -- Handle toggle such as `"--name" : "app-name" : _`
-      (toggle : x : xs) | toggle `elem` strOptions -> takeCliArgs (x : toggle : acc) xs
+      (toggle : x : xs) | isPodenvArg toggle -> takeCliArgs (x : toggle : acc) xs
       (x : xs)
         -- `--` is a hard separator, stop now.
         | "--" == x -> takeCliArgs acc []

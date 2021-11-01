@@ -125,9 +125,12 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
         <> _command
 
 podmanExecArgs :: Context -> [String]
-podmanExecArgs ctx@Context {..} = toString <$> args
+podmanExecArgs ctx = toString <$> args
   where
-    args = ["exec"] <> podmanArgs ctx <> [_name] <> _command
+    args = ["exec"] <> podmanArgs ctx <> [ctx ^. name] <> cmd
+    cmd = case ctx ^. command of
+      [] -> ["/bin/bash"]
+      x -> x
 
 podman :: [String] -> P.ProcessConfig () () ()
 podman = P.setDelegateCtlc True . P.proc "podman"
