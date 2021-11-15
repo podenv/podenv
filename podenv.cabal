@@ -64,7 +64,7 @@ library
                   , lens-family-th
                   , linux-capabilities
                   , optparse-applicative
-                  , relude
+                  , relude >= 0.7
                   , text
                   , th-env
                   , typed-process
