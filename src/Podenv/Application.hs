@@ -136,6 +136,7 @@ capsAll, capsToggle :: [Cap]
 capsAll = capsToggle
 capsToggle =
   [ Cap "root" "run as root" capRoot (contextSet Ctx.runAs (Just Ctx.RunAsRoot)),
+    Cap "userid" "run as host user" capUserid (contextSet Ctx.runAs (Just Ctx.RunAsHostUID)),
     Cap "terminal" "allocate a tty" capTerminal setTerminal,
     Cap "interactive" "interactive mode" capInteractive (contextSet Ctx.interactive True),
     Cap "dbus" "share session dbus socket" capDbus setDbus,
