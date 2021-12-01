@@ -69,16 +69,16 @@ instance Text.Show.Show ArgName where
 
 -- | Config load entrypoint
 load :: Maybe Text -> Maybe Text -> IO Config
-load selectorM configTxt = case defaultSelector of
+load selectorM configTxt = case selectorM >>= defaultSelector of
   Just c -> pure $ ConfigDefault (ApplicationRecord c)
   Nothing -> load' . Dhall.normalize <$> loadExpr configTxt
+
+defaultSelector :: Text -> Maybe Application
+defaultSelector s
+  | "image:" `Text.isPrefixOf` s = imageApp s
+  | "nix:" `Text.isPrefixOf` s = nixApp s
+  | otherwise = Nothing
   where
-    defaultSelector :: Maybe Application
-    defaultSelector = case selectorM of
-      Just s
-        | "image:" `Text.isPrefixOf` s -> imageApp s
-        | "nix:" `Text.isPrefixOf` s -> nixApp s
-      _ -> Nothing
     imageApp x = mkApp ("image-" <> mkName x) (Image $ Text.drop (Text.length "image:") x)
     nixApp x = mkApp ("nix-" <> mkName x) (Nix $ Text.drop (Text.length "nix:") x)
     mkApp name runtime' = Just $ defaultApp & (appName .~ name) . (appRuntime .~ runtime')
@@ -254,13 +254,17 @@ select' config args = case config of
         (x : xs) -> ensureBuilder atoms (f x) >>= \appB -> pure (xs, appB)
         [] -> Left ("Missing argument: " <> show arg)
       LamApp f -> case args' of
-        (x : xs) -> do
-          -- Recursively select the app to eval arg `mod app arg` as `mod (app arg)`
-          -- e.g. LamApp should be applied at the end.
-          atom' <- lookup x atoms `orDie` (x <> ": unknown lam arg")
-          (rest, (_, app)) <- selectApp atoms xs atom'
-          appb <- ensureBuilder atoms (f (unRecord app))
-          pure (rest, appb)
+        (x : xs) -> case defaultSelector x of
+          Just app -> do
+            appb <- ensureBuilder atoms (f app)
+            pure (xs, appb)
+          Nothing -> do
+            -- Recursively select the app to eval arg `mod app arg` as `mod (app arg)`
+            -- e.g. LamApp should be applied at the end.
+            atom' <- lookup x atoms `orDie` (x <> ": unknown lam arg")
+            (rest, (_, app)) <- selectApp atoms xs atom'
+            appb <- ensureBuilder atoms (f (unRecord app))
+            pure (rest, appb)
         [] -> Left "Missing app argument"
 
 defaultConfigPath :: Text
