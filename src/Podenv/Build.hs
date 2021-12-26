@@ -16,6 +16,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Podenv.Application (Mode (Regular), prepare)
 import Podenv.Config (Builder (..), BuilderContainer (..), BuilderNix (..))
+import Podenv.Context (Name (..))
 import Podenv.Dhall
 import Podenv.Prelude
 import qualified Podenv.Runtime (defaultRuntimeEnv, execute, podman)
@@ -202,7 +203,7 @@ imageNameToFilePath imageName = "Containerfile_" <> toString (imageNameToFP imag
 
 runApp :: Application -> IO ()
 runApp app = do
-  ctx <- Podenv.Application.prepare app Podenv.Application.Regular
+  ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Name $ app ^. appName)
   Podenv.Runtime.execute Podenv.Runtime.defaultRuntimeEnv ctx
 
 checkIfBuilt :: FilePath -> Text -> IO Bool

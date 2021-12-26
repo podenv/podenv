@@ -9,6 +9,8 @@ import qualified Data.Text as Text
 import qualified Podenv.Application
 import qualified Podenv.Build
 import qualified Podenv.Config
+import qualified Podenv.Context
+import qualified Podenv.Dhall
 import Podenv.Env
 import qualified Podenv.Main
 import Podenv.Prelude (mayFail)
@@ -101,6 +103,14 @@ spec config = describe "unit tests" $ do
       podmanCliTest
         ["--volume", "/home/data:/tmp/data", "--volume", "/tmp", "--volume", "/old:/tmp/data", "image:ubi8"]
         ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data", "--name", "image-8bfbaa", "ubi8"]
+    it "name override keep image" $ do
+      cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.containerfile = \"firefox\" }"]
+      (baseApp, mode, ctxName, be, re') <- Podenv.Main.cliConfigLoad cli
+      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+          app = baseApp {Podenv.Dhall.runtime = Podenv.Dhall.Image "localhost/firefox"}
+      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox\n"
+      Podenv.Runtime.podmanRunArgs re ctx `shouldBe` ["run", "--rm", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
@@ -117,13 +127,14 @@ spec config = describe "unit tests" $ do
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage args
-      (app, mode, _, _) <- Podenv.Main.cliConfigLoad cli
-      ctx <- Podenv.Application.preparePure testEnv app mode
-      Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
+      (app, mode, ctxName, _, re') <- Podenv.Main.cliConfigLoad cli
+      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      Podenv.Runtime.podmanRunArgs re ctx `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True")
-      ctx <- Podenv.Application.prepare app Podenv.Application.Regular
+      ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
     cliTest code args expectedCode = do
