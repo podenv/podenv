@@ -33,7 +33,7 @@ import qualified Podenv.Build
 import qualified Podenv.Config
 import Podenv.Dhall
 import Podenv.Prelude
-import Podenv.Runtime (Context, RuntimeEnv (..))
+import Podenv.Runtime (Context, Name (..), RuntimeEnv (..))
 import qualified Podenv.Runtime
 import qualified Podenv.Version (version)
 
@@ -45,9 +45,9 @@ main = do
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
 
-  (cliApp, mode, be, re) <- cliConfigLoad cli
+  (cliApp, mode, ctxName, be, re) <- cliConfigLoad cli
   (ready, app) <- Podenv.Build.prepare be cliApp
-  ctx <- Podenv.Application.prepare app mode
+  ctx <- Podenv.Application.prepare app mode ctxName
 
   if showApplication
     then putTextLn $ showApp app ctx be re
@@ -167,28 +167,27 @@ cliInfo =
         (long "version" <> help "Show version")
 
 -- | Load the config
-cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Maybe BuildEnv, RuntimeEnv)
+cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Name, Maybe BuildEnv, RuntimeEnv)
 cliConfigLoad cli@CLI {..} = do
   system <- Podenv.Config.loadSystem
   config <- Podenv.Config.load selector configExpr
   (args, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config (maybeToList selector <> extraArgs)
   let app = cliPrepare cli args baseApp
       be = Podenv.Build.initBuildEnv app <$> builderM
+      name' = Name $ fromMaybe (app ^. appName) name
       re = RuntimeEnv {verbose, system}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
-  pure (app, mode, be, re)
+  pure (app, mode, name', be, re)
 
 -- | Apply the CLI argument to the application
 cliPrepare :: CLI -> [Text] -> Application -> Application
 cliPrepare CLI {..} args = modifiers
   where
-    modifiers = setShell . setName . setEnvs . setVolumes . setCaps . setNS . addArgs
+    modifiers = setShell . setEnvs . setVolumes . setCaps . setNS . addArgs
 
     addArgs = appCommand %~ (<> args)
 
     setNS = maybe id (appNamespace ?~) namespace
-
-    setName = maybe id (appName .~) name
 
     setShell = bool id setShellCap shell
     setShellCap = appCapabilities %~ (capTerminal .~ True) . (capInteractive .~ True)

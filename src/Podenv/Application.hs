@@ -30,15 +30,15 @@ import qualified Podenv.Runtime as Ctx
 data Mode = Regular | Shell
 
 -- | Converts an Application into a Context
-prepare :: Application -> Mode -> IO Ctx.Context
-prepare app mode = do
+prepare :: Application -> Mode -> Ctx.Name -> IO Ctx.Context
+prepare app mode ctxName = do
   appEnv <- Podenv.Env.new
-  preparePure appEnv app mode
+  preparePure appEnv app mode ctxName
 
 -- TODO: make this stricly pure using a PodenvMonad similar to the PandocMonad
-preparePure :: AppEnv -> Application -> Mode -> IO Ctx.Context
-preparePure envBase app mode =
-  runReaderT (doPrepare app {home = containerHome} mode) appEnv
+preparePure :: AppEnv -> Application -> Mode -> Ctx.Name -> IO Ctx.Context
+preparePure envBase app mode ctxName =
+  runReaderT (doPrepare app {home = containerHome} mode ctxName) appEnv
   where
     appEnv = envBase & appHomeDir .~ (toString <$> containerHome)
     containerHome =
@@ -47,11 +47,11 @@ preparePure envBase app mode =
         then Just "/root"
         else app ^. appHome
 
-doPrepare :: Application -> Mode -> AppEnvT Ctx.Context
-doPrepare app mode = do
+doPrepare :: Application -> Mode -> Ctx.Name -> AppEnvT Ctx.Context
+doPrepare app mode ctxName = do
   uid <- asks _hostUid
   let baseCtx =
-        (Ctx.defaultContext (app ^. appName) image)
+        (Ctx.defaultContext ctxName image)
           { Ctx._uid = uid,
             Ctx._namespace = app ^. appNamespace
           }

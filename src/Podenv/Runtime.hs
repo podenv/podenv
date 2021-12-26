@@ -76,7 +76,7 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
       PortTcp p -> p
       PortUdp p -> p
 
-    hostnameArg = ["--hostname", _name]
+    hostnameArg = ["--hostname", unName _name]
     networkArg
       | _network =
         hostnameArg <> case _namespace of
@@ -105,6 +105,8 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
          in ["--user", show x, "--uidmap", show x <> ":0:1", "--uidmap", "0:1:" <> show x]
       Nothing -> []
 
+    nameArg = ["--name", unName _name]
+
     args =
       ["run"]
         <> podmanArgs ctx
@@ -119,14 +121,14 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
         <> maybe [] (\wd -> ["--workdir", toText wd]) _workdir
         <> concatMap (\(k, v) -> ["--env", toText $ k <> "=" <> v]) (Map.toAscList _environ)
         <> concatMap volumeArg (Map.toAscList _mounts)
-        <> cond (_name /= mempty) ["--name", _name]
+        <> nameArg
         <> [unImageName _image]
         <> _command
 
 podmanExecArgs :: Context -> [String]
 podmanExecArgs ctx = toString <$> args
   where
-    args = ["exec"] <> podmanArgs ctx <> [ctx ^. name] <> cmd
+    args = ["exec"] <> podmanArgs ctx <> [unName $ ctx ^. name] <> cmd
     cmd = case ctx ^. command of
       [] -> ["/bin/bash"]
       x -> x
@@ -201,7 +203,7 @@ executePodman ctx = do
   debug $ show cmd
   P.runProcess_ cmd
   where
-    cname = toString (ctx ^. name)
+    cname = toString (unName $ ctx ^. name)
     -- Create a kept container with sleep and return the exec arg
     createContainer re = do
       let infraCtx = (detach .~ True) . (command .~ ["sleep", "infinity"])
