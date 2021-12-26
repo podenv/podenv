@@ -39,7 +39,11 @@ spec config = describe "unit tests" $ do
     it "load firefox" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
       let be = Podenv.Build.initBuildEnv baseApp <$> builderM
-      Text.take 33 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox"
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox\n"
+    it "load nixify" $ do
+      (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
+      let be = Podenv.Build.initBuildEnv baseApp <$> builderM
+      Text.take 41 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/nixify-firefox\n"
   describe "cli parser" $ do
     it "pass command args" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "ls", "-la"]

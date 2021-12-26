@@ -227,7 +227,7 @@ select' config args = case config of
     (selector : xs) -> do
       atom <- lookup selector atoms `orDie` (selector <> ": not found")
       (args', app) <- selectApp atoms xs atom
-      let name' = selector -- todo: mappend the extra selector arg
+      let name' = Text.intercalate "-" $ take (length args - length args') args
       pure (args', ensureName name' <$> app)
     [] -> Left "Multiple apps configured, provides a selector"
   where
