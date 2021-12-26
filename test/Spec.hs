@@ -5,11 +5,10 @@ module Main where
 
 import Data.Maybe (maybeToList)
 import Data.Text (pack)
+import qualified Data.Text as Text
 import qualified Podenv.Application
 import qualified Podenv.Build
 import qualified Podenv.Config
-import Podenv.Dhall (Application (..))
-import qualified Podenv.Dhall
 import Podenv.Env
 import qualified Podenv.Main
 import Podenv.Prelude (mayFail)
@@ -40,9 +39,7 @@ spec config = describe "unit tests" $ do
     it "load firefox" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
       let be = Podenv.Build.initBuildEnv baseApp <$> builderM
-      (_, app) <- Podenv.Build.prepare be baseApp
-      runtime app `shouldBe` Podenv.Dhall.Image "localhost/firefox"
-  -- ctx <- Podenv.Application.prepare app
+      Text.take 33 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox"
   describe "cli parser" $ do
     it "pass command args" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "ls", "-la"]
