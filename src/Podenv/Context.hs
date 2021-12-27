@@ -41,10 +41,13 @@ data RunAs = RunAsRoot | RunAsHostUID | RunAsAnyUID
 data Port = PortTcp Natural | PortUdp Natural
   deriving (Show)
 
+newtype Name = Name {unName :: Text}
+  deriving (Show)
+
 -- | The application context to be executed by podman or kubectl
 data Context = Context
   { -- | identifier
-    _name :: Text,
+    _name :: Name,
     _namespace :: Maybe Text,
     -- | container image name
     _image :: ImageName,
@@ -77,7 +80,7 @@ data Context = Context
 
 $(makeLenses ''Context)
 
-defaultContext :: Text -> ImageName -> Context
+defaultContext :: Name -> ImageName -> Context
 defaultContext _name _image =
   Context
     { _name,

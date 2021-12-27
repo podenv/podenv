@@ -5,10 +5,11 @@ module Main where
 
 import Data.Maybe (maybeToList)
 import Data.Text (pack)
+import qualified Data.Text as Text
 import qualified Podenv.Application
 import qualified Podenv.Build
 import qualified Podenv.Config
-import Podenv.Dhall (Application (..))
+import qualified Podenv.Context
 import qualified Podenv.Dhall
 import Podenv.Env
 import qualified Podenv.Main
@@ -40,9 +41,11 @@ spec config = describe "unit tests" $ do
     it "load firefox" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
       let be = Podenv.Build.initBuildEnv baseApp <$> builderM
-      (_, app) <- Podenv.Build.prepare be baseApp
-      runtime app `shouldBe` Podenv.Dhall.Image "localhost/firefox"
-  -- ctx <- Podenv.Application.prepare app
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox\n"
+    it "load nixify" $ do
+      (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
+      let be = Podenv.Build.initBuildEnv baseApp <$> builderM
+      Text.take 41 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/nixify-firefox\n"
   describe "cli parser" $ do
     it "pass command args" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "ls", "-la"]
@@ -100,6 +103,14 @@ spec config = describe "unit tests" $ do
       podmanCliTest
         ["--volume", "/home/data:/tmp/data", "--volume", "/tmp", "--volume", "/old:/tmp/data", "image:ubi8"]
         ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data", "--name", "image-8bfbaa", "ubi8"]
+    it "name override keep image" $ do
+      cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.containerfile = \"firefox\" }"]
+      (baseApp, mode, ctxName, be, re') <- Podenv.Main.cliConfigLoad cli
+      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+          app = baseApp {Podenv.Dhall.runtime = Podenv.Dhall.Image "localhost/firefox"}
+      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox\n"
+      Podenv.Runtime.podmanRunArgs re ctx `shouldBe` ["run", "--rm", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
@@ -116,13 +127,14 @@ spec config = describe "unit tests" $ do
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage args
-      (app, mode, _, _) <- Podenv.Main.cliConfigLoad cli
-      ctx <- Podenv.Application.preparePure testEnv app mode
-      Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
+      (app, mode, ctxName, _, re') <- Podenv.Main.cliConfigLoad cli
+      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      Podenv.Runtime.podmanRunArgs re ctx `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True")
-      ctx <- Podenv.Application.prepare app Podenv.Application.Regular
+      ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
 
     cliTest code args expectedCode = do
