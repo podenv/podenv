@@ -30,7 +30,7 @@ EOF
 Then start the application using this command:
 
 ```ShellSession
-$ podenv --home ~/.config/openvpn openvpn ovpn.conf
+$ podenv --volume ~/.config/openvpn:~/ openvpn ovpn.conf
 Enter Auth Username:
 ```
 
@@ -72,7 +72,7 @@ container to keep the namespace alive. This can be activated by using the
 Restart the `openvpn` container using:
 
 ```console
-$ podenv --home ~/.config/openvpn --namespace ovpn openvpn ovpn.conf
+$ podenv --volume ~/.config/openvpn:~/ --namespace ovpn openvpn ovpn.conf
 ```
 
 Then other application can join the namespace, for example:

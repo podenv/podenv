@@ -43,10 +43,10 @@ localhost/podenv/firefox                    latest                713d6fa70a9f  
 The firefox application doesn't have access to the host files and when you close the window,
 the browser configuration, its bookmarks and the history are lost. To prevent that, most
 application expect you to pick a storage location for their data. You can use the
-`--home` command line argument to define a host directory as the application home:
+`--volume` command line argument to define a host directory as the application home:
 
 ```console
-$ podenv --home ~/.config/firefox-pod firefox
+$ podenv --volume ~/.config/firefox-pod:~/ firefox
 [firefox window appears]
 
 $ ls -ap ~/.config/firefox-pod/

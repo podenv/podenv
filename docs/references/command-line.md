@@ -17,22 +17,23 @@ Here is the output of the `--help`:
 ```bash
 podenv - a podman wrapper
 
-Usage: podenv [--list] [--list-caps] [--show] [--config ARG] [--update]
-              [--verbose] [--shell] [--namespace ARG] [--home PATH]
-              [--name NAME] [--env ENV] [--volume VOLUME] [APP] [ARGS]
+Usage: podenv [--version] [--list] [--list-caps] [--show] [--config ARG]
+              [--update] [--verbose] [--shell] [--namespace ARG] [--name NAME]
+              [--env ENV] [-v|--volume VOLUME] [APP] [ARGS]
 
 Available options:
+  --version                Show version
   --list                   List available applications
   --list-caps              List available capabilities
   --show                   Show the environment without running it
+  --config ARG             A config expression
   --update                 Update the runtime
   --verbose                Increase verbosity
   --shell                  Start a shell instead of the application command
   --namespace ARG          Share a network ns
-  --home PATH              Host path for application home
   --name NAME              Container name
   --env ENV                Extra env 'KEY=VALUE'
-  --volume VOLUME          Extra volumes 'volume|hostPath[:containerPath]'
+  -v,--volume VOLUME       Extra volumes 'volume|hostPath[:containerPath]'
   APP                      Application config name or image:name or nix:expr
   ARGS                     Application args
   -h,--help                Show this help text
