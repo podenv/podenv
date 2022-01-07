@@ -41,11 +41,11 @@ spec config = describe "unit tests" $ do
     it "load firefox" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
       let be = Podenv.Build.initBuildEnv baseApp <$> builderM
-      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox\n"
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/3c922bca"
     it "load nixify" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
       let be = Podenv.Build.initBuildEnv baseApp <$> builderM
-      Text.take 41 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/nixify-firefox\n"
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/3c922bca"
   describe "cli parser" $ do
     it "pass command args" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "ls", "-la"]
@@ -109,7 +109,7 @@ spec config = describe "unit tests" $ do
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
           app = baseApp {Podenv.Dhall.runtime = Podenv.Dhall.Image "localhost/firefox"}
       ctx <- Podenv.Application.preparePure testEnv app mode ctxName
-      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/firefox\n"
+      Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/16e5f60f"
       Podenv.Runtime.podmanRunArgs re ctx `shouldBe` ["run", "--rm", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]

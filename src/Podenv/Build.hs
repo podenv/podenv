@@ -21,6 +21,7 @@ import Podenv.Dhall
 import Podenv.Prelude
 import qualified Podenv.Runtime (defaultRuntimeEnv, execute, podman)
 import System.Directory (renameFile)
+import System.Exit (ExitCode (ExitSuccess))
 import qualified System.Process.Typed as P
 
 -- | A build env contains action to be performed before preparation and execution
@@ -62,14 +63,13 @@ initContainer baseApp BuilderContainer {..} = BuildEnv {..}
     beName = bcName
     beInfos = "# Containerfile " <> imageName <> "\n" <> fileContent
     containerBuild = bcBuild
-    fileContentBase = containerBuild ^. cbContainerfile
-    imageHash = (toText . SHA.showDigest . SHA.sha256 . encodeUtf8 $ fileContentBase) <> "\n"
-    fileContent = fileContentBase <> "\nLABEL podenv=" <> imageHash
+    fileContent = containerBuild ^. cbContainerfile
+    imageHash = toText . SHA.showDigest . SHA.sha256 . encodeUtf8 $ fileContent
 
     -- The image name can be set by the container build,
-    -- otherwise it default to the app name (e.g. when using distro template)
+    -- otherwise it default to the Containerfile hash
     imageName =
-      "localhost/" <> fromMaybe (baseApp ^. appName) (containerBuild ^. cbImage_name)
+      "localhost/" <> fromMaybe imageHash (containerBuild ^. cbImage_name)
     fileName = imageNameToFilePath imageName
 
     setHome = case containerBuild ^. cbImage_home of
@@ -78,8 +78,8 @@ initContainer baseApp BuilderContainer {..} = BuildEnv {..}
     setImage = appRuntime .~ Image imageName
 
     bePrepare = do
-      currentHash <- getImageHash imageName
-      pure (imageHash == currentHash, baseApp & setHome . setImage)
+      imageReady <- checkImageExist imageName
+      pure (imageReady, baseApp & setHome . setImage)
 
     beBuild = do
       buildImage imageName fileName fileContent (containerBuild ^. cbImage_volumes)
@@ -155,14 +155,6 @@ initNix baseApp expr BuilderNix {..} = BuildEnv {..}
 
     beUpdate = error "Nix update is not implemented (yet)"
 
--- | Get the podenv label value.
-getImageHash :: Text -> IO Text
-getImageHash iname = do
-  (_, stdout', _) <- P.readProcess (Podenv.Runtime.podman args)
-  pure $ decodeUtf8 stdout'
-  where
-    args = ["image", "inspect", toString iname, "--format", "{{.Labels.podenv}}"]
-
 -- | Build a container image
 buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()
 buildImage imageName fileName containerfile volumes = do
@@ -195,6 +187,11 @@ buildImage imageName fileName containerfile volumes = do
         (p1, p2) = Text.break (== ':') volume
         hostPath = cacheDir </> toString p1
         containerPath = Text.drop 1 p2
+
+checkImageExist :: Text -> IO Bool
+checkImageExist imageName = do
+  res <- P.runProcess (Podenv.Runtime.podman ["image", "exists", Text.unpack imageName])
+  pure $ res == ExitSuccess
 
 imageNameToFilePath :: Text -> FilePath
 imageNameToFilePath imageName = "Containerfile_" <> toString (imageNameToFP imageName)
