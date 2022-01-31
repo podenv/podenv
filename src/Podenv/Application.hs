@@ -210,11 +210,13 @@ setVideo ctx = do
 setPulseaudio :: Ctx.Context -> AppEnvT Ctx.Context
 setPulseaudio ctx = do
   shareSkt <- addXdgRun "pulse"
+  uid <- asks _hostUid
+  let pulseServer = "/run/user/" <> show uid <> "/pulse/native"
   pure $
     ctx
       & Ctx.directMount "/etc/machine-id"
         . shareSkt
-        . Ctx.addEnv "PULSE_SERVER" "/run/user/pulse/native"
+        . Ctx.addEnv "PULSE_SERVER" pulseServer
 
 getHomes :: Text -> AppEnvT (FilePath, FilePath)
 getHomes help = do
@@ -363,17 +365,18 @@ addXdgRun fp = snd <$> addXdgRun' fp
 addXdgRun' :: FilePath -> AppEnvT (FilePath, Ctx.Context -> Ctx.Context)
 addXdgRun' fp = do
   hostXdg <- getXdgRuntimeDir
+  uid <- asks _hostUid
   let containerPath = runDir </> fp
       hostPath = hostXdg </> fp
+      runBaseDir = "/run/user"
+      runDir = runBaseDir <> "/" <> show uid
   pure
     ( containerPath,
       Ctx.addEnv "XDG_RUNTIME_DIR" (toText runDir)
         -- Podman creates parent directory as root, ensure user can r/w xdgdir using tmpfs
-        . Ctx.addMount runDir Ctx.tmpfs
+        . Ctx.addMount runBaseDir Ctx.tmpfs
         . Ctx.addMount containerPath (Ctx.rwHostPath hostPath)
     )
-  where
-    runDir = "/run/user"
 
 -- | Helper for capabilities that are directly represented in the context
 contextSet :: Lens' Ctx.Context a -> a -> Ctx.Context -> AppEnvT Ctx.Context
