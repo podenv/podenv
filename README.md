@@ -32,11 +32,11 @@ Run a rootfs: `podenv --shell rootfs:/`
 
 … starts the following command: `bwrap --die-with-parent --unshare-pid --unshare-ipc --unshare-uts --unshare-net --ro-bind /usr /usr --ro-bind /lib64 /lib64 --ro-bind /bin /bin --ro-bind /sbin /sbin --ro-bind /etc /etc --proc /proc --dev /dev --perms 01777 --tmpfs /tmp --clearenv --setenv HOME /var/home/fedora /bin/sh`
 
-### Nix packages
+### Nix flakes
 
-Run a nix package: `podenv nix:"(import <nixpkgs> {}).hello" hello`
+Run a nix package: `podenv nixpkgs#hello`
 
-… instantiates the expression and runs the `hello` command in a container.
+… runs the installable using bubblewrap.
 
 ### Applications
 

@@ -28,6 +28,7 @@ module Podenv.Runtime
 where
 
 import qualified Data.Map.Strict as Map
+import qualified Data.Set
 import qualified Data.Text as Text
 import Podenv.Config (defaultSystemConfig)
 import Podenv.Context
@@ -99,11 +100,16 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
     rootMounts = case fp of
       "/" ->
         roBind "usr"
+          <> roBind "lib"
           <> roBind "lib64"
           <> roBind "bin"
           <> roBind "sbin"
           <> roBind "etc"
       _ -> roBind "/"
+
+    sysMounts
+      | Data.Set.null _devices = []
+      | otherwise = roBind "/sys"
 
     roBind p = toText <$> ["--ro-bind", fp </> p, "/" </> p]
     args =
@@ -117,6 +123,7 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
         <> ["--perms", "01777", "--tmpfs", "/tmp"]
         <> concatMap volumeArg (Map.toAscList _mounts)
         <> concatMap (\d -> ["--dev-bind", toText d, toText d]) _devices
+        <> sysMounts
         <> ["--clearenv"]
         <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList _environ)
         <> maybe [] (\wd -> ["--chdir", toText wd]) _workdir

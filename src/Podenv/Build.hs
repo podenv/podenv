@@ -4,87 +4,82 @@
 
 -- | This modules contains logic to perform application runtime build
 module Podenv.Build
-  ( initBuildEnv,
-    prepare,
-    execute,
+  ( prepare,
     BuildEnv (..),
+    containerBuildRuntime,
+    nixRuntime,
   )
 where
 
+import qualified Control.Monad
 import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Podenv.Application (Mode (Regular), prepare)
-import Podenv.Config (Builder (..), BuilderContainer (..), BuilderNix (..))
-import Podenv.Context (Name (..))
+import qualified Podenv.Config
 import Podenv.Dhall
 import Podenv.Prelude
+import Podenv.Runtime (ImageName (..))
 import qualified Podenv.Runtime
-import System.Directory (renameFile)
+import System.Directory (doesDirectoryExist, renameFile)
 import System.Exit (ExitCode (ExitSuccess))
 import qualified System.Process.Typed as P
 
+-- | Helper function to run a standalone app, usefull for local build
+type AppRunner = Application -> IO ()
+
 -- | A build env contains action to be performed before preparation and execution
 data BuildEnv = BuildEnv
-  { beName :: Text,
-    beInfos :: Text,
-    -- | Creates the modified application, e.g. with a new runtime image name
-    bePrepare :: IO (Bool, Application),
+  { beInfos :: Text,
     -- | Builds the runtime
-    beBuild :: IO (),
+    beEnsure :: AppRunner -> IO (),
     -- | Updates the runtime
-    beUpdate :: IO ()
+    beUpdate :: AppRunner -> IO ()
   }
 
--- | Create the build env
-initBuildEnv :: Podenv.Runtime.RuntimeEnv -> Application -> Builder -> BuildEnv
-initBuildEnv re app builder' = case (runtime app, builder') of
-  (Nix expr, NixBuilder nb) -> initNix re app expr nb
-  (Container _, ContainerBuilder cb) -> initContainer app cb
-  (_, _) -> error "Application runtime does not match builder"
-
--- | Prepare the application when necessary
-prepare :: Maybe BuildEnv -> Application -> IO (Bool, Application)
-prepare Nothing app = pure (True, app)
-prepare (Just BuildEnv {..}) _ = bePrepare
-
--- | Build the runtime when necessary
-execute :: Maybe BuildEnv -> IO ()
-execute Nothing = pure ()
-execute (Just BuildEnv {..}) = do
-  putTextLn $ "Building app with: " <> beName
-  beBuild
-
--- | Container build env:
-initContainer :: Application -> BuilderContainer -> BuildEnv
-initContainer baseApp BuilderContainer {..} = BuildEnv {..}
+defaultBuildEnv :: Text -> BuildEnv
+defaultBuildEnv beInfos = BuildEnv {..}
   where
-    -- buildenv basic info:
-    beName = bcName
-    beInfos = "# Containerfile " <> imageName <> "\n" <> fileContent
-    containerBuild = bcBuild
-    fileContent = containerBuild ^. cbContainerfile
-    imageHash = toText . SHA.showDigest . SHA.sha256 . encodeUtf8 $ fileContent
+    beEnsure = const $ pure ()
+    beUpdate = const $ pure ()
 
+-- | Create the build env
+prepare :: Podenv.Runtime.RuntimeEnv -> Application -> IO (BuildEnv, Application)
+prepare re app = case runtime app of
+  Image name -> pure (defaultBuildEnv name, app)
+  Container cb -> pure (prepareContainer cb, app)
+  Rootfs fp -> pure (defaultBuildEnv fp, app)
+  Nix expr -> prepareNix re app expr
+
+containerBuildRuntime :: ContainerBuild -> Podenv.Runtime.RuntimeContext
+containerBuildRuntime = Podenv.Runtime.Container . mkImageName
+
+mkImageName :: ContainerBuild -> ImageName
+mkImageName containerBuild = ImageName $ "localhost/" <> name
+  where
     -- The image name can be set by the container build,
     -- otherwise it default to the Containerfile hash
-    imageName =
-      "localhost/" <> fromMaybe imageHash (containerBuild ^. cbImage_name)
-    fileName = imageNameToFilePath imageName
+    name = fromMaybe imageHash (containerBuild ^. cbImage_name)
+    imageHash = toText . SHA.showDigest . SHA.sha256 . encodeUtf8 $ containerBuild ^. cbContainerfile
 
-    setHome = case containerBuild ^. cbImage_home of
-      Just home -> appHome ?~ home
-      Nothing -> id
-    setImage = appRuntime .~ Image imageName
+-- | Container build env
+prepareContainer :: ContainerBuild -> BuildEnv
+prepareContainer containerBuild = BuildEnv {..}
+  where
+    -- buildenv basic info:
+    beInfos = "# Containerfile " <> imageName <> "\n" <> fileContent
+    fileContent = containerBuild ^. cbContainerfile
 
-    bePrepare = do
+    ImageName imageName = mkImageName containerBuild
+    fileName = "Containerfile_" <> toString (imageNameToFP imageName)
+      where
+        imageNameToFP = Text.replace "/" "_" . Text.replace ":" "-"
+
+    beEnsure = const $ do
       imageReady <- checkImageExist imageName
-      pure (imageReady, baseApp & setHome . setImage)
+      unless imageReady $
+        buildImage imageName fileName fileContent (containerBuild ^. cbImage_volumes)
 
-    beBuild = do
-      buildImage imageName fileName fileContent (containerBuild ^. cbImage_volumes)
-
-    beUpdate = case containerBuild ^. cbImage_update of
+    beUpdate = const $ case containerBuild ^. cbImage_update of
       Nothing -> error "The container is missing the `image_update` attribute"
       Just cmd -> do
         buildImage
@@ -93,67 +88,109 @@ initContainer baseApp BuilderContainer {..} = BuildEnv {..}
           (unlines ["FROM " <> imageName, "RUN " <> cmd])
           (containerBuild ^. cbImage_volumes)
 
--- | Nix build env:
-initNix :: Podenv.Runtime.RuntimeEnv -> Application -> Text -> BuilderNix -> BuildEnv
-initNix re baseApp expr BuilderNix {..} = BuildEnv {..}
+-- | Nix runtime re-use the host root filesystem, prepareNix added the nix-store volume.
+nixRuntime :: Podenv.Runtime.RuntimeContext
+nixRuntime = Podenv.Runtime.Bubblewrap "/"
+
+getCertLocation :: IO (Maybe FilePath)
+getCertLocation = runMaybeT $ Control.Monad.msum $ checkPath <$> paths
   where
-    -- buildenv basic info:
-    beName = bnName
-    beInfos = "# Nix expr:\n" <> expr
-    name = baseApp ^. appName
+    checkPath :: FilePath -> MaybeT IO FilePath
+    checkPath fp = do
+      exist <- lift $ doesPathExist fp
+      unless exist mzero
+      pure fp
+    -- Copied from profile.d/nix.sh
+    paths =
+      [ "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/ssl/ca-bundle.pem",
+        "/etc/ssl/certs/ca-bundle.crt"
+      ]
+
+-- | Nix build env
+prepareNix :: Podenv.Runtime.RuntimeEnv -> Application -> Flakes -> IO (BuildEnv, Application)
+prepareNix re app flakes = do
+  certs <- toText . fromMaybe (error "Can't find ca-bundle") <$> getCertLocation
+  -- TODO: check howto re-use the host /nix
+  pure
+    ( BuildEnv
+        { beInfos = "# Nix expr:\n" <> Text.unwords nixArgs,
+          beEnsure = beEnsure certs,
+          beUpdate = const $ error "Nix update is not implemented"
+        },
+      updateApp certs app
+    )
+  where
+    name = app ^. appName
     fileName = toString $ "nix_" <> name
 
-    -- container image info to use for nix runtime
-    containerBuild = case buildNixApp ^. appRuntime of
-      Container cb -> cb
-      _ -> error "Nix build must have a Container runtime"
-    containerfile = containerBuild ^. cbContainerfile
-    imageName =
-      fromMaybe (error "Nix build must have a image_name attribute") $
-        containerBuild ^. cbImage_name
+    -- The location where we expect to find the `nix` command
+    nixStore = Podenv.Runtime.volumesDir re </> "nix-store"
+    nixCommandProfile = "var/nix/profiles/nix-install"
+    nixCommandPath = "/nix/" <> nixCommandProfile <> "/bin/nix"
+    nixFlags = ["--extra-experimental-features", "nix-command flakes"]
 
-    -- update the application with nix requirements
-    setImage = appRuntime .~ Image imageName
-    addVolumes = appVolumes %~ (\xs -> (containerBuild ^. cbImage_volumes) <> xs)
-    profileDir = toText $ "/nix/var/nix/profiles/podenv" </> toString name
-    addEnv = appEnviron %~ ("PATH=" <> toText profileDir <> "/bin:/bin" :)
+    -- The nix command args
+    nixExtraArgs = case nixpkgs flakes of
+      Just pin | not (any (Text.isPrefixOf pin) (installables flakes)) -> ["--override-input", "nixpkgs", pin]
+      _ -> []
+    nixArgs = nixExtraArgs <> installables flakes
 
-    -- the app to run to setup the nix-store volume and instantiate the profile
-    builderApp = buildNixApp & setImage . addVolumes
+    beEnsure certs runApp = do
+      built <- checkIfBuilt fileName (show nixArgs)
+      unless built $ do
+        ensureNixInstalled
+        _ <- runApp (buildApp certs)
 
-    setHome = case containerBuild ^. cbImage_home of
-      Just home -> appHome ?~ home
-      Nothing -> id
+        -- save that the build succeeded
+        cacheDir <- getCacheDir
+        Text.writeFile (cacheDir </> fileName) (show nixArgs)
 
-    bePrepare = do
-      built <- checkIfBuilt fileName expr
-      pure (built, baseApp & setHome . addVolumes . addEnv . setImage)
+    debug = when (Podenv.Runtime.verbose re) . hPutStrLn stderr . mappend "[+] "
 
-    beBuild = do
-      cacheDir <- getCacheDir
+    ensureNixInstalled = do
+      debug $ "Checking if " <> nixStore </> nixCommandProfile <> " exists"
+      nixInstalled <- doesSymlinkExist $ nixStore </> nixCommandProfile
+      unless nixInstalled $ do
+        debug $ "Checking if " <> nixStore </> "store" <> " exists"
+        storeExist <- doesDirectoryExist $ nixStore </> "store"
+        when storeExist $ error $ "existing nix-store is invalid, try removing " <> toText nixStore
 
-      let setupMark = cacheDir </> toString ("nix_" <> buildNixApp ^. appName) <> ".ready"
-      setupDone <- doesFileExist setupMark
-      unless setupDone $ do
-        buildImage imageName (imageNameToFilePath imageName) containerfile []
-        runApp re builderApp
-        Text.writeFile setupMark ""
+        podenv <- getExecutablePath
+        debug $ "[+] Installing nix-store with " <> podenv <> " nix.setup"
+        P.runProcess_ $ P.setDelegateCtlc True $ P.proc podenv ["nix.setup"]
 
-      -- prepare and cleanup leftover
-      runApp re $
-        builderApp & appCommand
-          .~ ["sh", "-c", "mkdir -p /nix/var/nix/profiles/podenv; rm -f " <> profileDir <> "-[0-9]-link"]
+    -- The Application to build the expression, it is executed in advance to separate build and execution
+    buildApp certs =
+      Podenv.Config.defaultApp
+        { runtime = Rootfs "/",
+          name = "build-" <> name,
+          volumes = [toText nixStore <> ":/nix", "nix-setup-home:~/", "nix-cache:~/.cache/nix"],
+          environ = ["NIX_SSL_CERT_FILE=" <> certs, "LC_ALL=C.UTF-8", "TERM=xterm"],
+          command =
+            [toText nixCommandPath, "--verbose"]
+              <> nixFlags
+              <> ["build", "--no-link"]
+              <> nixArgs
+        }
+        & (appCapabilities . capNetwork .~ True)
 
-      let installCommand =
-            ["nix-env", "--profile", profileDir, "--install"]
-              <> ["--remove-all", "-E", "_:" <> expr]
-
-      runApp re $ builderApp & appCommand .~ installCommand
-
-      -- save that the build succeeded
-      Text.writeFile (cacheDir </> fileName) expr
-
-    beUpdate = error "Nix update is not implemented (yet)"
+    runCommand =
+      [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
+        [] -> ["run"] <> nixArgs
+        appArgs -> ["shell"] <> nixArgs <> ["--command"] <> appArgs
+    addCommand = appCommand .~ runCommand
+    addVolumes = appVolumes %~ mappend ["nix-store:/nix", "nix-cache:~/.cache/nix"]
+    addEnvirons certs =
+      appEnviron
+        %~ mappend
+          [ "NIX_SSL_CERT_FILE=" <> certs,
+            "TERM=xterm",
+            "LC_ALL=C.UTF-8",
+            "PATH=/bin"
+          ]
+    updateApp certs = addCommand . addVolumes . addEnvirons certs
 
 -- | Build a container image
 buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()
@@ -192,16 +229,6 @@ checkImageExist :: Text -> IO Bool
 checkImageExist imageName = do
   res <- P.runProcess (Podenv.Runtime.podman ["image", "exists", Text.unpack imageName])
   pure $ res == ExitSuccess
-
-imageNameToFilePath :: Text -> FilePath
-imageNameToFilePath imageName = "Containerfile_" <> toString (imageNameToFP imageName)
-  where
-    imageNameToFP = Text.replace "/" "_" . Text.replace ":" "-"
-
-runApp :: Podenv.Runtime.RuntimeEnv -> Application -> IO ()
-runApp re app = do
-  ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Name $ app ^. appName)
-  Podenv.Runtime.execute re ctx
 
 checkIfBuilt :: FilePath -> Text -> IO Bool
 checkIfBuilt filename expected = do

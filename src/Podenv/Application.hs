@@ -24,6 +24,7 @@ where
 import qualified Data.Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import qualified Podenv.Build
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
@@ -86,7 +87,8 @@ doPrepare app mode ctxName = do
     runtimeCtx = case app ^. appRuntime of
       Image x -> Ctx.Container $ Ctx.ImageName x
       Rootfs root -> Ctx.Bubblewrap $ toString root
-      _ -> error "Can't prepare a non runtime Image application"
+      Container cb -> Podenv.Build.containerBuildRuntime cb
+      Nix _ -> Podenv.Build.nixRuntime
 
     validate ctx = case runtimeCtx of
       Ctx.Bubblewrap _ | null (ctx ^. Ctx.command) -> error "Bubblewrap requires a command"
