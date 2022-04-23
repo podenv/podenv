@@ -26,6 +26,12 @@ Run a container image: `podenv --cwd --shell image:ubi8`
 
 … starts the following command: `podman run -it --detach-keys '' --network none --rm --volume $(pwd):/data:Z --workdir /data ubi8 /bin/bash`
 
+### Bubblewrap chroot
+
+Run a rootfs: `podenv --shell rootfs:/`
+
+… starts the following command: `bwrap --die-with-parent --unshare-pid --unshare-ipc --unshare-uts --unshare-net --ro-bind /usr /usr --ro-bind /lib64 /lib64 --ro-bind /bin /bin --ro-bind /sbin /sbin --ro-bind /etc /etc --proc /proc --dev /dev --perms 01777 --tmpfs /tmp --clearenv --setenv HOME /var/home/fedora /bin/sh`
+
 ### Nix packages
 
 Run a nix package: `podenv nix:"(import <nixpkgs> {}).hello" hello`

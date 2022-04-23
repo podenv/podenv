@@ -63,6 +63,8 @@ spec config = describe "unit tests" $ do
   describe "cli default" $ do
     it "image:name" $ cliTest "env" ["image:testy"] "def // { runtime = Podenv.Image \"testy\", name = \"image-b2effd\" }"
     it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime.nix = \"test\", name = \"nix-1c3a91\" }"
+  describe "bwrap ctx" $ do
+    it "run simple" $ bwrapTest ["--shell"] (defBwrap <> ["/bin/sh"])
   describe "podman ctx" $ do
     it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
     it "run keep" $ podmanTest (addCap "env" "keep = True") ["run", "--hostname", "env", "--name", "env", defImg]
@@ -111,7 +113,7 @@ spec config = describe "unit tests" $ do
           app = baseApp {Podenv.Dhall.runtime = Podenv.Dhall.Image "localhost/firefox"}
       ctx <- Podenv.Application.preparePure testEnv app mode ctxName
       Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/16e5f60f"
-      Podenv.Runtime.podmanRunArgs re ctx `shouldBe` ["run", "--rm", "--network", "none", "--name", "tmp", "localhost/firefox"]
+      Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` ["run", "--rm", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
@@ -123,20 +125,41 @@ spec config = describe "unit tests" $ do
           _hostHomeDir = Just "/home/user",
           _hostCwd = "/usr/src/podenv",
           _hostUid = 1000,
-          _appHomeDir = Just "/home/fedora"
+          _appHomeDir = Just "/home/fedora",
+          _rootfsHome = const $ pure $ Just "/home/nobody"
         }
+
+    getFP ctx = case Podenv.Context._runtimeCtx ctx of
+      Podenv.Context.Bubblewrap fp -> fp
+      _ -> error "Not bwrap"
+
+    defBwrap =
+      ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net"]
+        <> ["--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
+        <> ["--clearenv", "--setenv", "HOME", "/home/nobody"]
+
+    bwrapTest args expected = do
+      cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])
+      (app, mode, ctxName, _, re') <- Podenv.Main.cliConfigLoad cli
+      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      Podenv.Runtime.bwrapRunArgs re ctx (getFP ctx) `shouldBe` expected
+
+    getImg ctx = case Podenv.Context._runtimeCtx ctx of
+      Podenv.Context.Container image -> image
+      _ -> error "Not podman"
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage args
       (app, mode, ctxName, _, re') <- Podenv.Main.cliConfigLoad cli
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
       ctx <- Podenv.Application.preparePure testEnv app mode ctxName
-      Podenv.Runtime.podmanRunArgs re ctx `shouldBe` expected
+      Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True")
       ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Podenv.Context.Name "env")
-      Podenv.Runtime.podmanRunArgs defRe ctx `shouldBe` expected
+      Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
 
     cliTest code args expectedCode = do
       cli@Podenv.Main.CLI {..} <- Podenv.Main.usage args

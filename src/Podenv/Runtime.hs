@@ -7,14 +7,18 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- | This module contains the podman/kubectl context wrapper
+-- | This module contains the podman/bubblewrap context wrapper
 module Podenv.Runtime
   ( execute,
+    showRuntimeCmd,
 
     -- * Podman helpers
     podman,
     podmanRunArgs,
-    showPodmanCmd,
+
+    -- * Bubblewrap helpers
+    bwrap,
+    bwrapRunArgs,
 
     -- * data type and lenses
     module Podenv.Context,
@@ -29,7 +33,6 @@ import Podenv.Config (defaultSystemConfig)
 import Podenv.Context
 import Podenv.Dhall (SystemConfig (..), sysDns)
 import Podenv.Prelude
-import System.IO (hPutStr)
 import qualified System.Process.Typed as P
 
 execute :: RuntimeEnv -> Context -> IO ()
@@ -48,10 +51,81 @@ ensureHostDirectory volumesDir (MkVolume _ (Volume volumeName)) = do
 ensureHostDirectory _ _ = pure ()
 
 doExecute :: Context -> ContextEnvT ()
-doExecute = executePodman
+doExecute ctx = case ctx ^. runtimeCtx of
+  Container image -> executePodman ctx image
+  Bubblewrap fp -> executeBubblewrap ctx fp
 
-showPodmanCmd :: RuntimeEnv -> Context -> Text
-showPodmanCmd re = show . P.proc "podman" . podmanRunArgs re
+executeBubblewrap :: Context -> FilePath -> ContextEnvT ()
+executeBubblewrap ctx fp = do
+  re <- ask
+  let args = bwrapRunArgs re ctx fp
+  let cmd = bwrap args
+  debug $ show cmd
+  P.runProcess_ cmd
+
+bwrap :: [String] -> P.ProcessConfig () () ()
+bwrap = P.setDelegateCtlc True . P.proc "bwrap"
+
+commonArgs :: Context -> [Text]
+commonArgs Context {..} =
+  concatMap (\c -> ["--cap-add", Text.drop 4 (show c)]) _syscaps
+
+bwrapRunArgs :: RuntimeEnv -> Context -> FilePath -> [String]
+bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
+  where
+    userArg = case ctx ^. runAs of
+      Just RunAsRoot -> ["--unshare-user", "--uid", "0"]
+      Just RunAsHostUID -> []
+      Just RunAsAnyUID -> ["--unshare-user", "--uid", show $ ctx ^. anyUid]
+      Nothing -> []
+
+    networkArg
+      | _network = case _namespace of
+        Just "host" -> []
+        Just _ns -> error "Shared netns not implemented"
+        Nothing -> [] -- TODO: implement private network namespace
+      | otherwise = ["--unshare-net"]
+
+    volumeArg :: (FilePath, Volume) -> [Text]
+    volumeArg (destPath, MkVolume mode vtype) = case vtype of
+      HostPath hostPath -> [bindMode mode, toText hostPath, toText destPath]
+      Volume x -> [bindMode mode, toText $ volumesDir </> toString x, toText destPath]
+      TmpFS -> ["--tmpfs", toText destPath]
+      where
+        bindMode = \case
+          RO -> "--ro-bind"
+          RW -> "--bind"
+
+    rootMounts = case fp of
+      "/" ->
+        roBind "usr"
+          <> roBind "lib64"
+          <> roBind "bin"
+          <> roBind "sbin"
+          <> roBind "etc"
+      _ -> roBind "/"
+
+    roBind p = toText <$> ["--ro-bind", fp </> p, "/" </> p]
+    args =
+      userArg
+        <> ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts"]
+        <> networkArg
+        <> commonArgs ctx
+        <> rootMounts
+        <> ["--proc", "/proc"]
+        <> ["--dev", "/dev"]
+        <> ["--perms", "01777", "--tmpfs", "/tmp"]
+        <> concatMap volumeArg (Map.toAscList _mounts)
+        <> concatMap (\d -> ["--dev-bind", toText d, toText d]) _devices
+        <> ["--clearenv"]
+        <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList _environ)
+        <> maybe [] (\wd -> ["--chdir", toText wd]) _workdir
+        <> _command
+
+showRuntimeCmd :: RuntimeEnv -> Context -> Text
+showRuntimeCmd re ctx = case ctx ^. runtimeCtx of
+  Container image -> show . P.proc "podman" $ podmanRunArgs re ctx image
+  Bubblewrap fp -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
 
 data RuntimeEnv = RuntimeEnv
   { verbose :: Bool,
@@ -68,7 +142,7 @@ type ContextEnvT a = ReaderT RuntimeEnv IO a
 debug :: Text -> ContextEnvT ()
 debug msg = do
   isVerbose <- asks verbose
-  when isVerbose $ liftIO $ hPutStr stderr ("[+] " <> toString msg <> "\n")
+  when isVerbose $ liftIO $ hPutStrLn stderr ("[+] " <> toString msg)
 
 cond :: Bool -> [a] -> [a]
 cond b xs = if b then xs else []
@@ -79,8 +153,8 @@ infraName ns = ns <> "-ns"
 podmanArgs :: Context -> [Text]
 podmanArgs Context {..} = cond _interactive ["-i", "--detach-keys", ""] <> cond _terminal ["-t"]
 
-podmanRunArgs :: RuntimeEnv -> Context -> [String]
-podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
+podmanRunArgs :: RuntimeEnv -> Context -> ImageName -> [String]
+podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
   where
     portArgs = concatMap publishArg _ports
     publishArg port = ["--publish", showPort port]
@@ -129,13 +203,13 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
         <> cond (not _selinux) ["--security-opt", "label=disable"]
         <> userArg
         <> networkArg
-        <> concatMap (\c -> ["--cap-add", Text.drop 4 (show c)]) _syscaps
+        <> commonArgs ctx
         <> concatMap (\d -> ["--device", toText d]) _devices
         <> maybe [] (\wd -> ["--workdir", toText wd]) _workdir
         <> concatMap (\(k, v) -> ["--env", toText $ k <> "=" <> v]) (Map.toAscList _environ)
         <> concatMap volumeArg (Map.toAscList _mounts)
         <> nameArg
-        <> [unImageName _image]
+        <> [unImageName image]
         <> _command
 
 podmanExecArgs :: Context -> [String]
@@ -190,8 +264,8 @@ ensureInfraNet ns = do
       debug $ show cmd
       P.runProcess_ cmd
 
-executePodman :: Context -> ContextEnvT ()
-executePodman ctx = do
+executePodman :: Context -> ImageName -> ContextEnvT ()
+executePodman ctx image = do
   re <- ask
   case (ctx ^. namespace, ctx ^. network) of
     (Just ns, True) | ns /= mempty -> ensureInfraNet ns
@@ -209,7 +283,7 @@ executePodman ctx = do
         Unknown "exited" -> startContainer
         Unknown cstate -> cfail $ "unknown container status: " <> cstate
       else case status of
-        NotFound -> pure $ podmanRunArgs re ctx
+        NotFound -> pure $ podmanRunArgs re ctx image
         Running -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
         Unknown _ -> recreateContainer re
   let cmd = podman args
@@ -220,7 +294,7 @@ executePodman ctx = do
     -- Create a kept container with sleep and return the exec arg
     createContainer re = do
       let infraCtx = (detach .~ True) . (command .~ ["sleep", "infinity"])
-          infraCmd = podman $ podmanRunArgs re (infraCtx ctx)
+          infraCmd = podman $ podmanRunArgs re (infraCtx ctx) image
       debug $ "Starting infra container: " <> show infraCmd
       P.runProcess_ $ infraCmd
       pure $ podmanExecArgs ctx
@@ -233,4 +307,4 @@ executePodman ctx = do
     -- Delete a non-kept container and return the run args
     recreateContainer re = do
       P.runProcess_ (podman ["rm", cname])
-      pure $ podmanRunArgs re ctx
+      pure $ podmanRunArgs re ctx image
