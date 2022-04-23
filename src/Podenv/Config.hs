@@ -11,9 +11,6 @@ module Podenv.Config
     ApplicationRecord (..),
     defaultConfigPath,
     defaultApp,
-    Builder (..),
-    BuilderNix (..),
-    BuilderContainer (..),
     loadSystem,
     defaultSystemConfig,
     podenvImportTxt,
@@ -77,11 +74,13 @@ defaultSelector :: Text -> Maybe Application
 defaultSelector s
   | "image:" `Text.isPrefixOf` s = imageApp s
   | "nix:" `Text.isPrefixOf` s = nixApp s
+  | "nixpkgs#" `Text.isPrefixOf` s = nixApp' s
   | "rootfs:" `Text.isPrefixOf` s = rootfsApp s
   | otherwise = Nothing
   where
     imageApp x = mkApp ("image-" <> mkName x) (Image $ Text.drop (Text.length "image:") x)
-    nixApp x = mkApp ("nix-" <> mkName x) (Nix $ Text.drop (Text.length "nix:") x)
+    nixApp' x = mkApp ("nix-" <> mkName x) (Nix $ Flakes [x] Nothing)
+    nixApp x = nixApp' $ Text.drop (Text.length "nix:") x
     rootfsApp x = mkApp ("rootfs-" <> mkName x) (Rootfs $ Text.drop (Text.length "rootfs:") x)
     mkApp name runtime' = Just $ defaultApp & (appName .~ name) . (appRuntime .~ runtime')
     mkName = Text.take 6 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8
@@ -200,28 +199,14 @@ loadConfig baseSelector expr = case expr of
         | otherwise = baseSelector <> "." <> name
   _ -> extractError $ baseSelector <> ": expected a record literal, but got: " <> Text.take 256 (show expr)
 
-data Builder
-  = NixBuilder BuilderNix
-  | ContainerBuilder BuilderContainer
-
-data BuilderNix = BuilderNix
-  { bnName :: Text,
-    buildNixApp :: Application
-  }
-
-data BuilderContainer = BuilderContainer
-  { bcName :: Text,
-    bcBuild :: ContainerBuild
-  }
-
 -- | Select the application, returning the unused cli args.
-select :: Config -> [Text] -> Either Text ([Text], (Maybe Builder, Application))
-select config args = (fmap . fmap) unRecord <$> select' config args
+select :: Config -> [Text] -> Either Text ([Text], Application)
+select config args = fmap unRecord <$> select' config args
 
-select' :: Config -> [Text] -> Either Text ([Text], (Maybe Builder, ApplicationRecord))
+select' :: Config -> [Text] -> Either Text ([Text], ApplicationRecord)
 select' config args = case config of
   -- config default is always selected, drop the first args
-  ConfigDefault app -> ensureBuilder [] app >>= \appB -> pure (tail (fromList args), appB)
+  ConfigDefault app -> pure (tail (fromList args), app)
   -- config has only one application, don't touch the args
   ConfigApplication atom -> selectApp [] args atom
   -- config has some applications, the first arg is a selector
@@ -230,44 +215,25 @@ select' config args = case config of
       atom <- lookup selector atoms `orDie` (selector <> ": not found")
       (args', app) <- selectApp atoms xs atom
       let name' = Text.intercalate "-" $ take (length args - length args') args
-      pure (args', ensureName name' <$> app)
+      pure (args', ensureName name' app)
     [] -> Left "Multiple apps configured, provides a selector"
   where
-    -- When an application define a builder, lookup its definition
-    ensureBuilder :: [(Text, Atom)] -> ApplicationRecord -> Either Text (Maybe Builder, ApplicationRecord)
-    ensureBuilder atoms app = do
-      builderM <-
-        case unRecord app ^. appRuntime of
-          Image name
-            | name == mempty -> Left "Empty image"
-            | otherwise -> Right Nothing
-          Nix {} -> case lookup "nix.setup" atoms of
-            Just (Lit x) -> Right $ Just $ NixBuilder $ BuilderNix "nix.setup" (unRecord x)
-            Just _ -> Left "Invalid nix.setup"
-            Nothing -> Right $ Just $ NixBuilder defaultNixBuilder
-          Container cb -> Right $ Just $ ContainerBuilder $ BuilderContainer "<inline>" cb
-          Rootfs _ -> Right Nothing
-      pure (builderM, app)
-
     selectApp atoms args' atom = case atom of
       -- App is not a function, don't touch the arg
-      Lit x -> ensureBuilder atoms x >>= \appB -> pure (args', appB)
+      Lit app -> pure (args', app)
       -- App needs an argument, the tail is the arg
       LamArg arg f -> case args' of
-        (x : xs) -> ensureBuilder atoms (f x) >>= \appB -> pure (xs, appB)
+        (x : xs) -> pure (xs, f x)
         [] -> Left ("Missing argument: " <> show arg)
       LamApp f -> case args' of
         (x : xs) -> case defaultSelector x of
-          Just app -> do
-            appb <- ensureBuilder atoms (f app)
-            pure (xs, appb)
+          Just app -> pure (xs, f app)
           Nothing -> do
             -- Recursively select the app to eval arg `mod app arg` as `mod (app arg)`
             -- e.g. LamApp should be applied at the end.
             atom' <- lookup x atoms `orDie` (x <> ": unknown lam arg")
-            (rest, (_, app)) <- selectApp atoms xs atom'
-            appb <- ensureBuilder atoms (f (unRecord app))
-            pure (rest, appb)
+            (rest, app) <- selectApp atoms xs atom'
+            pure (rest, f (unRecord app))
         [] -> Left "Missing app argument"
 
 defaultConfigPath :: Text
@@ -278,11 +244,6 @@ defaultApp :: Application
 defaultApp = case Dhall.extract Dhall.auto (Dhall.renote appDefault) of
   Success app -> app
   Failure v -> error $ "Invalid default application: " <> show v
-
-defaultNixBuilder :: BuilderNix
-defaultNixBuilder = case loadApp (Dhall.renote hubNixBuilder) of
-  (Success (Lit a)) -> BuilderNix "default" (unRecord a)
-  _ -> error "Can't load default nix builder."
 
 -- | A type synonym to simplify function annotation.
 type DhallParser a = Dhall.Extractor Dhall.Src.Src Void a
@@ -321,10 +282,15 @@ appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
     runtimeFromRecord :: DM.Map Text (Dhall.RecordField s Void) -> Dhall.Expr Void Void
     runtimeFromRecord kv = case recordItems kv of
       [("image", x)] -> mkRuntime "Image" x
-      [("nix", x)] -> mkRuntime "Nix" x
+      [("nix", x)] -> mkRuntime "Nix" (mkNixRecord x)
       [("containerfile", x)] -> mkRuntime "Container" (pref containerBuildDefault (mkRecord [("containerfile", x)]))
       _ -> mkRuntime "Container" (pref containerBuildDefault (Dhall.denote (Dhall.RecordLit kv)))
       where
+        mkNixRecord v =
+          mkRecord
+            [ ("installables", Dhall.ListLit Nothing $ fromList [v]),
+              ("nixpkgs", Dhall.App Dhall.None Dhall.Text)
+            ]
         mkRuntime field v =
           Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing)) v
 

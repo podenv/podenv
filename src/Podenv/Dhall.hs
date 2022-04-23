@@ -38,9 +38,6 @@ appDefault =
 capsDefault :: Expr Void Void
 capsDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Capabilities.dhall).default")
 
-hubNixBuilder :: Expr Void Void
-hubNixBuilder = $(Dhall.TH.staticDhallExpression "./hub/Builders/nix.dhall")
-
 systemConfigDefault :: Expr Void Void
 systemConfigDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/System.dhall).default")
 
@@ -53,6 +50,7 @@ Dhall.TH.makeHaskellTypes
      in [ main "Capabilities",
           main "Application",
           main "ContainerBuild",
+          main "Flakes",
           main' "SystemConfig" "System",
           Dhall.TH.MultipleConstructors "Provider" "./hub/schemas/Provider.dhall",
           Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall"
@@ -76,6 +74,10 @@ deriving instance Eq Provider
 deriving instance Show ContainerBuild
 
 deriving instance Eq ContainerBuild
+
+deriving instance Show Flakes
+
+deriving instance Eq Flakes
 
 deriving instance Show Capabilities
 

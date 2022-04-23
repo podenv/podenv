@@ -32,6 +32,7 @@ module Podenv.Prelude
     getCurrentDirectory,
     doesFileExist,
     doesPathExist,
+    doesSymlinkExist,
     pathIsSymbolicLink,
     findExecutable,
     (</>),
@@ -54,6 +55,7 @@ module Podenv.Prelude
   )
 where
 
+import qualified Control.Exception
 import Control.Monad (foldM)
 import qualified Data.Text.IO
 import Lens.Family (ASetter, set, (%~), (.~), (^.))
@@ -63,6 +65,7 @@ import System.Directory
 import System.Environment
 import System.FilePath.Posix (hasTrailingPathSeparator, takeDirectory, takeFileName, (</>))
 import System.IO (hPutStrLn)
+import qualified System.Posix.Files
 import System.Posix.Types (UserID)
 import System.Posix.User (getRealUserID)
 
@@ -95,3 +98,10 @@ readFileM fp' = do
   if exist
     then liftIO $ Data.Text.IO.readFile fp'
     else pure ""
+
+doesSymlinkExist :: FilePath -> IO Bool
+doesSymlinkExist fp =
+  either (const False) (const True) <$> checkFp
+  where
+    checkFp :: IO (Either Control.Exception.SomeException FilePath)
+    checkFp = Control.Exception.try $ System.Posix.Files.readSymbolicLink fp

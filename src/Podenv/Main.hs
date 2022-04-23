@@ -14,6 +14,7 @@
 -- * Runtime: execute with podman or kubernetes
 module Podenv.Main
   ( main,
+    runApp,
 
     -- * exports for tests
     usage,
@@ -28,7 +29,6 @@ import Data.Version (showVersion)
 import Options.Applicative hiding (command)
 import Paths_podenv (version)
 import qualified Podenv.Application
-import Podenv.Build (BuildEnv (beInfos, beName, beUpdate))
 import qualified Podenv.Build
 import qualified Podenv.Config
 import Podenv.Dhall
@@ -45,16 +45,22 @@ main = do
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
 
-  (cliApp, mode, ctxName, be, re) <- cliConfigLoad cli
-  (ready, app) <- Podenv.Build.prepare be cliApp
+  (baseApp, mode, ctxName, re) <- cliConfigLoad cli
+  (be, app) <- Podenv.Build.prepare re baseApp
   ctx <- Podenv.Application.prepare app mode ctxName
 
   if showApplication
     then putTextLn $ showApp app ctx be re
     else do
-      unless ready $ Podenv.Build.execute be
-      when update $ beUpdate (fromMaybe (error "Need build env") be)
+      Podenv.Build.beEnsure be (runApp re)
+      when update $ Podenv.Build.beUpdate be (runApp re)
       Podenv.Runtime.execute re ctx
+
+-- | helper function to run a Application.
+runApp :: Podenv.Runtime.RuntimeEnv -> Application -> IO ()
+runApp re app = do
+  ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Name $ app ^. appName)
+  Podenv.Runtime.execute re ctx
 
 usage :: [String] -> IO CLI
 usage args = do
@@ -167,7 +173,7 @@ cliInfo =
         (long "version" <> help "Show version")
 
 -- | Load the config
-cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Name, Maybe BuildEnv, RuntimeEnv)
+cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Name, RuntimeEnv)
 cliConfigLoad cli@CLI {..} = do
   system <- Podenv.Config.loadSystem
   -- The volumes dir may be provided by the system config, otherwise default to ~/.local/share/podenv/volumes
@@ -176,13 +182,12 @@ cliConfigLoad cli@CLI {..} = do
     Nothing -> getDataDir >>= \fp -> pure $ fp </> "volumes"
 
   config <- Podenv.Config.load selector configExpr
-  (args, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config (maybeToList selector <> extraArgs)
+  (args, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> extraArgs)
   let app = cliPrepare cli args baseApp
-      be = Podenv.Build.initBuildEnv re app <$> builderM
       name' = Name $ fromMaybe (app ^. appName) name
       re = RuntimeEnv {verbose, system, volumesDir}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
-  pure (app, mode, name', be, re)
+  pure (app, mode, name', re)
 
 -- | Apply the CLI argument to the application
 cliPrepare :: CLI -> [Text] -> Application -> Application
@@ -203,11 +208,11 @@ cliPrepare CLI {..} args = modifiers
 
     setCaps app' = foldr (appCapabilities %~) app' capsOverride
 
-showApp :: Application -> Context -> Maybe BuildEnv -> RuntimeEnv -> Text
-showApp Application {..} ctx beM re = unlines infos
+showApp :: Application -> Context -> Podenv.Build.BuildEnv -> RuntimeEnv -> Text
+showApp Application {..} ctx be re = unlines infos
   where
     infos =
-      maybe [] (\be -> ["[+] runtime: " <> beName be, beInfos be, ""]) beM
+      ["[+] runtime: " <> Podenv.Build.beInfos be, ""]
         <> ["[+] Capabilities", unwords appCaps, ""]
         <> ["[+] Command", cmd]
     cmd = Podenv.Runtime.showRuntimeCmd re ctx
