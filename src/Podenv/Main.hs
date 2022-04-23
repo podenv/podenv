@@ -130,7 +130,7 @@ cliParser =
 
 -- | List of strOption that accept an argument (that is not the selector)
 strOptions :: [String]
-strOptions = ["--namespace", "--name", "--env", "--volume", "-v"]
+strOptions = ["--config", "--namespace", "--name", "--env", "--volume", "-v"]
 
 -- | Parse all capabilities toggles
 capsParser :: Parser [Capabilities -> Capabilities]
@@ -210,7 +210,7 @@ showApp Application {..} ctx beM re = unlines infos
       maybe [] (\be -> ["[+] runtime: " <> beName be, beInfos be, ""]) beM
         <> ["[+] Capabilities", unwords appCaps, ""]
         <> ["[+] Command", cmd]
-    cmd = Podenv.Runtime.showPodmanCmd re ctx
+    cmd = Podenv.Runtime.showRuntimeCmd re ctx
     appCaps = concatMap showCap Podenv.Application.capsAll
     showCap Podenv.Application.Cap {..} =
       [capName | capabilities ^. capLens]

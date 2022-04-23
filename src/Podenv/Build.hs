@@ -208,10 +208,3 @@ checkIfBuilt filename expected = do
   cacheDir <- getCacheDir
   current <- readFileM (cacheDir </> filename)
   pure $ current == expected
-
-readFileM :: FilePath -> IO Text
-readFileM fp' = do
-  exist <- liftIO $ doesFileExist fp'
-  if exist
-    then liftIO $ Text.readFile fp'
-    else pure ""

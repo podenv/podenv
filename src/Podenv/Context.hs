@@ -26,6 +26,11 @@ import System.Linux.Capabilities (Capability)
 newtype ImageName = ImageName {unImageName :: Text}
   deriving (Show)
 
+data RuntimeContext
+  = Container ImageName
+  | Bubblewrap FilePath
+  deriving (Show)
+
 data Mode = RO | RW
   deriving (Show)
 
@@ -50,7 +55,7 @@ data Context = Context
     _name :: Name,
     _namespace :: Maybe Text,
     -- | container image name
-    _image :: ImageName,
+    _runtimeCtx :: RuntimeContext,
     -- | network namespace name
     _network :: Bool,
     _ports :: [Port],
@@ -80,11 +85,11 @@ data Context = Context
 
 $(makeLenses ''Context)
 
-defaultContext :: Name -> ImageName -> Context
-defaultContext _name _image =
+defaultContext :: Name -> RuntimeContext -> Context
+defaultContext _name _runtimeCtx =
   Context
     { _name,
-      _image,
+      _runtimeCtx,
       _command = [],
       _uid = 0,
       _namespace = Nothing,

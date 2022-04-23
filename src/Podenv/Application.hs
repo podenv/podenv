@@ -1,6 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -20,6 +21,7 @@ module Podenv.Application
   )
 where
 
+import qualified Data.Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Podenv.Dhall
@@ -37,21 +39,33 @@ prepare app mode ctxName = do
 
 -- TODO: make this stricly pure using a PodenvMonad similar to the PandocMonad
 preparePure :: AppEnv -> Application -> Mode -> Ctx.Name -> IO Ctx.Context
-preparePure envBase app mode ctxName =
-  runReaderT (doPrepare app {home = containerHome} mode ctxName) appEnv
+preparePure envBase app mode ctxName = do
+  home <- getContainerHome
+  runReaderT (doPrepare app {home} mode ctxName) (appEnv home)
   where
-    appEnv = envBase & appHomeDir .~ (toString <$> containerHome)
-    containerHome =
-      -- The root cap needs to be applied first as it modifies the App
-      if app ^. appCapabilities . capRoot
-        then Just "/root"
-        else app ^. appHome
+    appEnv home = envBase & appHomeDir .~ (toString <$> home)
+    -- here we discover the app home early so that it can be shared with the AppEnv
+    getContainerHome
+      | app ^. appCapabilities . capRoot = pure $ Just "/root"
+      | otherwise = do
+        runtimeHome <- getRuntimeHome
+        -- TODO: check if appHome is still relevant
+        pure $ runtimeHome <|> app ^. appHome
+
+    -- check if the runtime defines a home directory
+    getRuntimeHome = case app ^. appRuntime of
+      Container cb -> pure $ cb ^. cbImage_home
+      Rootfs fp -> do
+        home <- (envBase ^. rootfsHome) (toString fp)
+        pure (toText <$> home)
+      Nix _ -> pure $ toText <$> envBase ^. hostHomeDir
+      Image _ -> pure Nothing
 
 doPrepare :: Application -> Mode -> Ctx.Name -> AppEnvT Ctx.Context
 doPrepare app mode ctxName = do
   uid <- asks _hostUid
   let baseCtx =
-        (Ctx.defaultContext ctxName image)
+        (Ctx.defaultContext ctxName runtimeCtx)
           { Ctx._uid = uid,
             Ctx._namespace = app ^. appNamespace
           }
@@ -66,17 +80,34 @@ doPrepare app mode ctxName = do
         then resolveFileArgs $ app ^. appCommand
         else pure $ Ctx.command .~ app ^. appCommand
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
-  pure (setCommand . modifiers $ ctx)
+
+  pure (validate . setCommand . modifiers $ ctx)
   where
-    image = case app ^. appRuntime of
-      Image x -> Ctx.ImageName x
+    runtimeCtx = case app ^. appRuntime of
+      Image x -> Ctx.Container $ Ctx.ImageName x
+      Rootfs root -> Ctx.Bubblewrap $ toString root
       _ -> error "Can't prepare a non runtime Image application"
 
-    modifiers :: Ctx.Context -> Ctx.Context
-    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setPort . ensureWorkdir
+    validate ctx = case runtimeCtx of
+      Ctx.Bubblewrap _ | null (ctx ^. Ctx.command) -> error "Bubblewrap requires a command"
+      _ -> ctx
 
-    ensureWorkdir = case app ^. appHome of
-      (Just x) -> Ctx.workdir `setWhenNothing` toString x
+    modifiers :: Ctx.Context -> Ctx.Context
+    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setPort . setEnv . ensureWorkdir
+
+    -- Check if path is part of a mount point
+    isMounted :: FilePath -> Ctx.Context -> Bool
+    isMounted fp ctx = any isPrefix mountPaths
+      where
+        mountPaths = Data.Map.keys $ ctx ^. Ctx.mounts
+        isPrefix x = fp `isPrefixOf` x
+
+    ensureWorkdir ctx = case app ^. appHome of
+      (Just x) | isMounted (toString x) ctx -> ctx & Ctx.workdir `setWhenNothing` toString x
+      _ -> ctx
+
+    setEnv = case app ^. appHome of
+      Just x -> Ctx.addEnv "HOME" x
       _ -> id
 
     setPort = case app ^. appProvide of

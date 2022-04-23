@@ -77,10 +77,12 @@ defaultSelector :: Text -> Maybe Application
 defaultSelector s
   | "image:" `Text.isPrefixOf` s = imageApp s
   | "nix:" `Text.isPrefixOf` s = nixApp s
+  | "rootfs:" `Text.isPrefixOf` s = rootfsApp s
   | otherwise = Nothing
   where
     imageApp x = mkApp ("image-" <> mkName x) (Image $ Text.drop (Text.length "image:") x)
     nixApp x = mkApp ("nix-" <> mkName x) (Nix $ Text.drop (Text.length "nix:") x)
+    rootfsApp x = mkApp ("rootfs-" <> mkName x) (Rootfs $ Text.drop (Text.length "rootfs:") x)
     mkApp name runtime' = Just $ defaultApp & (appName .~ name) . (appRuntime .~ runtime')
     mkName = Text.take 6 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8
 
@@ -244,6 +246,7 @@ select' config args = case config of
             Just _ -> Left "Invalid nix.setup"
             Nothing -> Right $ Just $ NixBuilder defaultNixBuilder
           Container cb -> Right $ Just $ ContainerBuilder $ BuilderContainer "<inline>" cb
+          Rootfs _ -> Right Nothing
       pure (builderM, app)
 
     selectApp atoms args' atom = case atom of

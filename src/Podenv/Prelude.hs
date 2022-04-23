@@ -1,4 +1,6 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 -- | Common functions
 module Podenv.Prelude
   ( module Relude,
@@ -8,11 +10,17 @@ module Podenv.Prelude
     orDie,
     mayFail,
 
+    -- * io
+    readFileM,
+    hPutStrLn,
+
     -- * base env
+
 #if !MIN_VERSION_relude(1,0,0)
     getArgs,
     lookupEnv,
 #endif
+    getExecutablePath,
 
     -- * xdg
     getCacheDir,
@@ -24,6 +32,8 @@ module Podenv.Prelude
     getCurrentDirectory,
     doesFileExist,
     doesPathExist,
+    pathIsSymbolicLink,
+    findExecutable,
     (</>),
     takeFileName,
     takeDirectory,
@@ -45,6 +55,7 @@ module Podenv.Prelude
 where
 
 import Control.Monad (foldM)
+import qualified Data.Text.IO
 import Lens.Family (ASetter, set, (%~), (.~), (^.))
 import Relude
 import Relude.Extra.Lens (Lens')
@@ -77,3 +88,10 @@ getDataDir = getXdgDirectory XdgData "podenv"
 
 getConfigDir :: IO FilePath
 getConfigDir = getXdgDirectory XdgConfig "podenv"
+
+readFileM :: FilePath -> IO Text
+readFileM fp' = do
+  exist <- liftIO $ doesFileExist fp'
+  if exist
+    then liftIO $ Data.Text.IO.readFile fp'
+    else pure ""

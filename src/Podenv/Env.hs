@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-missing-export-lists #-}
@@ -5,6 +6,9 @@
 -- | The platform environment
 module Podenv.Env where
 
+import qualified Data.List.NonEmpty
+import qualified Data.Maybe
+import qualified Data.Text
 import Lens.Family.TH (makeLenses)
 import Podenv.Prelude
 
@@ -13,19 +17,35 @@ data AppEnv = AppEnv
     _hostHomeDir :: Maybe FilePath,
     _hostCwd :: FilePath,
     _hostUid :: UserID,
-    _appHomeDir :: Maybe FilePath
+    _appHomeDir :: Maybe FilePath,
+    _rootfsHome :: FilePath -> IO (Maybe FilePath)
   }
-  deriving (Show)
 
 $(makeLenses ''AppEnv)
 
 type AppEnvT a = ReaderT AppEnv IO a
 
+-- | Get the current uid home path in the rootfs
+getRootfsHome :: UserID -> Maybe FilePath -> FilePath -> IO (Maybe FilePath)
+getRootfsHome _ (Just hostHome) "/" = pure $ Just hostHome
+getRootfsHome uid _ fp = do
+  passwd <- readFileM (fp </> "etc/passwd")
+  pure $
+    toString . Data.List.NonEmpty.head
+      <$> Data.List.NonEmpty.nonEmpty (Data.Maybe.mapMaybe isUser $ Podenv.Prelude.lines passwd)
+  where
+    isUser l = case Data.Text.splitOn ":" l of
+      (_ : _ : uid' : _ : _ : home : _) | readMaybe (toString uid') == Just uid -> Just home
+      _ -> Nothing
+
 new :: IO AppEnv
-new =
+new = do
+  uid <- getRealUserID
+  home <- lookupEnv "HOME"
   AppEnv
     <$> lookupEnv "XDG_RUNTIME_DIR"
-    <*> lookupEnv "HOME"
+    <*> pure home
     <*> getCurrentDirectory
-    <*> getRealUserID
+    <*> pure uid
     <*> pure Nothing
+    <*> pure (getRootfsHome uid home)
