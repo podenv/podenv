@@ -33,7 +33,19 @@ import System.IO (hPutStr)
 import qualified System.Process.Typed as P
 
 execute :: RuntimeEnv -> Context -> IO ()
-execute re ctx = runReaderT (doExecute ctx) re
+execute re ctx = do
+  traverse_ (ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
+  runReaderT (doExecute ctx) re
+
+-- | Create host directory and set SELinux label if needed
+ensureHostDirectory :: FilePath -> Volume -> IO ()
+ensureHostDirectory volumesDir (MkVolume _ (Volume volumeName)) = do
+  let fp = volumesDir </> toString volumeName
+  exist <- doesPathExist fp
+  unless exist $ do
+    createDirectoryIfMissing True fp
+    P.runProcess_ $ P.proc "chcon" ["system_u:object_r:container_file_t:s0", fp]
+ensureHostDirectory _ _ = pure ()
 
 doExecute :: Context -> ContextEnvT ()
 doExecute = executePodman
@@ -43,11 +55,12 @@ showPodmanCmd re = show . P.proc "podman" . podmanRunArgs re
 
 data RuntimeEnv = RuntimeEnv
   { verbose :: Bool,
-    system :: SystemConfig
+    system :: SystemConfig,
+    volumesDir :: FilePath
   }
   deriving (Show)
 
-defaultRuntimeEnv :: RuntimeEnv
+defaultRuntimeEnv :: FilePath -> RuntimeEnv
 defaultRuntimeEnv = RuntimeEnv True defaultSystemConfig
 
 type ContextEnvT a = ReaderT RuntimeEnv IO a
@@ -88,7 +101,7 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} = toString <$> args
     volumeArg :: (FilePath, Volume) -> [Text]
     volumeArg (fp, MkVolume mode vtype) = case vtype of
       HostPath x -> volume (toText x)
-      Volume x -> volume x
+      Volume x -> volume (toText $ volumesDir </> toString x)
       TmpFS -> ["--mount", "type=tmpfs,destination=" <> toText fp]
       where
         volume hp = ["--volume", hp <> ":" <> toText fp <> showVolumeMode mode]

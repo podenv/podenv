@@ -40,11 +40,11 @@ spec config = describe "unit tests" $ do
   describe "builder config" $ do
     it "load firefox" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["firefox"]
-      let be = Podenv.Build.initBuildEnv baseApp <$> builderM
+      let be = Podenv.Build.initBuildEnv defRe baseApp <$> builderM
       Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/3c922bca"
     it "load nixify" $ do
       (_, (builderM, baseApp)) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
-      let be = Podenv.Build.initBuildEnv baseApp <$> builderM
+      let be = Podenv.Build.initBuildEnv defRe baseApp <$> builderM
       Text.take 34 . Podenv.Build.beInfos <$> be `shouldBe` Just "# Containerfile localhost/3c922bca"
   describe "cli parser" $ do
     it "pass command args" $ do
@@ -67,7 +67,8 @@ spec config = describe "unit tests" $ do
     it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
     it "run keep" $ podmanTest (addCap "env" "keep = True") ["run", "--hostname", "env", "--name", "env", defImg]
     it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "NET_ADMIN"])
-    it "run volumes" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp/test:/tmp/test"])
+    it "run hostdir" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp/test:/tmp/test"])
+    it "run volumes" $ podmanTest "env // { volumes = [\"nix-store:/nix\"]}" (defRun ["--hostname", "env", "--volume", "/data/nix-store:/nix"])
     it "run home volumes" $
       podmanTest "env // { volumes = [\"~/src:/data\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/home/user/src:/data"])
     it "run many volumes" $
@@ -114,7 +115,7 @@ spec config = describe "unit tests" $ do
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
-    defRe = Podenv.Runtime.defaultRuntimeEnv
+    defRe = Podenv.Runtime.defaultRuntimeEnv "/data"
 
     testEnv =
       AppEnv

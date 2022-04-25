@@ -19,7 +19,7 @@ import Podenv.Config (Builder (..), BuilderContainer (..), BuilderNix (..))
 import Podenv.Context (Name (..))
 import Podenv.Dhall
 import Podenv.Prelude
-import qualified Podenv.Runtime (defaultRuntimeEnv, execute, podman)
+import qualified Podenv.Runtime
 import System.Directory (renameFile)
 import System.Exit (ExitCode (ExitSuccess))
 import qualified System.Process.Typed as P
@@ -37,9 +37,9 @@ data BuildEnv = BuildEnv
   }
 
 -- | Create the build env
-initBuildEnv :: Application -> Builder -> BuildEnv
-initBuildEnv app builder' = case (runtime app, builder') of
-  (Nix expr, NixBuilder nb) -> initNix app expr nb
+initBuildEnv :: Podenv.Runtime.RuntimeEnv -> Application -> Builder -> BuildEnv
+initBuildEnv re app builder' = case (runtime app, builder') of
+  (Nix expr, NixBuilder nb) -> initNix re app expr nb
   (Container _, ContainerBuilder cb) -> initContainer app cb
   (_, _) -> error "Application runtime does not match builder"
 
@@ -94,8 +94,8 @@ initContainer baseApp BuilderContainer {..} = BuildEnv {..}
           (containerBuild ^. cbImage_volumes)
 
 -- | Nix build env:
-initNix :: Application -> Text -> BuilderNix -> BuildEnv
-initNix baseApp expr BuilderNix {..} = BuildEnv {..}
+initNix :: Podenv.Runtime.RuntimeEnv -> Application -> Text -> BuilderNix -> BuildEnv
+initNix re baseApp expr BuilderNix {..} = BuildEnv {..}
   where
     -- buildenv basic info:
     beName = bnName
@@ -136,11 +136,11 @@ initNix baseApp expr BuilderNix {..} = BuildEnv {..}
       setupDone <- doesFileExist setupMark
       unless setupDone $ do
         buildImage imageName (imageNameToFilePath imageName) containerfile []
-        runApp builderApp
+        runApp re builderApp
         Text.writeFile setupMark ""
 
       -- prepare and cleanup leftover
-      runApp $
+      runApp re $
         builderApp & appCommand
           .~ ["sh", "-c", "mkdir -p /nix/var/nix/profiles/podenv; rm -f " <> profileDir <> "-[0-9]-link"]
 
@@ -148,7 +148,7 @@ initNix baseApp expr BuilderNix {..} = BuildEnv {..}
             ["nix-env", "--profile", profileDir, "--install"]
               <> ["--remove-all", "-E", "_:" <> expr]
 
-      runApp $ builderApp & appCommand .~ installCommand
+      runApp re $ builderApp & appCommand .~ installCommand
 
       -- save that the build succeeded
       Text.writeFile (cacheDir </> fileName) expr
@@ -198,10 +198,10 @@ imageNameToFilePath imageName = "Containerfile_" <> toString (imageNameToFP imag
   where
     imageNameToFP = Text.replace "/" "_" . Text.replace ":" "-"
 
-runApp :: Application -> IO ()
-runApp app = do
+runApp :: Podenv.Runtime.RuntimeEnv -> Application -> IO ()
+runApp re app = do
   ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Name $ app ^. appName)
-  Podenv.Runtime.execute Podenv.Runtime.defaultRuntimeEnv ctx
+  Podenv.Runtime.execute re ctx
 
 checkIfBuilt :: FilePath -> Text -> IO Bool
 checkIfBuilt filename expected = do

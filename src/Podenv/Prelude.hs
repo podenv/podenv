@@ -17,6 +17,7 @@ module Podenv.Prelude
     -- * xdg
     getCacheDir,
     getConfigDir,
+    getDataDir,
 
     -- * directory
     createDirectoryIfMissing,
@@ -48,11 +49,11 @@ import Lens.Family (ASetter, set, (%~), (.~), (^.))
 import Relude
 import Relude.Extra.Lens (Lens')
 import System.Directory
+import System.Environment
 import System.FilePath.Posix (hasTrailingPathSeparator, takeDirectory, takeFileName, (</>))
 import System.IO (hPutStrLn)
 import System.Posix.Types (UserID)
 import System.Posix.User (getRealUserID)
-import System.Environment
 
 orDie :: Maybe a -> Text -> Either Text a
 orDie (Just a) _ = Right a
@@ -70,6 +71,9 @@ l `setWhenNothing` b = l %~ maybe (Just b) Just
 
 getCacheDir :: IO FilePath
 getCacheDir = getXdgDirectory XdgCache "podenv"
+
+getDataDir :: IO FilePath
+getDataDir = getXdgDirectory XdgData "podenv"
 
 getConfigDir :: IO FilePath
 getConfigDir = getXdgDirectory XdgConfig "podenv"
