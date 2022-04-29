@@ -43,13 +43,17 @@ execute re ctx = do
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
-ensureHostDirectory volumesDir (MkVolume _ (Volume volumeName)) = do
-  let fp = volumesDir </> toString volumeName
+ensureHostDirectory volumesDir (MkVolume _ (Volume volumeName)) =
+  ensureHostDirectory' $ volumesDir </> toString volumeName
+ensureHostDirectory _ (MkVolume _ (HostPath fp)) | (last <$> nonEmpty fp) == Just '/' = ensureHostDirectory' fp
+ensureHostDirectory _ _ = pure ()
+
+ensureHostDirectory' :: FilePath -> IO ()
+ensureHostDirectory' fp = do
   exist <- doesPathExist fp
   unless exist $ do
     createDirectoryIfMissing True fp
     P.runProcess_ $ P.proc "chcon" ["system_u:object_r:container_file_t:s0", fp]
-ensureHostDirectory _ _ = pure ()
 
 doExecute :: Context -> ContextEnvT ()
 doExecute ctx = case ctx ^. runtimeCtx of

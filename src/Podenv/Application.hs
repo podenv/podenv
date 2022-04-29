@@ -91,7 +91,7 @@ doPrepare app mode ctxName = do
       Nix _ -> Podenv.Build.nixRuntime
 
     validate ctx = case runtimeCtx of
-      Ctx.Bubblewrap _ | null (ctx ^. Ctx.command) -> error "Bubblewrap requires a command"
+      Ctx.Bubblewrap _ | null (ctx ^. Ctx.command) -> ctx & Ctx.command .~ ["/bin/sh"]
       _ -> ctx
 
     modifiers :: Ctx.Context -> Ctx.Context
