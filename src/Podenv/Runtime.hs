@@ -213,8 +213,8 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
       ["run"]
         <> podmanArgs ctx
         <> maybe [] (\h -> ["--hostname", h]) _hostname
-        <> cond (_detach) ["--detach"]
-        <> cond (not _keep) ["--rm"]
+        <> cond _privileged ["--privileged"]
+        <> ["--rm"]
         <> cond _ro ["--read-only=true"]
         <> cond (not _selinux) ["--security-opt", "label=disable"]
         <> userArg
@@ -227,14 +227,6 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
         <> nameArg
         <> [unImageName image]
         <> _command
-
-podmanExecArgs :: Context -> [String]
-podmanExecArgs ctx = toString <$> args
-  where
-    args = ["exec"] <> podmanArgs ctx <> [unName $ ctx ^. name] <> cmd
-    cmd = case ctx ^. command of
-      [] -> ["/bin/bash"]
-      x -> x
 
 podman :: [String] -> P.ProcessConfig () () ()
 podman = P.setDelegateCtlc True . P.proc "podman"
@@ -291,35 +283,15 @@ executePodman ctx image = do
   debug $ "Podman status of " <> toText cname <> ": " <> show status
   let cfail err = liftIO . mayFail . Left $ toText cname <> ": " <> err
   args <-
-    if ctx ^. keep
-      then case status of
-        NotFound -> createContainer re
-        Running -> pure $ podmanExecArgs ctx
-        Unknown "configured" -> startContainer
-        Unknown "exited" -> startContainer
-        Unknown cstate -> cfail $ "unknown container status: " <> cstate
-      else case status of
-        NotFound -> pure $ podmanRunArgs re ctx image
-        Running -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
-        Unknown _ -> recreateContainer re
+    case status of
+      NotFound -> pure $ podmanRunArgs re ctx image
+      Running -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
+      Unknown _ -> recreateContainer re
   let cmd = podman args
   debug $ show cmd
   P.runProcess_ cmd
   where
     cname = toString (unName $ ctx ^. name)
-    -- Create a kept container with sleep and return the exec arg
-    createContainer re = do
-      let infraCtx = (detach .~ True) . (command .~ ["sleep", "infinity"])
-          infraCmd = podman $ podmanRunArgs re (infraCtx ctx) image
-      debug $ "Starting infra container: " <> show infraCmd
-      P.runProcess_ $ infraCmd
-      pure $ podmanExecArgs ctx
-
-    -- Start the kept container and return the exec arg
-    startContainer = do
-      P.runProcess_ (podman ["start", cname])
-      pure $ podmanExecArgs ctx
-
     -- Delete a non-kept container and return the run args
     recreateContainer re = do
       P.runProcess_ (podman ["rm", cname])

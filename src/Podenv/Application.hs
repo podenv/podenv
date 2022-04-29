@@ -42,28 +42,20 @@ prepare app mode ctxName = do
 preparePure :: AppEnv -> Application -> Mode -> Ctx.Name -> IO Ctx.Context
 preparePure envBase app mode ctxName = do
   home <- getContainerHome
-  runReaderT (doPrepare app {home} mode ctxName) (appEnv home)
+  runReaderT (doPrepare app mode ctxName home) (appEnv home)
   where
     appEnv home = envBase & appHomeDir .~ (toString <$> home)
-    -- here we discover the app home early so that it can be shared with the AppEnv
+
     getContainerHome
       | app ^. appCapabilities . capRoot = pure $ Just "/root"
-      | otherwise = do
-        runtimeHome <- getRuntimeHome
-        -- TODO: check if appHome is still relevant
-        pure $ runtimeHome <|> app ^. appHome
+      | otherwise = case app ^. appRuntime of
+        Container cb -> pure $ cb ^. cbImage_home
+        Rootfs fp -> fmap toText <$> (envBase ^. rootfsHome) (toString fp)
+        Nix _ -> pure $ toText <$> envBase ^. hostHomeDir
+        Image _ -> pure Nothing
 
-    -- check if the runtime defines a home directory
-    getRuntimeHome = case app ^. appRuntime of
-      Container cb -> pure $ cb ^. cbImage_home
-      Rootfs fp -> do
-        home <- (envBase ^. rootfsHome) (toString fp)
-        pure (toText <$> home)
-      Nix _ -> pure $ toText <$> envBase ^. hostHomeDir
-      Image _ -> pure Nothing
-
-doPrepare :: Application -> Mode -> Ctx.Name -> AppEnvT Ctx.Context
-doPrepare app mode ctxName = do
+doPrepare :: Application -> Mode -> Ctx.Name -> Maybe Text -> AppEnvT Ctx.Context
+doPrepare app mode ctxName appHome = do
   uid <- asks _hostUid
   let baseCtx =
         (Ctx.defaultContext ctxName runtimeCtx)
@@ -95,7 +87,7 @@ doPrepare app mode ctxName = do
       _ -> ctx
 
     modifiers :: Ctx.Context -> Ctx.Context
-    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setPort . setEnv . ensureWorkdir
+    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setEnv . ensureWorkdir
 
     -- Check if path is part of a mount point
     isMounted :: FilePath -> Ctx.Context -> Bool
@@ -104,17 +96,13 @@ doPrepare app mode ctxName = do
         mountPaths = Data.Map.keys $ ctx ^. Ctx.mounts
         isPrefix x = fp `isPrefixOf` x
 
-    ensureWorkdir ctx = case app ^. appHome of
+    ensureWorkdir ctx = case appHome of
       (Just x) | isMounted (toString x) ctx -> ctx & Ctx.workdir `setWhenNothing` toString x
       _ -> ctx
 
-    setEnv = case app ^. appHome of
+    setEnv = case appHome of
       Just x -> Ctx.addEnv "HOME" x
       _ -> id
-
-    setPort = case app ^. appProvide of
-      Just (Tcp p) -> Ctx.ports %~ (Ctx.PortTcp p :)
-      Nothing -> id
 
     -- Some capabilities do not work with selinux
     noSelinuxCaps = [capWayland, capX11]
@@ -130,7 +118,7 @@ doPrepare app mode ctxName = do
       | hasPrivCap || hasDevice ctx || hasHostPath ctx = ctx & Ctx.selinux .~ False
       | otherwise = ctx
 
-    setRunAs = case app ^. appHome of
+    setRunAs = case appHome of
       -- To keep it simple, when the app home is in `/home`, assume we share the host uid.
       Just h | "/home" `Text.isPrefixOf` h -> Ctx.runAs `setWhenNothing` Ctx.RunAsHostUID
       _ -> id
@@ -184,10 +172,10 @@ capsToggle =
     Cap "gpg" "share gpg agent and keys" capGpg setGpg,
     Cap "x11" "share x11 socket" capX11 setX11,
     Cap "cwd" "mount cwd" capCwd setCwd,
-    Cap "keep" "keep after run" capKeep (contextSet Ctx.keep True),
     Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
     Cap "hostfile" "mount command file arg" capHostfile pure,
-    Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False)
+    Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False),
+    Cap "privileged" "run with extra privileges" capPrivileged (contextSet Ctx.privileged True)
   ]
 
 setTerminal :: Ctx.Context -> AppEnvT Ctx.Context

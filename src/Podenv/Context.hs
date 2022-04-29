@@ -79,8 +79,7 @@ data Context = Context
     _hostname :: Maybe Text,
     _interactive :: Bool,
     _terminal :: Bool,
-    _keep :: Bool,
-    _detach :: Bool
+    _privileged :: Bool
   }
   deriving (Show)
 
@@ -110,8 +109,7 @@ defaultContext _name _runtimeCtx =
       _hostname = Nothing,
       _interactive = False,
       _terminal = False,
-      _keep = False,
-      _detach = False
+      _privileged = False
     }
 
 rwHostPath :: FilePath -> Volume
