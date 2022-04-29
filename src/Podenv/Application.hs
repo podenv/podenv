@@ -186,7 +186,8 @@ capsToggle =
     Cap "cwd" "mount cwd" capCwd setCwd,
     Cap "keep" "keep after run" capKeep (contextSet Ctx.keep True),
     Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
-    Cap "hostfile" "mount command file arg" capHostfile pure
+    Cap "hostfile" "mount command file arg" capHostfile pure,
+    Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False)
   ]
 
 setTerminal :: Ctx.Context -> AppEnvT Ctx.Context

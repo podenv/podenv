@@ -110,7 +110,7 @@ spec config = describe "unit tests" $ do
       cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"]
       (app, mode, ctxName, re) <- Podenv.Main.cliConfigLoad cli
       ctx <- Podenv.Application.preparePure testEnv app mode ctxName
-      Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` ["run", "--rm", "--network", "none", "--name", "tmp", "localhost/firefox"]
+      Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` ["run", "--rm", "--read-only=true", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
@@ -132,7 +132,7 @@ spec config = describe "unit tests" $ do
 
     defBwrap =
       ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net"]
-        <> ["--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
+        <> ["--ro-bind", "/srv", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
         <> ["--clearenv", "--setenv", "HOME", "/home/nobody"]
 
     bwrapTest args expected = do
@@ -147,14 +147,14 @@ spec config = describe "unit tests" $ do
       _ -> error "Not podman"
 
     podmanCliTest args expected = do
-      cli <- Podenv.Main.usage args
+      cli <- Podenv.Main.usage (["--rw"] <> args)
       (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
       ctx <- Podenv.Application.preparePure testEnv app mode ctxName
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
 
     podmanTest code expected = do
-      app <- loadOne (addCap code "network = True")
+      app <- loadOne (addCap code "network = True, rw = True")
       ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
 

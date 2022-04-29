@@ -22,7 +22,7 @@ Here are some demo use cases:
 
 ### Container image
 
-Run a container image: `podenv --cwd --shell image:ubi8`
+Run a container image: `podenv --rw --cwd --shell image:ubi8`
 
 … starts the following command: `podman run -it --detach-keys '' --network none --rm --volume $(pwd):/data:Z --workdir /data ubi8 /bin/bash`
 
