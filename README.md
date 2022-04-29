@@ -44,6 +44,17 @@ Run a podenv application: `podenv gimp ./image.png`
 
 … builds a container and starts the following command: `podman run [wayland args] --volume $(pwd)/image.png:/data/image.png gimp /data/image.png`
 
+### Container rootfs
+
+Run a container image rootfs with bubblewrap:
+
+```
+# Extract filesystem
+podenv --volume rawhide:/mnt  image:registry.fedoraproject.org/fedora:rawhide bash -c "tar --one-file-system -cvf - / | tar -C /mnt -xf -" > /dev/null`
+# Run shell
+podenv --network --rw --root rootfs:rawhide
+```
+
 # Documentation
 
 Podenv documentation is organized into the following [four sections][documentation]:
