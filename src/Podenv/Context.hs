@@ -73,6 +73,7 @@ data Context = Context
     -- | container volumes
     _mounts :: Map FilePath Volume,
     _syscaps :: [Capability],
+    _ro :: Bool,
     -- | container devices
     _devices :: Set FilePath,
     _hostname :: Maybe Text,
@@ -103,6 +104,8 @@ defaultContext _name _runtimeCtx =
       _mounts = mempty,
       _devices = mempty,
       _syscaps = mempty,
+      -- TODO: make ro work for podman
+      _ro = True,
       _workdir = Nothing,
       _hostname = Nothing,
       _interactive = False,

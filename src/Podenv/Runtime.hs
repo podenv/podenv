@@ -89,29 +89,33 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
 
     volumeArg :: (FilePath, Volume) -> [Text]
     volumeArg (destPath, MkVolume mode vtype) = case vtype of
-      HostPath hostPath -> [bindMode mode, toText hostPath, toText destPath]
-      Volume x -> [bindMode mode, toText $ volumesDir </> toString x, toText destPath]
+      HostPath hostPath -> [volumeMode mode, toText hostPath, toText destPath]
+      Volume x -> [volumeMode mode, toText $ volumesDir </> toString x, toText destPath]
       TmpFS -> ["--tmpfs", toText destPath]
       where
-        bindMode = \case
+        volumeMode = \case
           RO -> "--ro-bind"
           RW -> "--bind"
 
     rootMounts = case fp of
       "/" ->
-        roBind "usr"
-          <> roBind "lib"
-          <> roBind "lib64"
-          <> roBind "bin"
-          <> roBind "sbin"
-          <> roBind "etc"
-      _ -> roBind "/"
+        doBind "usr"
+          <> doBind "lib"
+          <> doBind "lib64"
+          <> doBind "bin"
+          <> doBind "sbin"
+          <> doBind "etc"
+      c : _ | c `notElem` ['/', ':'] -> toText <$> [bindMode, toString volumesDir </> fp, "/"]
+      _ -> doBind ""
 
     sysMounts
       | Data.Set.null _devices = []
-      | otherwise = roBind "/sys"
+      | otherwise = ["--ro-bind", "/sys", "/sys"]
 
-    roBind p = toText <$> ["--ro-bind", fp </> p, "/" </> p]
+    bindMode
+      | ctx ^. ro = "--ro-bind"
+      | otherwise = "--bind"
+    doBind p = toText <$> [bindMode, fp </> p, "/" </> p]
     args =
       userArg
         <> ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts"]
@@ -207,6 +211,7 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
         <> maybe [] (\h -> ["--hostname", h]) _hostname
         <> cond (_detach) ["--detach"]
         <> cond (not _keep) ["--rm"]
+        <> cond _ro ["--read-only=true"]
         <> cond (not _selinux) ["--security-opt", "label=disable"]
         <> userArg
         <> networkArg
