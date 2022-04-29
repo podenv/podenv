@@ -52,7 +52,6 @@ Dhall.TH.makeHaskellTypes
           main "ContainerBuild",
           main "Flakes",
           main' "SystemConfig" "System",
-          Dhall.TH.MultipleConstructors "Provider" "./hub/schemas/Provider.dhall",
           Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall"
         ]
   )
@@ -66,10 +65,6 @@ $(makeLensesBy (\n -> Just $ "cb" <> [toUpper $ head n] <> tail n) ''ContainerBu
 deriving instance Show Runtime
 
 deriving instance Eq Runtime
-
-deriving instance Show Provider
-
-deriving instance Eq Provider
 
 deriving instance Show ContainerBuild
 

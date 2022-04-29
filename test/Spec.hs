@@ -67,7 +67,6 @@ spec config = describe "unit tests" $ do
     it "run simple" $ bwrapTest ["--shell"] (defBwrap <> ["/bin/sh"])
   describe "podman ctx" $ do
     it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
-    it "run keep" $ podmanTest (addCap "env" "keep = True") ["run", "--hostname", "env", "--name", "env", defImg]
     it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "NET_ADMIN"])
     it "run hostdir" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp/test:/tmp/test"])
     it "run volumes" $ podmanTest "env // { volumes = [\"nix-store:/nix\"]}" (defRun ["--hostname", "env", "--volume", "/data/nix-store:/nix"])
