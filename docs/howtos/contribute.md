@@ -8,8 +8,7 @@ Podenv is a free software in early development. Issues or changes are most welco
 
 ## Source install
 
-For all of the following instructions, make sure to first check out the
-`hub` submodule:
+Make sure to check out the `hub` submodule:
 
 ```bash
 $ git submodule init

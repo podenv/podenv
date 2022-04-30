@@ -25,6 +25,7 @@ module Podenv.Main
   )
 where
 
+import qualified Data.Text
 import Data.Version (showVersion)
 import Options.Applicative hiding (command)
 import Paths_podenv (version)
@@ -165,7 +166,7 @@ cliInfo :: ParserInfo CLI
 cliInfo =
   info
     (versionOption <*> cliParser <**> helper)
-    (fullDesc <> header "podenv - a podman wrapper")
+    (fullDesc <> header "podenv - a container wrapper")
   where
     versionOption =
       infoOption
@@ -225,7 +226,8 @@ printCaps = do
   putText $ unlines $ sort $ map showCap Podenv.Application.capsAll
   where
     showCap Podenv.Application.Cap {..} =
-      capName <> "\t" <> capDescription
+      let sep = if Data.Text.length capName < 8 then "\t\t" else "\t"
+       in capName <> sep <> capDescription
 
 printApps :: Maybe Text -> IO ()
 printApps configTxt = do
