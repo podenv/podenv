@@ -10,7 +10,7 @@ Using rootless containers, podenv let you run applications seamlessly.
 The goal of podenv is to implement a modern application launcher:
 
 - [Highlevel capability system](#capabilities)
-- [Runtime agnostic](#runtimes)
+- [Multiple runtimes](#runtimes)
 - [VPN network namespace](#namespace)
 - [Functional configuration](#configuration)
 - [Simple to use](#usages)
