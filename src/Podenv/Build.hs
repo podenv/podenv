@@ -133,7 +133,7 @@ prepareNix re app flakes = do
 
     -- The nix command args
     nixExtraArgs = case nixpkgs flakes of
-      Just pin | not (any (Text.isPrefixOf pin) (installables flakes)) -> ["--override-input", "nixpkgs", pin]
+      Just pin | not (all (Text.isPrefixOf pin) (installables flakes)) -> ["--override-input", "nixpkgs", pin]
       _ -> []
     nixArgs = nixExtraArgs <> installables flakes
 
