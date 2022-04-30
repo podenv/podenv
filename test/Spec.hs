@@ -10,6 +10,7 @@ import qualified Podenv.Application
 import qualified Podenv.Build
 import qualified Podenv.Config
 import qualified Podenv.Context
+import qualified Podenv.Dhall
 import Podenv.Env
 import qualified Podenv.Main
 import Podenv.Prelude (mayFail)
@@ -45,6 +46,20 @@ spec config = describe "unit tests" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
       (be, _) <- Podenv.Build.prepare defRe baseApp
       Text.take 34 (Podenv.Build.beInfos be) `shouldBe` "# Containerfile localhost/3c922bca"
+    it "override nixpkgs when necessary" $ do
+      let mkApp installables pin =
+            Podenv.Config.defaultApp
+              { Podenv.Dhall.runtime = Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables pin)
+              }
+
+      (_, app0) <- Podenv.Build.prepare defRe (mkApp ["nixpkgs#hello"] (Just "nixpkgs/42"))
+      (Podenv.Dhall.command app0) `shouldContain` ["--override-input", "nixpkgs"]
+
+      (_, app1) <- Podenv.Build.prepare defRe (mkApp ["nixpkgs/42#hello"] (Just "nixpkgs/42"))
+      (Podenv.Dhall.command app1) `shouldNotContain` ["--override-input", "nixpkgs"]
+
+      (_, app2) <- Podenv.Build.prepare defRe (mkApp ["nixpkgs/42#hello", "nixGL"] (Just "nixpkgs/42"))
+      (Podenv.Dhall.command app2) `shouldContain` ["--override-input", "nixpkgs"]
 
   describe "cli parser" $ do
     it "pass command args" $ do
