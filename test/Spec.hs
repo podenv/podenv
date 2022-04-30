@@ -132,7 +132,8 @@ spec config = describe "unit tests" $ do
     defBwrap =
       ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net"]
         <> ["--ro-bind", "/srv", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
-        <> ["--clearenv", "--setenv", "HOME", "/home/nobody"]
+        <> ["--bind", "/home/user/.local/share/podenv/volumes/rootfs-53b3be-home", "/home/nobody"]
+        <> ["--clearenv", "--setenv", "HOME", "/home/nobody", "--chdir", "/home/nobody"]
 
     bwrapTest args expected = do
       cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])

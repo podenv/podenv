@@ -87,7 +87,11 @@ doPrepare app mode ctxName appHome = do
       _ -> ctx
 
     modifiers :: Ctx.Context -> Ctx.Context
-    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setEnv . ensureWorkdir
+    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setEnv . ensureWorkdir . ensureHome
+
+    ensureHome = case appHome of
+      Just fp -> Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ (Ctx.unName ctxName <> "-home")))
+      Nothing -> id
 
     -- Check if path is part of a mount point
     isMounted :: FilePath -> Ctx.Context -> Bool
