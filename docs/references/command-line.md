@@ -15,7 +15,7 @@ to enable or disable network access use `--network` or `--no-network`.
 Here is the output of the `--help`:
 
 ```bash
-podenv - a podman wrapper
+podenv - a container wrapper
 
 Usage: podenv [--version] [--list] [--list-caps] [--show] [--config ARG]
               [--update] [--verbose] [--shell] [--namespace ARG] [--name NAME]
