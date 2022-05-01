@@ -34,14 +34,12 @@ import Podenv.Config (defaultSystemConfig)
 import Podenv.Context
 import Podenv.Dhall (SystemConfig (..), sysDns)
 import Podenv.Prelude
-import qualified System.Posix.Files
 import qualified System.Process.Typed as P
 
 execute :: RuntimeEnv -> Context -> IO ()
 execute re ctx = do
   traverse_ (ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
-  setResolvConf <- ensureResolvConf ctx
-  runReaderT (doExecute (setResolvConf ctx)) re
+  runReaderT (doExecute ctx) re
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
@@ -56,27 +54,6 @@ ensureHostDirectory' fp = do
   unless exist $ do
     createDirectoryIfMissing True fp
     P.runProcess_ $ P.proc "chcon" ["system_u:object_r:container_file_t:s0", fp]
-
-ensureResolvConf :: Context -> IO (Context -> Context)
-ensureResolvConf ctx = case ctx ^. runtimeCtx of
-  Bubblewrap "/" -> do
-    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
-    if symlink
-      then do
-        realResolvConf <- getSymlinkPath
-        pure $
-          Podenv.Context.addMount
-            realResolvConf
-            (Podenv.Context.MkVolume RO (Podenv.Context.HostPath realResolvConf))
-      else pure id
-  _ -> pure id
-  where
-    getSymlinkPath = do
-      realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
-      pure $
-        if "../" `isPrefixOf` realResolvConf
-          then drop 2 realResolvConf
-          else realResolvConf
 
 doExecute :: Context -> ContextEnvT ()
 doExecute ctx = case ctx ^. runtimeCtx of
