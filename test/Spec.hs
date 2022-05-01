@@ -106,9 +106,9 @@ spec config = describe "unit tests" $ do
     it "run simple" $
       podmanCliTest
         ["--network", "--shell", "image:ubi8"]
-        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "image-8bfbaa", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
+        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "image-8bfbaa", "--env", "TERM=xterm-256color", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
     it "shell override hostfile" $ do
-      let expected extra = ["run", "-i", "--detach-keys", "", "-t", "--rm", "--network", "none"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
+      let expected extra = ["run", "-i", "--detach-keys", "", "-t", "--rm", "--network", "none", "--env", "TERM=xterm-256color"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
           cmd = ["--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"]
       podmanCliTest
         (["--shell"] <> cmd)
@@ -148,7 +148,8 @@ spec config = describe "unit tests" $ do
       ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net"]
         <> ["--ro-bind", "/srv", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
         <> ["--bind", "/home/user/.local/share/podenv/volumes/rootfs-53b3be-home", "/home/nobody"]
-        <> ["--clearenv", "--setenv", "HOME", "/home/nobody", "--chdir", "/home/nobody"]
+        <> ["--clearenv", "--setenv", "HOME", "/home/nobody", "--setenv", "TERM", "xterm-256color"]
+        <> ["--chdir", "/home/nobody"]
 
     bwrapTest args expected = do
       cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])

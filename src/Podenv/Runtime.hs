@@ -157,6 +157,7 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
         <> sysMounts
         <> ["--clearenv"]
         <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList _environ)
+        <> cond (not _terminal) ["--new-session"]
         <> maybe [] (\wd -> ["--chdir", toText wd]) _workdir
         <> _command
 
