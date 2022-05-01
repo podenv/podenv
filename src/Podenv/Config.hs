@@ -49,6 +49,7 @@ data Atom
     Lit ApplicationRecord
   | -- | A paremeterized application
     LamArg ArgName (Text -> ApplicationRecord)
+  | LamArg2 ArgName ArgName (Text -> Text -> ApplicationRecord)
   | -- | A functional application
     LamApp (Application -> ApplicationRecord)
 
@@ -225,6 +226,10 @@ select' config args = case config of
       LamArg arg f -> case args' of
         (x : xs) -> pure (xs, f x)
         [] -> Left ("Missing argument: " <> show arg)
+      LamArg2 arg1 arg2 f -> case args' of
+        (x : y : xs) -> pure (xs, f x y)
+        (_ : _) -> Left ("Missing argument: " <> show arg2)
+        _ -> Left ("Missing arguments: " <> show arg1 <> " " <> show arg2)
       LamApp f -> case args' of
         (x : xs) -> case defaultSelector x of
           Just app -> pure (xs, f app)
@@ -315,11 +320,14 @@ appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
 -- | Parse and tag a DhallExpr with an Atom constructor
 loadApp :: DhallExpr -> DhallParser Atom
 loadApp expr = case expr of
+  Dhall.Lam _ fb1 (Dhall.Lam _ fb2 _) -> LamArg2 (getArgName fb1) (getArgName fb2) <$> Dhall.extract Dhall.auto expr
   Dhall.Lam _ fb _
     | Dhall.denote (Dhall.functionBindingAnnotation fb) == appType ->
       LamApp <$> Dhall.extract Dhall.auto expr
-    | otherwise -> LamArg (ArgName $ Dhall.functionBindingVariable fb) <$> Dhall.extract Dhall.auto expr
+    | otherwise -> LamArg (getArgName fb) <$> Dhall.extract Dhall.auto expr
   _ -> Lit <$> Dhall.extract Dhall.auto expr
+  where
+    getArgName = ArgName . Dhall.functionBindingVariable
 
 loadSystem :: IO SystemConfig
 loadSystem = do

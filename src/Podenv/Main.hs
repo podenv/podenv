@@ -238,9 +238,12 @@ printApps configTxt = do
         Podenv.Config.ConfigApplications xs -> xs
       showApp' (Podenv.Config.ApplicationRecord app) =
         "Application" <> maybe "" (\desc -> " (" <> desc <> ")") (app ^. appDescription)
+      showFunc args app = "λ " <> args <> " → " <> showApp' app
+      showArg a = "<" <> show a <> ">"
       showConfig = \case
         Podenv.Config.Lit app -> showApp' app
-        Podenv.Config.LamArg name f -> "λ " <> show name <> " → " <> showApp' (f ("<" <> show name <> ">"))
+        Podenv.Config.LamArg name f -> showFunc (show name) (f (showArg name))
+        Podenv.Config.LamArg2 n1 n2 f -> showFunc (show n1 <> " " <> show n2) (f (showArg n1) (showArg n2))
         Podenv.Config.LamApp _ -> "λ app → app"
       showAtom (name, app) = name <> ": " <> showConfig app
   traverse_ (putTextLn . showAtom) atoms
