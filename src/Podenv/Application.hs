@@ -167,7 +167,7 @@ capsToggle =
     Cap "wayland" "share wayland socket" capWayland setWayland,
     Cap "pipewire" "share pipewire socket" capPipewire setPipewire,
     Cap "video" "share video devices" capVideo setVideo,
-    Cap "dri" "share graphic device" capDri (pure . Ctx.addDevice "/dev/dri"),
+    Cap "dri" "share graphic device" capDri setDri,
     Cap "kvm" "share kvm device" capKvm (pure . Ctx.addDevice "/dev/kvm"),
     Cap "tun" "share tun device" capTun (pure . Ctx.addDevice "/dev/net/tun"),
     Cap "alsa" "share alsa devices" capAlsa (pure . Ctx.addDevice "/dev/snd"),
@@ -232,6 +232,15 @@ setVideo ctx = do
         map (Ctx.addDevice . toString . mappend "/dev/") $
           filter ("video" `Text.isPrefixOf`) $ map toText devices
   pure $ foldr (\c a -> c a) ctx addDevices
+
+setDri :: Ctx.Context -> AppEnvT Ctx.Context
+setDri ctx = do
+  nvidia <- liftIO $ doesPathExist "/dev/nvidiactl"
+  pure $
+    ctx
+      & if nvidia
+        then Ctx.addDevice "/dev/nvidiactl" . Ctx.addDevice "/dev/nvidia0"
+        else Ctx.addDevice "/dev/dri"
 
 setPulseaudio :: Ctx.Context -> AppEnvT Ctx.Context
 setPulseaudio ctx = do
