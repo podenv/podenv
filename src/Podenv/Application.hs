@@ -29,6 +29,7 @@ import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
 import qualified Podenv.Runtime as Ctx
+import qualified System.Posix.Files
 
 data Mode = Regular | Shell
 
@@ -176,11 +177,37 @@ capsToggle =
     Cap "gpg" "share gpg agent and keys" capGpg setGpg,
     Cap "x11" "share x11 socket" capX11 setX11,
     Cap "cwd" "mount cwd" capCwd setCwd,
-    Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
+    Cap "network" "enable network" capNetwork setNetwork,
     Cap "hostfile" "mount command file arg" capHostfile pure,
     Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False),
     Cap "privileged" "run with extra privileges" capPrivileged (contextSet Ctx.privileged True)
   ]
+
+setNetwork :: Ctx.Context -> AppEnvT Ctx.Context
+setNetwork ctx = do
+  setResolvConf <- liftIO $ ensureResolvConf ctx
+  pure $ ctx & (Ctx.network .~ True) . setResolvConf
+
+ensureResolvConf :: Ctx.Context -> IO (Ctx.Context -> Ctx.Context)
+ensureResolvConf ctx = case ctx ^. Ctx.runtimeCtx of
+  -- When using host rootfs, then we need to mount /etc/resolv.conf target when it is a symlink
+  Ctx.Bubblewrap "/" -> do
+    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
+    if symlink
+      then do
+        realResolvConf <- getSymlinkPath
+        pure $ Ctx.addMount realResolvConf $ Ctx.roHostPath realResolvConf
+      else pure id
+  -- Otherwise we can just mount it directly
+  Ctx.Bubblewrap _ -> pure $ Ctx.addMount "/etc/resolv.conf" (Ctx.roHostPath "/etc/resolv.conf")
+  _ -> pure id
+  where
+    getSymlinkPath = do
+      realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
+      pure $
+        if "../" `isPrefixOf` realResolvConf
+          then drop 2 realResolvConf
+          else realResolvConf
 
 setTerminal :: Ctx.Context -> AppEnvT Ctx.Context
 setTerminal ctx =
