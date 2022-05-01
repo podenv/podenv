@@ -184,7 +184,7 @@ capsToggle =
 
 setTerminal :: Ctx.Context -> AppEnvT Ctx.Context
 setTerminal ctx =
-  pure $ ctx & (Ctx.interactive .~ True) . (Ctx.terminal .~ True)
+  pure $ ctx & (Ctx.interactive .~ True) . (Ctx.terminal .~ True) . (Ctx.addEnv "TERM" "xterm-256color")
 
 setWayland :: Ctx.Context -> AppEnvT Ctx.Context
 setWayland ctx = do
