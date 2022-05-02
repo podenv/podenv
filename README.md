@@ -1,5 +1,8 @@
 # podenv: a container wrapper
 
+[![Hackage](https://img.shields.io/hackage/v/podenv.svg?logo=haskell)](https://hackage.haskell.org/package/podenv)
+[![Apache-2.0 license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 > Note that this is a work in progress, please get in touch if you are interested.
 
 Podenv provides a declarative interface to manage containerized applications.
