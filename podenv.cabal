@@ -11,7 +11,8 @@ homepage:           https://github.com/podenv/podenv#readme
 bug-reports:        https://github.com/podenv/podenv/issues
 license:            Apache-2.0
 license-file:       LICENSE
-extra-doc-files:    README.md
+extra-doc-files:    CHANGELOG.md
+                    README.md
 author:             Tristan Cacqueray
 maintainer:         tdecacqu@redhat.com
 copyright:          2021 Red Hat
