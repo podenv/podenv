@@ -4,13 +4,13 @@ This tutorial teachs you how to install and use podenv.
 
 ## Binary installation
 
-Currently podenv can be installed on Fedora from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/podenv/).
-
-TODO: Download the `podenv-x86_64-linux.tar.bz` archive from the release page and put in your PATH:
+Download the `podenv-x86_64-linux.tar.bz2` archive from the release page and put in your PATH:
 
 ```bash
 curl -L https://github.com/podenv/podenv/releases/download/0.1.0/podenv-x86_64-linux.tar.bz2 -o - | tar -xjvf - -C ~/.local/
 ```
+
+Or install the Fedora package from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/podenv/).
 
 You can verify the podenv command is successfully installed by running:
 
