@@ -43,7 +43,7 @@ Mount directories with smart volumes:
 Podenv works with multiple runtimes:
 
 - Podman for container image and Containerfile.
-- Bubblewrap for local rootfs and Nix Flakes.
+- Bubblewrap for local rootfs and Nix Flakes. Checkout the [Howto use Nix tutorial](./docs/tutorials/nix.md).
 
 The runtime integration is decoupled from the application description
 so that more options can be added in the future.
@@ -174,6 +174,7 @@ These guides help you get your hands dirty with working examples:
 * [Install and use podenv](./docs/tutorials/install.md)
 * [Use an application](./docs/tutorials/use.md)
 * [Create an application](./docs/tutorials/create.md)
+* [Howto use Nix](./docs/tutorials/nix.md)
 
 ## Howtos
 

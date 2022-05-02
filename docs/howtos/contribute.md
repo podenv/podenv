@@ -27,6 +27,12 @@ Build and run the project:
 $ cabal run podenv -- --help
 ```
 
+Install in your PATH:
+
+```ShellSession
+$ cabal install exe:podenv --installdir=$HOME/.local/bin
+```
+
 ## Run tests
 
 ```ShellSession

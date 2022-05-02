@@ -188,7 +188,7 @@ prepareNix re app flakes = do
           [ "NIX_SSL_CERT_FILE=" <> certs,
             "TERM=xterm",
             "LC_ALL=C.UTF-8",
-            "PATH=/bin"
+            "PATH=/nix/var/nix/profiles/nix-install/bin:/bin"
           ]
     updateApp certs = addCommand . addVolumes . addEnvirons certs
 
