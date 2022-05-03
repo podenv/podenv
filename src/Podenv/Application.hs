@@ -23,7 +23,6 @@ where
 
 import qualified Data.Map
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
 import qualified Podenv.Build
 import Podenv.Dhall
 import Podenv.Env
@@ -298,33 +297,10 @@ setAgent var = do
     Nothing -> id
     Just path -> Ctx.addEnv (toText var) (toText path) . Ctx.directMount (takeDirectory path)
 
-setSshControlPath :: AppEnvT (Ctx.Context -> Ctx.Context)
-setSshControlPath = do
-  config <- readConfig
-  uid <- asks _hostUid
-  pure $ case getControlPath (words config) of
-    Just cp ->
-      case takeDirectory $ toString $ Text.replace "%i" (show uid) cp of
-        "/tmp" -> id
-        d -> Ctx.directMount d
-    Nothing -> id
-  where
-    readConfig = do
-      homeDir <- fromMaybe (error "Need HOME for ssh") <$> asks _hostHomeDir
-      let configPath = homeDir </> ".ssh" </> "config"
-      exist <- liftIO $ doesFileExist configPath
-      bool (pure "") (liftIO $ Text.readFile configPath) exist
-    getControlPath = \case
-      ("ControlPath" : x : _) -> Just x
-      (_ : xs) -> getControlPath xs
-      [] -> Nothing
-
 setSsh :: Ctx.Context -> AppEnvT Ctx.Context
 setSsh ctx = do
-  shareConfig <- mountHomeConfig "ssh" ".ssh"
   shareAgent <- liftIO $ setAgent "SSH_AUTH_SOCK"
-  shareControlPath <- setSshControlPath
-  pure $ ctx & shareAgent . shareConfig . shareControlPath
+  pure $ ctx & shareAgent
 
 setGpg :: Ctx.Context -> AppEnvT Ctx.Context
 setGpg ctx = do
