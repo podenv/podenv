@@ -6,9 +6,7 @@ There are a few switches that results in different actions:
 
 * `--show` dry run, show the enviroment definition and the resulting configuration.
 * `--list` list the enviroments.
-
-All the other arguments are override for the environment definition, for example,
-to enable or disable network access use `--network` or `--no-network`.
+* `--list-caps` list the available capabilities.
 
 ## Usage
 
@@ -38,3 +36,17 @@ Available options:
   ARGS                     Application args
   -h,--help                Show this help text
 ```
+
+## Smart volumes
+
+The volumes syntax is flexible: `host:container`
+
+- The container part can be omited, in that case it maps to the host.
+- The host part can be a path or a volume name.
+- `~/` resolve to the HOME value for the host, and the application home for the container.
+
+For example:
+
+- `--volume ~` share the home directory.
+- `--volume web:~` use a volume named `web` for the container home.
+- `--volume /srv` share an absolute path.
