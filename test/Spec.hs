@@ -28,6 +28,7 @@ main = mockEnv >> loadConfig >>= hspec . spec
       setEnv "XDG_CACHE_HOME" (curHome <> "/.cache")
       setEnv "HOME" "/home/user"
       setEnv "WAYLAND_DISPLAY" "wayland-0"
+      setEnv "NIX_SSL_CERT_FILE" "/etc/hosts"
 
 spec :: Podenv.Config.Config -> Spec
 spec config = describe "unit tests" $ do
