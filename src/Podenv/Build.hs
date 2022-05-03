@@ -45,10 +45,12 @@ defaultBuildEnv beInfos = BuildEnv {..}
 -- | Create the build env
 prepare :: Podenv.Runtime.RuntimeEnv -> Application -> IO (BuildEnv, Application)
 prepare re app = case runtime app of
-  Image name -> pure (defaultBuildEnv name, app)
-  Container cb -> pure (prepareContainer cb, app)
-  Rootfs fp -> pure (defaultBuildEnv fp, app)
+  Image name -> pure (defaultBuildEnv name, addArgs app)
+  Container cb -> pure (prepareContainer cb, addArgs app)
+  Rootfs fp -> pure (defaultBuildEnv fp, addArgs app)
   Nix expr -> prepareNix re app expr
+  where
+    addArgs = appCommand %~ (<> Podenv.Runtime.extraArgs re)
 
 containerBuildRuntime :: ContainerBuild -> Podenv.Runtime.RuntimeContext
 containerBuildRuntime = Podenv.Runtime.Container . mkImageName
@@ -178,8 +180,11 @@ prepareNix re app flakes = do
 
     runCommand =
       [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
-        [] -> ["run"] <> nixArgs
-        appArgs -> ["shell"] <> nixArgs <> ["--command"] <> appArgs
+        [] ->
+          ["run"] <> nixArgs <> case Podenv.Runtime.extraArgs re of
+            [] -> []
+            xs -> ["--"] <> xs
+        appArgs -> ["shell"] <> nixArgs <> ["--command"] <> appArgs <> Podenv.Runtime.extraArgs re
     addCommand = appCommand .~ runCommand
     addVolumes = appVolumes %~ mappend ["nix-store:/nix", "nix-cache:~/.cache/nix"]
     addEnvirons certs =
