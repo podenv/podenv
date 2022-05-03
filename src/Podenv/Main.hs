@@ -66,7 +66,7 @@ runApp re app = do
 usage :: [String] -> IO CLI
 usage args = do
   cli <- handleParseResult $ execParserPure defaultPrefs cliInfo cliArgs
-  pure $ cli {extraArgs = map toText appArgs}
+  pure $ cli {cliExtraArgs = map toText appArgs}
   where
     cliArgs = takeCliArgs [] args
     appArgs = case drop (length cliArgs) args of
@@ -104,12 +104,12 @@ data CLI = CLI
     capsOverride :: [Capabilities -> Capabilities],
     shell :: Bool,
     namespace :: Maybe Text,
-    -- TODO: add namespaced :: Bool (when set, namespace is the app name head)
     name :: Maybe Text,
     cliEnv :: [Text],
     volumes :: [Text],
+    -- app selector and arguments:
     selector :: Maybe Text,
-    extraArgs :: [Text]
+    cliExtraArgs :: [Text]
   }
 
 -- WARNING: when adding strOption, update the 'strOptions' list
@@ -183,21 +183,17 @@ cliConfigLoad cli@CLI {..} = do
     Nothing -> getDataDir >>= \fp -> pure $ fp </> "volumes"
 
   config <- Podenv.Config.load selector configExpr
-  (args, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> extraArgs)
-  let app = cliPrepare cli args baseApp
+  (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
+  let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
-      re = RuntimeEnv {verbose, system, volumesDir}
+      re = RuntimeEnv {verbose, system, extraArgs, volumesDir}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
   pure (app, mode, name', re)
 
 -- | Apply the CLI argument to the application
-cliPrepare :: CLI -> [Text] -> Application -> Application
-cliPrepare CLI {..} args = modifiers
+cliPrepare :: CLI -> Application -> Application
+cliPrepare CLI {..} = setShell . setEnvs . setVolumes . setCaps . setNS
   where
-    modifiers = setShell . setEnvs . setVolumes . setCaps . setNS . addArgs
-
-    addArgs = appCommand %~ (<> args)
-
     setNS = maybe id (appNamespace ?~) namespace
 
     setShell = bool id setShellCap shell

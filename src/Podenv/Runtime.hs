@@ -146,12 +146,15 @@ showRuntimeCmd re ctx = case ctx ^. runtimeCtx of
 data RuntimeEnv = RuntimeEnv
   { verbose :: Bool,
     system :: SystemConfig,
+    -- | The app argument provided on the command line
+    extraArgs :: [Text],
+    -- | The host location of the volumes directory, default to ~/.local/share/podenv/volumes
     volumesDir :: FilePath
   }
   deriving (Show)
 
 defaultRuntimeEnv :: FilePath -> RuntimeEnv
-defaultRuntimeEnv = RuntimeEnv True defaultSystemConfig
+defaultRuntimeEnv = RuntimeEnv True defaultSystemConfig []
 
 type ContextEnvT a = ReaderT RuntimeEnv IO a
 

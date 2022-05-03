@@ -3,7 +3,6 @@
 
 module Main where
 
-import Data.Maybe (maybeToList)
 import Data.Text (pack)
 import qualified Data.Text as Text
 import qualified Podenv.Application
@@ -64,10 +63,10 @@ spec config = describe "unit tests" $ do
   describe "cli parser" $ do
     it "pass command args" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "ls", "-la"]
-      Podenv.Main.extraArgs cli `shouldBe` ["ls", "-la"]
+      Podenv.Main.cliExtraArgs cli `shouldBe` ["ls", "-la"]
     it "handle separator" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "--", "ls", "-la"]
-      Podenv.Main.extraArgs cli `shouldBe` ["ls", "-la"]
+      Podenv.Main.cliExtraArgs cli `shouldBe` ["ls", "-la"]
   describe "cli with single config" $ do
     it "select app" $ cliTest "env" [] "env"
     it "add args" $ cliTest "env" ["ls"] "env // { command = [\"ls\"]}"
@@ -82,6 +81,10 @@ spec config = describe "unit tests" $ do
     it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime.nix = \"test\", name = \"nix-a94a8f\" }"
   describe "bwrap ctx" $ do
     it "run simple" $ bwrapTest ["--shell"] (defBwrap <> ["/bin/sh"])
+  describe "nix test" $ do
+    it "nix run without args" $ nixTest "{ runtime.nix = \"test\"}" [] ["run", "test"]
+    it "nix run with args" $ nixTest "{env, test = { runtime.nix = \"test\"}}" ["test", "--help"] ["run", "test", "--", "--help"]
+    it "nix run with shell" $ nixTest "{env, test = { runtime.nix = \"test\", command = [\"test\"]}}" ["test", "--help"] ["shell", "test", "--command", "test", "--help"]
   describe "podman ctx" $ do
     it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
     it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "NET_ADMIN"])
@@ -166,7 +169,8 @@ spec config = describe "unit tests" $ do
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage (["--rw"] <> args)
-      (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
+      (cliApp, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
+      (_, app) <- Podenv.Build.prepare re' cliApp
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
       ctx <- Podenv.Application.preparePure testEnv app mode ctxName
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
@@ -176,14 +180,20 @@ spec config = describe "unit tests" $ do
       ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
 
-    cliTest code args expectedCode = do
-      cli@Podenv.Main.CLI {..} <- Podenv.Main.usage args
-      config' <- loadConfig (Podenv.Main.selector cli) code
-      (args', baseApp) <- mayFail $ Podenv.Config.select config' (maybeToList selector <> extraArgs)
-      expected <- loadOne expectedCode
+    getApp code args = do
+      cli <- Podenv.Main.usage args
+      (baseApp, _, _, re) <- Podenv.Main.cliConfigLoad (cli {Podenv.Main.configExpr = Just . mkConfig $ code})
+      (_, app) <- Podenv.Build.prepare re baseApp
+      pure app
 
-      let got = Podenv.Main.cliPrepare cli args' baseApp
+    cliTest gotCode args expectedCode = do
+      got <- getApp gotCode args
+      expected <- getApp expectedCode []
       got `shouldBe` expected
+
+    nixTest code args expectedCommand = do
+      app <- getApp code args
+      drop 3 (Podenv.Dhall.command app) `shouldBe` expectedCommand
 
     loadTest code expected = do
       config' <- loadConfig Nothing code
@@ -196,20 +206,18 @@ spec config = describe "unit tests" $ do
     addCap code capCode =
       "( " <> code <> " // { capabilities = (" <> code <> ").capabilities // {" <> capCode <> "}})"
 
+    mkConfig code =
+      pack $
+        unlines
+          [ "let Podenv = env:PODENV",
+            "let Nix = Podenv.Nix",
+            "let def = { capabilities = {=}, runtime = Podenv.Image \"ubi8\" }",
+            "let env = def // { name = \"env\" }",
+            "let env2 = env // { name = \"beta\" } in",
+            code
+          ]
     loadConfig s code =
-      Podenv.Config.load
-        s
-        ( Just
-            . pack
-            $ unlines
-              [ "let Podenv = env:PODENV",
-                "let Nix = Podenv.Nix",
-                "let def = { capabilities = {=}, runtime = Podenv.Image \"ubi8\" }",
-                "let env = def // { name = \"env\" }",
-                "let env2 = env // { name = \"beta\" } in",
-                code
-              ]
-        )
+      Podenv.Config.load s (Just . mkConfig $ code)
 
     loadOne code = do
       config' <- loadConfig Nothing code
