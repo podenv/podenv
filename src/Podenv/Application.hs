@@ -90,7 +90,9 @@ doPrepare app mode ctxName appHome = do
     modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setEnv . ensureWorkdir . ensureHome
 
     ensureHome = case appHome of
-      Just fp -> Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ (Ctx.unName ctxName <> "-home")))
+      Just fp ->
+        let volumeName = fromMaybe (Ctx.unName ctxName) (app ^. appNamespace)
+         in Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ volumeName <> "-home"))
       Nothing -> id
 
     -- Check if path is part of a mount point
