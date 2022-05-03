@@ -55,7 +55,7 @@ $ podenv nix.setup
 [Display the nix version]
 ```
 
-> You can check what nix.setup does by running `podenv --show nix.setup`.
+> You can check what the [nix.setup application](https://github.com/podenv/hub/blob/main/Builders/nix.dhall) does by running `podenv --show nix.setup`.
 
 ## Setup the environment
 

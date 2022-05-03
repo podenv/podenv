@@ -41,12 +41,12 @@ Mount directories with smart volumes:
 - `--volume web:~` use a volume named `web` for the container home.
 - `--hostfile ./document.pdf` share a single file.
 
-### <a name="runtimes"></a>Runtimes
+### <a name="runtimes"></a>Container Runtimes
 
-Podenv works with multiple runtimes:
+Podenv works with multiple container runtimes:
 
-- Podman for container image and Containerfile.
-- Bubblewrap for local rootfs and Nix Flakes. Checkout the [Howto use Nix tutorial](./docs/tutorials/nix.md).
+- Podman for image and Containerfile.
+- Bubblewrap for local rootfs and Nix Flakes.
 
 The runtime integration is decoupled from the application description
 so that more options can be added in the future.
@@ -64,12 +64,12 @@ Applications are user-defined with functionnal and re-usable expressions:
 #### Firefox with a fedora container
 
 ```dhall
-Application::{
+(env:PODENV).Application::{
 , name = "firefox"
 , description = Some "Mozilla Firefox"
-, runtime = (./fedora.dhall).latest.useGraphic [ "firefox" ]
+, runtime = (env:PODENV).Hub.fedora.useGraphic [ "firefox" ]
 , command = [ "firefox", "--no-remote" ]
-, capabilities = Capabilities::{ wayland = True, network = True }
+, capabilities = (env:PODENV).Capabilities::{ wayland = True, network = True }
 }
 ```
 
@@ -77,11 +77,10 @@ The fedora useGraphic function defines a custom Containerfile:
 
 ```dhall
 \(pkgs : List Text) ->
-ContainerBuild::{
+(env:PODENV).ContainerBuild::{
 , containerfile =
     ''
     FROM fedora:latest
-    RUN ${./mkUser.dhall "fedora"}
     RUN dnf install -y mesa-dri-drivers pipewire-libs
     RUN dnf update -y
     RUN dnf install -y ${concatSep " " pkgs}
@@ -98,11 +97,11 @@ ContainerBuild::{
 Podenv support the [Nix installables syntax](https://nixos.org/manual/nix/stable/command-ref/new-cli/nix.html#installables):
 
 ```dhall
-Application::{
+(env:PODENV).Application::{
 , name = "polyglot"
 , description = Some "Tool to count lines of source code."
-, runtime = Nix Flakes::{ installables = [ "github:podenv/polyglot.nix" ]}
-, capabilities = Capabilities::{ cwd = True }
+, runtime = (env:PODENV).Hub.nix.useInstallables [ "github:podenv/polyglot.nix" ]
+, capabilities = (env:PODENV).Capabilities::{ cwd = True }
 }
 ```
 
@@ -115,53 +114,7 @@ Run `podenv --list` to see the available applications.
 ## <a name="usages"></a>Usage
 
 Podenv provides a simple command line: `podenv [--caps] application-name [args]`.
-
-Here are some common use cases:
-
-### Applications
-
-```ShellSession
-$ podenv gimp ./image.png
-```
-
-… runs the following command: `podman run [wayland args] --volume $(pwd)/image.png:/data/image.png localhost/gimp /data/image.png`
-
-If necessary, podenv builds a local image using the Containerfile defined by the application.
-
-### Container image
-
-```ShellSession
-$ podenv --rw --network --root --cwd --shell image:ubi8
-```
-
-… runs the following command: `podman run --rm -it --detach-keys '' --volume $(pwd):/data:Z --workdir /data --volume ~/.local/share/podenv/volumes/image-ubi8-home:/root ubi8 /bin/bash`
-
-By default podenv mounts a local volumes for the home directory.
-
-### Bubblewrap chroot
-
-Extract a container image and execute it with bubblewrap:
-
-```ShellSession
-$ podenv --volume rawhide:/mnt image:fedora:rawhide bash -c "tar --one-file-system -cf - / | tar -C /mnt -xf -"
-$ podenv --network --rw --root rootfs:rawhide
-```
-
-… extracts the rootfs with: `podman run --rm --read-only=true --network none --volume ~/.local/share/podenv/volumes/rawhide:/mnt fedora:rawhide bash -c "tar ..."`
-
-… and, runs the following command: `bwrap [unshare args] --bind ~/.local/share/podenv/volumes/rawhide / --bind ~/.local/share/podenv/volumes/rootfs-7e08b7-home /root /bin/sh`
-
-This is useful to avoid polluting the container storage.
-
-### Nix flakes
-
-```ShellSession
-$ podenv nixpkgs#hello
-```
-
-… runs the installable using bubblewrap: `bwrap [unshare args] --bind ~/.local/share/podenv/volumes/nix-store /nix --bind ~/.local/share/podenv/volumes/nix-cache ~/.cache/nix --clearenv --setenv NIX_SSL_CERT_FILE /etc/pki/tls/certs/ca-bundle.crt nix --extra-experimental-features "nix-command flakes" run nixpkgs#hello`
-
-If necessary, podenv automatically installs the Nix toolchain using bubblewrap with the [nix.setup application](https://github.com/podenv/hub/blob/main/Builders/nix.dhall).
+Checkout the tutorials for examples.
 
 
 # Documentation
@@ -178,6 +131,7 @@ These guides help you get your hands dirty with working examples:
 * [Use an application](./docs/tutorials/use.md)
 * [Create an application](./docs/tutorials/create.md)
 * [Howto use Nix](./docs/tutorials/nix.md)
+* [Work with rawhide](./docs/tutorials/rawhide.md)
 
 ## Howtos
 
