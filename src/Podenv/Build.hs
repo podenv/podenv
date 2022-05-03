@@ -95,8 +95,14 @@ nixRuntime :: Podenv.Runtime.RuntimeContext
 nixRuntime = Podenv.Runtime.Bubblewrap "/"
 
 getCertLocation :: IO (Maybe FilePath)
-getCertLocation = runMaybeT $ Control.Monad.msum $ checkPath <$> paths
+getCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$> paths)
   where
+    checkEnv :: MaybeT IO FilePath
+    checkEnv = do
+      env <- lift $ lookupEnv "NIX_SSL_CERT_FILE"
+      case env of
+        Just fp -> checkPath fp
+        Nothing -> mzero
     checkPath :: FilePath -> MaybeT IO FilePath
     checkPath fp = do
       exist <- lift $ doesPathExist fp
