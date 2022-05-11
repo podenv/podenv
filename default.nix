@@ -47,6 +47,12 @@ let
             sha256 = "0cw9a1gfvias4hr36ywdizhysnzbzxy20fb3jwmqmgjy40lzxp2g";
           };
 
+          # latest version has a print fix
+          typed-process = pkgs.haskell.lib.overrideCabal hpPrev.typed-process {
+            version = "0.2.8.0";
+            sha256 = "sha256-hXjaVF1rL6Swtylr44mnNnORU87RnR3/ve5orsl4wKk=";
+          };
+
           podenv = (hpPrev.callCabal2nix "podenv" (gitignoreSource ./.)
             { }).overrideAttrs (_: {
               # Set build environment variable to avoid warnings
