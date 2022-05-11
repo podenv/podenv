@@ -192,7 +192,7 @@ prepareNix re app flakes = do
             xs -> ["--"] <> xs
         appArgs -> ["shell"] <> nixArgs <> ["--command"] <> appArgs <> Podenv.Runtime.extraArgs re
     addCommand = appCommand .~ runCommand
-    addVolumes = appVolumes %~ mappend ["nix-store:/nix", "nix-cache:~/.cache/nix"]
+    addVolumes = appVolumes %~ mappend ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
     addEnvirons certs =
       appEnviron
         %~ mappend
