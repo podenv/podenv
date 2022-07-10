@@ -72,7 +72,7 @@ data Context = Context
     _environ :: Map Text Text,
     -- | container volumes
     _mounts :: Map FilePath Volume,
-    _syscaps :: [Capability],
+    _syscaps :: Set.Set Capability,
     _ro :: Bool,
     -- | container devices
     _devices :: Set FilePath,

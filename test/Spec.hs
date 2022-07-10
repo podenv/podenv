@@ -88,7 +88,7 @@ spec config = describe "unit tests" $ do
     it "nix run with shell" $ nixTest "{env, test = { runtime.nix = \"test\", command = [\"test\"]}}" ["test", "--help"] ["shell", "test", "--command", "test", "--help"]
   describe "podman ctx" $ do
     it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
-    it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "NET_ADMIN"])
+    it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "CAP_NET_ADMIN"])
     it "run hostdir" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp/test:/tmp/test"])
     it "run volumes" $ podmanTest "env // { volumes = [\"nix-store:/nix\"]}" (defRun ["--hostname", "env", "--volume", "/data/nix-store:/nix"])
     it "run home volumes" $
