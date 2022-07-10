@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.2.0 (next)
+## 0.3.0 (next)
+
+## 0.2.0 (2022-07-10)
 
 - restrict ssh capability to the agent socket.
 - home volume is set to the namespace name if a namespace is defined.
