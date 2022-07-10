@@ -63,7 +63,7 @@ library
                   , gitrev
                   , lens-family-core
                   , lens-family-th
-                  , linux-capabilities
+                  , linux-capabilities >= 0.1.1.0
                   , optparse-applicative
                   , relude >= 0.7
                   , text

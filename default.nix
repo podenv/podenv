@@ -53,6 +53,11 @@ let
             sha256 = "sha256-hXjaVF1rL6Swtylr44mnNnORU87RnR3/ve5orsl4wKk=";
           };
 
+          linux-capabilities = pkgs.haskell.lib.overrideCabal hpPrev.linux-capabilities {
+            version = "0.1.1.0";
+            sha256 = "sha256-xrLOxd8K8p+vnXJ8cmqHdgY4ZE5DNYEWnHWNp1sjuEg=";
+          };
+
           podenv = (hpPrev.callCabal2nix "podenv" (gitignoreSource ./.)
             { }).overrideAttrs (_: {
               # Set build environment variable to avoid warnings

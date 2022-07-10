@@ -22,6 +22,7 @@ module Podenv.Application
 where
 
 import qualified Data.Map
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Podenv.Build
 import Podenv.Dhall
@@ -133,7 +134,7 @@ doPrepare app mode ctxName appHome = do
     addSysCap :: Text -> Ctx.Context -> Ctx.Context
     addSysCap syscap = case readMaybe (toString $ "CAP_" <> syscap) of
       Nothing -> error $ "Can't read syscap: " <> show syscap
-      Just c -> Ctx.syscaps %~ (c :)
+      Just c -> Ctx.syscaps %~ (Set.insert c)
 
     addEnvs ctx = foldr addEnv ctx (app ^. appEnviron)
     addEnv :: Text -> Ctx.Context -> Ctx.Context

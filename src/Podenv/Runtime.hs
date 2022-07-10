@@ -73,7 +73,7 @@ bwrap = P.setDelegateCtlc True . P.proc "bwrap"
 
 commonArgs :: Context -> [Text]
 commonArgs Context {..} =
-  concatMap (\c -> ["--cap-add", Text.drop 4 (show c)]) _syscaps
+  concatMap (\c -> ["--cap-add", show c]) $ sort $ Data.Set.toList _syscaps
 
 bwrapRunArgs :: RuntimeEnv -> Context -> FilePath -> [String]
 bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
