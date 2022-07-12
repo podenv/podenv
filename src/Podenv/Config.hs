@@ -5,6 +5,7 @@
 -- | This module contains the logic to load the dhall configuration
 module Podenv.Config
   ( load,
+    decodeExpr,
     select,
     Config (..),
     Atom (..),
@@ -69,7 +70,7 @@ instance Text.Show.Show ArgName where
 load :: Maybe Text -> Maybe Text -> IO Config
 load selectorM configTxt = case selectorM >>= defaultSelector of
   Just c -> pure $ ConfigDefault (ApplicationRecord c)
-  Nothing -> load' . Dhall.normalize <$> loadExpr configTxt
+  Nothing -> decodeExpr . Dhall.normalize <$> loadExpr configTxt
 
 defaultSelector :: Text -> Maybe Application
 defaultSelector s
@@ -161,8 +162,8 @@ podenvImportTxt :: Text
 podenvImportTxt = Text.replace "\n " "" $ Dhall.pretty podenvImport
 
 -- | Pure config load
-load' :: DhallExpr -> Config
-load' expr = case loadConfig "" expr of
+decodeExpr :: DhallExpr -> Config
+decodeExpr expr = case loadConfig "" expr of
   Success [(selector, Lit app)] -> ConfigApplication $ Lit (ensureName selector app)
   Success [(_, x)] -> ConfigApplication x
   Success [] -> error "No application found"
