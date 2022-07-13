@@ -53,7 +53,7 @@ ensureHostDirectory' fp = do
   exist <- doesPathExist fp
   unless exist $ do
     createDirectoryIfMissing True fp
-    P.runProcess_ $ P.proc "chcon" ["system_u:object_r:container_file_t:s0", fp]
+    P.runProcess_ $ P.proc "/bin/chcon" ["system_u:object_r:container_file_t:s0", fp]
 
 doExecute :: Context -> ContextEnvT ()
 doExecute ctx = case ctx ^. runtimeCtx of
