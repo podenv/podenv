@@ -1,4 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -19,23 +20,23 @@ module Podenv.Config
 where
 
 import Control.Exception (bracket_)
-import qualified Data.Digest.Pure.SHA as SHA
+import Data.Digest.Pure.SHA qualified as SHA
 import Data.Either.Validation
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text (readFile)
-import qualified Dhall
-import qualified Dhall.Core as Dhall
-import qualified Dhall.Import
-import qualified Dhall.Map as DM
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text (readFile)
+import Dhall qualified
+import Dhall.Core qualified as Dhall
+import Dhall.Import qualified
+import Dhall.Map qualified as DM
 import Dhall.Marshal.Decode (DhallErrors (..), extractError)
-import qualified Dhall.Parser
-import qualified Dhall.Src
+import Dhall.Parser qualified
+import Dhall.Src qualified
 import Podenv.Dhall hiding (name)
 import Podenv.Prelude
 import System.Directory
 import System.Environment (setEnv, unsetEnv)
 import System.FilePath.Posix (dropExtension, isExtensionOf, splitPath)
-import qualified Text.Show
+import Text.Show qualified
 
 data Config
   = -- | A standalone application, e.g. defaultSelector
@@ -185,10 +186,10 @@ loadConfig baseSelector expr = case expr of
   Dhall.RecordLit kv
     | -- When the node has a "runtime" attribute, assume it is an app.
       DM.member "runtime" kv ->
-      (\app -> [(baseSelector, app)]) <$> loadApp expr
+        (\app -> [(baseSelector, app)]) <$> loadApp expr
     | -- Otherwise, traverse each attributes
       otherwise ->
-      concat <$> traverse (uncurry loadCollection) (DM.toList kv)
+        concat <$> traverse (uncurry loadCollection) (DM.toList kv)
     where
       loadCollection n e
         -- Skip leaf starting with `use`, otherwise they can be used and likely fail with:
@@ -324,7 +325,7 @@ loadApp expr = case expr of
   Dhall.Lam _ fb1 (Dhall.Lam _ fb2 _) -> LamArg2 (getArgName fb1) (getArgName fb2) <$> Dhall.extract Dhall.auto expr
   Dhall.Lam _ fb _
     | Dhall.denote (Dhall.functionBindingAnnotation fb) == appType ->
-      LamApp <$> Dhall.extract Dhall.auto expr
+        LamApp <$> Dhall.extract Dhall.auto expr
     | otherwise -> LamArg (getArgName fb) <$> Dhall.extract Dhall.auto expr
   _ -> Lit <$> Dhall.extract Dhall.auto expr
   where

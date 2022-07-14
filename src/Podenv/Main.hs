@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -25,18 +26,18 @@ module Podenv.Main
   )
 where
 
-import qualified Data.Text
+import Data.Text qualified
 import Data.Version (showVersion)
 import Options.Applicative hiding (command)
 import Paths_podenv (version)
-import qualified Podenv.Application
-import qualified Podenv.Build
-import qualified Podenv.Config
+import Podenv.Application qualified
+import Podenv.Build qualified
+import Podenv.Config qualified
 import Podenv.Dhall
 import Podenv.Prelude
 import Podenv.Runtime (Context, Name (..), RuntimeEnv (..))
-import qualified Podenv.Runtime
-import qualified Podenv.Version (version)
+import Podenv.Runtime qualified
+import Podenv.Version qualified (version)
 
 -- | podenv entrypoint
 main :: IO ()

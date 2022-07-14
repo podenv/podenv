@@ -1,19 +1,20 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
 import Data.Text (pack)
-import qualified Data.Text as Text
-import qualified Podenv.Application
-import qualified Podenv.Build
-import qualified Podenv.Config
-import qualified Podenv.Context
-import qualified Podenv.Dhall
+import Data.Text qualified as Text
+import Podenv.Application qualified
+import Podenv.Build qualified
+import Podenv.Config qualified
+import Podenv.Context qualified
+import Podenv.Dhall qualified
 import Podenv.Env
-import qualified Podenv.Main
+import Podenv.Main qualified
 import Podenv.Prelude (mayFail)
-import qualified Podenv.Runtime
+import Podenv.Runtime qualified
 import System.Environment (getEnv, setEnv)
 import Test.Hspec
 

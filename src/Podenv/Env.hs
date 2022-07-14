@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -6,9 +7,9 @@
 -- | The platform environment
 module Podenv.Env where
 
-import qualified Data.List.NonEmpty
-import qualified Data.Maybe
-import qualified Data.Text
+import Data.List.NonEmpty qualified
+import Data.Maybe qualified
+import Data.Text qualified
 import Lens.Family.TH (makeLenses)
 import Podenv.Prelude
 
