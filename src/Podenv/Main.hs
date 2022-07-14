@@ -100,6 +100,7 @@ data CLI = CLI
     -- runtime env:
     update :: Bool,
     verbose :: Bool,
+    detach :: Bool,
     -- app modifiers:
     capsOverride :: [Capabilities -> Capabilities],
     shell :: Bool,
@@ -125,6 +126,7 @@ cliParser =
     -- runtime env:
     <*> switch (long "update" <> help "Update the runtime")
     <*> switch (long "verbose" <> help "Increase verbosity")
+    <*> switch (long "detach" <> help "Increase verbosity" <> hidden)
     -- app modifiers:
     <*> capsParser
     <*> switch (long "shell" <> help "Start a shell instead of the application command")
@@ -186,7 +188,7 @@ cliConfigLoad cli@CLI {..} = do
   (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
   let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
-      re = RuntimeEnv {verbose, system, extraArgs, volumesDir}
+      re = RuntimeEnv {verbose, detach, system, extraArgs, volumesDir}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
   pure (app, mode, name', re)
 

@@ -9,6 +9,7 @@
 - allow passing args directly to a nix run command: `podenv nix:github:podenv/devenv#emacs --version`
 - fix syscaps argument for bwrap.
 - use system chcon to set label.
+- add --detach argument.
 
 ## 0.1.0 (2022-05-02)
 

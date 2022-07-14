@@ -145,6 +145,7 @@ showRuntimeCmd re ctx = case ctx ^. runtimeCtx of
 
 data RuntimeEnv = RuntimeEnv
   { verbose :: Bool,
+    detach :: Bool,
     system :: SystemConfig,
     -- | The app argument provided on the command line
     extraArgs :: [Text],
@@ -154,7 +155,7 @@ data RuntimeEnv = RuntimeEnv
   deriving (Show)
 
 defaultRuntimeEnv :: FilePath -> RuntimeEnv
-defaultRuntimeEnv = RuntimeEnv True defaultSystemConfig []
+defaultRuntimeEnv = RuntimeEnv True False defaultSystemConfig []
 
 type ContextEnvT a = ReaderT RuntimeEnv IO a
 
@@ -216,6 +217,7 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
     args =
       ["run"]
         <> podmanArgs ctx
+        <> ["--detach" | detach]
         <> maybe [] (\h -> ["--hostname", h]) _hostname
         <> cond _privileged ["--privileged"]
         <> ["--rm"]
