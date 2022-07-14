@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -21,15 +22,15 @@ module Podenv.Application
   )
 where
 
-import qualified Data.Map
-import qualified Data.Set as Set
-import qualified Data.Text as Text
-import qualified Podenv.Build
+import Data.Map qualified
+import Data.Set qualified as Set
+import Data.Text qualified as Text
+import Podenv.Build qualified
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
-import qualified Podenv.Runtime as Ctx
-import qualified System.Posix.Files
+import Podenv.Runtime qualified as Ctx
+import System.Posix.Files qualified
 
 data Mode = Regular | Shell
 

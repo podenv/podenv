@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -11,18 +12,18 @@ module Podenv.Build
   )
 where
 
-import qualified Control.Monad
-import qualified Data.Digest.Pure.SHA as SHA
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
-import qualified Podenv.Config
+import Control.Monad qualified
+import Data.Digest.Pure.SHA qualified as SHA
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
+import Podenv.Config qualified
 import Podenv.Dhall
 import Podenv.Prelude
 import Podenv.Runtime (ImageName (..))
-import qualified Podenv.Runtime
+import Podenv.Runtime qualified
 import System.Directory (doesDirectoryExist, renameFile)
 import System.Exit (ExitCode (ExitSuccess))
-import qualified System.Process.Typed as P
+import System.Process.Typed qualified as P
 
 -- | Helper function to run a standalone app, usefull for local build
 type AppRunner = Application -> IO ()

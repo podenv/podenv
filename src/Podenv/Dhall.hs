@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -15,7 +16,7 @@ module Podenv.Dhall where
 import Data.Char (toUpper)
 import Data.Void
 import Dhall.Core (Expr ())
-import qualified Dhall.TH
+import Dhall.TH qualified
 import Lens.Family.TH (makeLensesBy)
 
 -- | The hub submodule commit, this is only used for the PODENV environment value
