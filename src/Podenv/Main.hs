@@ -49,7 +49,7 @@ main = do
 
   (baseApp, mode, ctxName, re) <- cliConfigLoad cli
   (be, app) <- Podenv.Build.prepare re baseApp
-  ctx <- Podenv.Application.prepare app mode ctxName
+  ctx <- Podenv.Application.prepare mode app ctxName
 
   if showApplication
     then putTextLn $ showApp app ctx be re
@@ -61,7 +61,7 @@ main = do
 -- | helper function to run a Application.
 runApp :: Podenv.Runtime.RuntimeEnv -> Application -> IO ()
 runApp re app = do
-  ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Name $ app ^. appName)
+  ctx <- Podenv.Application.prepare Podenv.Application.Regular app (Name $ app ^. appName)
   Podenv.Runtime.execute re ctx
 
 usage :: [String] -> IO CLI

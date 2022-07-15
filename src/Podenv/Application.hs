@@ -35,14 +35,14 @@ import System.Posix.Files qualified
 data Mode = Regular | Shell
 
 -- | Converts an Application into a Context
-prepare :: Application -> Mode -> Ctx.Name -> IO Ctx.Context
-prepare app mode ctxName = do
+prepare :: Mode -> Application -> Ctx.Name -> IO Ctx.Context
+prepare mode app ctxName = do
   appEnv <- Podenv.Env.new
-  preparePure appEnv app mode ctxName
+  preparePure mode appEnv app ctxName
 
 -- TODO: make this stricly pure using a PodenvMonad similar to the PandocMonad
-preparePure :: AppEnv -> Application -> Mode -> Ctx.Name -> IO Ctx.Context
-preparePure envBase app mode ctxName = do
+preparePure :: Mode -> AppEnv -> Application -> Ctx.Name -> IO Ctx.Context
+preparePure mode envBase app ctxName = do
   home <- getContainerHome
   runReaderT (doPrepare app mode ctxName home) (appEnv home)
   where
