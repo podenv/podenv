@@ -15,7 +15,6 @@
 -- This module performs read-only IO
 module Podenv.Application
   ( prepare,
-    preparePure,
     capsAll,
     Cap (..),
     Mode (..),
@@ -30,34 +29,12 @@ import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
 import Podenv.Runtime qualified as Ctx
-import System.Posix.Files qualified
 
 data Mode = Regular | Shell
 
 -- | Converts an Application into a Context
-prepare :: Mode -> Application -> Ctx.Name -> IO Ctx.Context
+prepare :: Mode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
 prepare mode app ctxName = do
-  appEnv <- Podenv.Env.new
-  preparePure mode appEnv app ctxName
-
--- TODO: make this stricly pure using a PodenvMonad similar to the PandocMonad
-preparePure :: Mode -> AppEnv -> Application -> Ctx.Name -> IO Ctx.Context
-preparePure mode envBase app ctxName = do
-  home <- getContainerHome
-  runReaderT (doPrepare app mode ctxName home) (appEnv home)
-  where
-    appEnv home = envBase & appHomeDir .~ (toString <$> home)
-
-    getContainerHome
-      | app ^. appCapabilities . capRoot = pure $ Just "/root"
-      | otherwise = case app ^. appRuntime of
-        Container cb -> pure $ cb ^. cbImage_home
-        Rootfs fp -> fmap toText <$> (envBase ^. rootfsHome) (toString fp)
-        Nix _ -> pure $ toText <$> envBase ^. hostHomeDir
-        Image _ -> pure Nothing
-
-doPrepare :: Application -> Mode -> Ctx.Name -> Maybe Text -> AppEnvT Ctx.Context
-doPrepare app mode ctxName appHome = do
   uid <- asks _hostUid
   let baseCtx =
         (Ctx.defaultContext ctxName runtimeCtx)
@@ -69,6 +46,30 @@ doPrepare app mode ctxName appHome = do
     foldM addVolume baseCtx (app ^. appVolumes)
       >>= flip (foldM setCaps) capsAll
 
+  setHome <- do
+    appHome <- asks _appHomeDir
+    let ensureHome = case appHome of
+          Just fp ->
+            let volumeName = fromMaybe (Ctx.unName ctxName) (app ^. appNamespace)
+             in Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ volumeName <> "-home"))
+          Nothing -> id
+        ensureWorkdir ctx' = case appHome of
+          (Just x) | isMounted (toString x) ctx' -> ctx' & Ctx.workdir `setWhenNothing` toString x
+          _ -> ctx'
+        setEnv = case appHome of
+          Just x -> Ctx.addEnv "HOME" (toText x)
+          _ -> id
+        setRunAs = case appHome of
+          -- To keep it simple, when the app home is in `/home`, assume we share the host uid.
+          Just h | "/home" `Text.isPrefixOf` toText h -> Ctx.runAs `setWhenNothing` Ctx.RunAsHostUID
+          _ -> id
+
+    pure $ setEnv . ensureWorkdir . ensureHome . setRunAs
+
+  setResolv <- case runtimeCtx of
+    Ctx.Bubblewrap fp -> ensureResolvConf fp
+    _ -> pure id
+
   setCommand <- case mode of
     Regular ->
       if app ^. appCapabilities . capHostfile
@@ -76,7 +77,7 @@ doPrepare app mode ctxName appHome = do
         else pure $ Ctx.command .~ app ^. appCommand
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
 
-  pure (validate . setCommand . modifiers $ ctx)
+  pure (validate . setHome . setCommand . setResolv . modifiers $ ctx)
   where
     runtimeCtx = case app ^. appRuntime of
       Image x -> Ctx.Container $ Ctx.ImageName x
@@ -89,13 +90,7 @@ doPrepare app mode ctxName appHome = do
       _ -> ctx
 
     modifiers :: Ctx.Context -> Ctx.Context
-    modifiers = disableSelinux . setRunAs . addSysCaps . addEnvs . setEnv . ensureWorkdir . ensureHome
-
-    ensureHome = case appHome of
-      Just fp ->
-        let volumeName = fromMaybe (Ctx.unName ctxName) (app ^. appNamespace)
-         in Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ volumeName <> "-home"))
-      Nothing -> id
+    modifiers = disableSelinux . addSysCaps . addEnvs
 
     -- Check if path is part of a mount point
     isMounted :: FilePath -> Ctx.Context -> Bool
@@ -103,14 +98,6 @@ doPrepare app mode ctxName appHome = do
       where
         mountPaths = Data.Map.keys $ ctx ^. Ctx.mounts
         isPrefix x = fp `isPrefixOf` x
-
-    ensureWorkdir ctx = case appHome of
-      (Just x) | isMounted (toString x) ctx -> ctx & Ctx.workdir `setWhenNothing` toString x
-      _ -> ctx
-
-    setEnv = case appHome of
-      Just x -> Ctx.addEnv "HOME" x
-      _ -> id
 
     -- Some capabilities do not work with selinux
     noSelinuxCaps = [capWayland, capX11]
@@ -126,16 +113,11 @@ doPrepare app mode ctxName appHome = do
       | hasPrivCap || hasDevice ctx || hasHostPath ctx = ctx & Ctx.selinux .~ False
       | otherwise = ctx
 
-    setRunAs = case appHome of
-      -- To keep it simple, when the app home is in `/home`, assume we share the host uid.
-      Just h | "/home" `Text.isPrefixOf` h -> Ctx.runAs `setWhenNothing` Ctx.RunAsHostUID
-      _ -> id
-
     addSysCaps ctx = foldr addSysCap ctx (app ^. appSyscaps)
     addSysCap :: Text -> Ctx.Context -> Ctx.Context
     addSysCap syscap = case readMaybe (toString $ "CAP_" <> syscap) of
       Nothing -> error $ "Can't read syscap: " <> show syscap
-      Just c -> Ctx.syscaps %~ (Set.insert c)
+      Just c -> Ctx.syscaps %~ Set.insert c
 
     addEnvs ctx = foldr addEnv ctx (app ^. appEnviron)
     addEnv :: Text -> Ctx.Context -> Ctx.Context
@@ -180,51 +162,25 @@ capsToggle =
     Cap "gpg" "share gpg agent and keys" capGpg setGpg,
     Cap "x11" "share x11 socket" capX11 setX11,
     Cap "cwd" "mount cwd" capCwd setCwd,
-    Cap "network" "enable network" capNetwork setNetwork,
+    Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
     Cap "hostfile" "mount command file arg" capHostfile pure,
     Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False),
     Cap "privileged" "run with extra privileges" capPrivileged (contextSet Ctx.privileged True)
   ]
 
-setNetwork :: Ctx.Context -> AppEnvT Ctx.Context
-setNetwork ctx = do
-  setResolvConf <- liftIO $ ensureResolvConf ctx
-  pure $ ctx & (Ctx.network .~ True) . setResolvConf
-
-ensureResolvConf :: Ctx.Context -> IO (Ctx.Context -> Ctx.Context)
-ensureResolvConf ctx = case ctx ^. Ctx.runtimeCtx of
-  -- When using host rootfs, then we need to mount /etc/resolv.conf target when it is a symlink
-  Ctx.Bubblewrap "/" -> do
-    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
-    if symlink
-      then do
-        realResolvConf <- getSymlinkPath
-        pure $ Ctx.addMount realResolvConf $ Ctx.roHostPath realResolvConf
-      else pure id
-  -- Otherwise we can just mount it directly
-  Ctx.Bubblewrap _ -> pure $ Ctx.addMount "/etc/resolv.conf" (Ctx.roHostPath "/etc/resolv.conf")
-  _ -> pure id
-  where
-    getSymlinkPath = do
-      realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
-      pure $
-        if "../" `isPrefixOf` realResolvConf
-          then drop 2 realResolvConf
-          else realResolvConf
-
 setTerminal :: Ctx.Context -> AppEnvT Ctx.Context
 setTerminal ctx =
-  pure $ ctx & (Ctx.interactive .~ True) . (Ctx.terminal .~ True) . (Ctx.addEnv "TERM" "xterm-256color")
+  pure $ ctx & (Ctx.interactive .~ True) . (Ctx.terminal .~ True) . Ctx.addEnv "TERM" "xterm-256color"
 
 setWayland :: Ctx.Context -> AppEnvT Ctx.Context
 setWayland ctx = do
-  sktM <- liftIO $ lookupEnv "WAYLAND_DISPLAY"
+  sktM <- asks _hostWaylandSocket
   case sktM of
     Nothing -> setX11 ctx
     Just skt -> setWayland' skt ctx
 
-setWayland' :: FilePath -> Ctx.Context -> AppEnvT Ctx.Context
-setWayland' skt ctx = do
+setWayland' :: SocketName -> Ctx.Context -> AppEnvT Ctx.Context
+setWayland' (SocketName skt) ctx = do
   shareSkt <- addXdgRun skt
   pure $
     ctx
@@ -257,15 +213,14 @@ setDbus ctx = do
 
 setVideo :: Ctx.Context -> AppEnvT Ctx.Context
 setVideo ctx = do
-  devices <- liftIO $ listDirectory "/dev"
+  devices <- getVideoDevices
   let addDevices =
-        map (Ctx.addDevice . toString . mappend "/dev/") $
-          filter ("video" `Text.isPrefixOf`) $ map toText devices
+        map (Ctx.addDevice . mappend "/dev/") devices
   pure $ foldr (\c a -> c a) ctx addDevices
 
 setDri :: Ctx.Context -> AppEnvT Ctx.Context
 setDri ctx = do
-  nvidia <- liftIO $ doesPathExist "/dev/nvidiactl"
+  nvidia <- isNVIDIAEnabled
   pure $
     ctx
       & if nvidia
@@ -294,16 +249,15 @@ mountHomeConfig help fp = do
   (hostDir, appDir) <- getHomes help
   pure $ Ctx.addMount (appDir </> fp) (Ctx.roHostPath $ hostDir </> fp)
 
-setAgent :: String -> IO (Ctx.Context -> Ctx.Context)
-setAgent var = do
-  value <- lookupEnv var
+setAgent :: String -> Maybe String -> AppEnvT (Ctx.Context -> Ctx.Context)
+setAgent var value = do
   pure $ case value of
     Nothing -> id
     Just path -> Ctx.addEnv (toText var) (toText path) . Ctx.directMount (takeDirectory path)
 
 setSsh :: Ctx.Context -> AppEnvT Ctx.Context
 setSsh ctx = do
-  shareAgent <- liftIO $ setAgent "SSH_AUTH_SOCK"
+  shareAgent <- setAgent "SSH_AUTH_SOCK" =<< asks _hostSSHAgent
   pure $ ctx & shareAgent
 
 setGpg :: Ctx.Context -> AppEnvT Ctx.Context
@@ -314,7 +268,7 @@ setGpg ctx = do
 
 setX11 :: Ctx.Context -> AppEnvT Ctx.Context
 setX11 ctx = do
-  display <- liftIO $ getEnv "DISPLAY"
+  display <- asks _hostDisplay
   pure $
     ctx
       & Ctx.directMount "/tmp/.X11-unix" . Ctx.addEnv "DISPLAY" (toText display) . Ctx.addMount "/dev/shm" Ctx.tmpfs
@@ -346,14 +300,12 @@ resolveFileArgs args = do
       fpM <- resolveHostPath arg
       case fpM of
         Nothing -> pure $ Left arg
-        Just fp -> do
-          exist <- liftIO $ doesPathExist fp
-          unless exist (liftIO $ putTextLn $ "Warning, arg path does not exist: " <> arg)
-          pure $ bool (Left arg) (Right fp) exist
+        Just fp -> pure $ Right fp
+
     addFileArg :: Either Text FilePath -> Ctx.Context -> Ctx.Context
     addFileArg (Left arg) = addCommand arg
     addFileArg (Right fp)
-      | hasTrailingPathSeparator fp = error "Directory filearg ar not supported"
+      | hasTrailingPathSeparator fp = error "Directory filearg are not supported"
       | otherwise =
         let cfp = "/data" </> takeFileName fp
          in addCommand (toText cfp) . Ctx.addMount cfp (Ctx.rwHostPath fp)

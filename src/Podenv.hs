@@ -30,7 +30,7 @@ import Podenv.Prelude
 import Podenv.Runtime
 
 appToContext :: AppEnv -> Application -> Name -> IO Context
-appToContext = preparePure Regular
+appToContext env app = runAppEnv env . prepare Regular app
 
 loadConfig :: Text -> IO Config
 loadConfig = Podenv.Config.load Nothing . Just

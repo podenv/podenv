@@ -27,8 +27,6 @@ main = mockEnv >> loadConfig >>= hspec . spec
     mockEnv = do
       curHome <- getEnv "HOME"
       setEnv "XDG_CACHE_HOME" (curHome <> "/.cache")
-      setEnv "HOME" "/home/user"
-      setEnv "WAYLAND_DISPLAY" "wayland-0"
       setEnv "NIX_SSL_CERT_FILE" "/etc/hosts"
 
 spec :: Podenv.Config.Config -> Spec
@@ -130,21 +128,28 @@ spec config = describe "unit tests" $ do
     it "name override keep image" $ do
       cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"]
       (app, mode, ctxName, re) <- Podenv.Main.cliConfigLoad cli
-      ctx <- Podenv.Application.preparePure mode testEnv app ctxName
+      ctx <- runPrepare mode testEnv app ctxName
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` ["run", "--rm", "--read-only=true", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultRuntimeEnv "/data"
 
+    runPrepare mode env app ctxName = runAppEnv env $ Podenv.Application.prepare mode app ctxName
+
     testEnv =
       AppEnv
         { _hostXdgRunDir = Just "/run/user/1000",
+          _hostWaylandSocket = Just (SocketName "wayland-0"),
           _hostHomeDir = Just "/home/user",
           _hostCwd = "/usr/src/podenv",
           _hostUid = 1000,
-          _appHomeDir = Just "/home/fedora",
-          _rootfsHome = const $ pure $ Just "/home/nobody"
+          _appHomeDir = Nothing,
+          _hostDisplay = ":0",
+          _hostSSHAgent = Nothing,
+          _isNVIDIAEnabled = pure False,
+          _ensureResolvConf = const $ pure id,
+          _getVideoDevices = pure []
         }
 
     getFP ctx = case Podenv.Context._runtimeCtx ctx of
@@ -154,15 +159,13 @@ spec config = describe "unit tests" $ do
     defBwrap =
       ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net"]
         <> ["--ro-bind", "/srv", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
-        <> ["--bind", "/home/user/.local/share/podenv/volumes/rootfs-53b3be-home", "/home/nobody"]
-        <> ["--clearenv", "--setenv", "HOME", "/home/nobody", "--setenv", "TERM", "xterm-256color"]
-        <> ["--chdir", "/home/nobody"]
+        <> ["--clearenv", "--setenv", "TERM", "xterm-256color"]
 
     bwrapTest args expected = do
       cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])
       (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
-      ctx <- Podenv.Application.preparePure mode testEnv app ctxName
+      ctx <- runPrepare mode testEnv app ctxName
       Podenv.Runtime.bwrapRunArgs re ctx (getFP ctx) `shouldBe` expected
 
     getImg ctx = case Podenv.Context._runtimeCtx ctx of
@@ -174,12 +177,12 @@ spec config = describe "unit tests" $ do
       (cliApp, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
       (_, app) <- Podenv.Build.prepare re' cliApp
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
-      ctx <- Podenv.Application.preparePure mode testEnv app ctxName
+      ctx <- runPrepare mode testEnv app ctxName
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True, rw = True")
-      ctx <- Podenv.Application.prepare Podenv.Application.Regular app (Podenv.Context.Name "env")
+      ctx <- runPrepare Podenv.Application.Regular testEnv app (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
 
     getApp code args = do
