@@ -89,9 +89,9 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
 
     networkArg
       | _network = case _namespace of
-          Just "host" -> []
-          Just _ns -> error "Shared netns not implemented"
-          Nothing -> [] -- TODO: implement private network namespace
+        Just "host" -> []
+        Just _ns -> error "Shared netns not implemented"
+        Nothing -> [] -- TODO: implement private network namespace
       | otherwise = ["--unshare-net"]
 
     volumeArg :: (FilePath, Volume) -> [Text]
@@ -189,10 +189,10 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
     hostnameArg = ["--hostname", unName _name]
     networkArg
       | _network =
-          hostnameArg <> case _namespace of
-            Just "host" -> ["--network", "host"]
-            Just ns -> ["--network", "container:" <> infraName ns]
-            Nothing -> maybe [] (\dns -> ["--dns=" <> dns]) (system ^. sysDns) <> portArgs
+        hostnameArg <> case _namespace of
+          Just "host" -> ["--network", "host"]
+          Just ns -> ["--network", "container:" <> infraName ns]
+          Nothing -> maybe [] (\dns -> ["--dns=" <> dns]) (system ^. sysDns) <> portArgs
       | otherwise = ["--network", "none"]
 
     volumeArg :: (FilePath, Volume) -> [Text]

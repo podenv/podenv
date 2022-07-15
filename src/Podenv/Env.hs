@@ -1,30 +1,69 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-missing-export-lists #-}
 
 -- | The platform environment
-module Podenv.Env where
+module Podenv.Env
+  ( AppEnv (..),
+    SocketName (..),
+    AppEnvT,
+    createLocalhostEnv,
+    runAppEnv,
+    isNVIDIAEnabled,
+    ensureResolvConf,
+    getVideoDevices,
+  )
+where
 
 import Data.List.NonEmpty qualified
 import Data.Maybe qualified
 import Data.Text qualified
-import Lens.Family.TH (makeLenses)
+import Data.Text qualified as Text
+import Podenv.Context hiding (Container, uid)
+import Podenv.Context qualified as Ctx
+import Podenv.Dhall hiding (runtime)
 import Podenv.Prelude
+import System.Posix.Files qualified
+
+newtype SocketName = SocketName FilePath
 
 data AppEnv = AppEnv
   { _hostXdgRunDir :: Maybe FilePath,
+    _hostWaylandSocket :: Maybe SocketName,
+    _hostDisplay :: String,
+    _hostSSHAgent :: Maybe FilePath,
     _hostHomeDir :: Maybe FilePath,
     _hostCwd :: FilePath,
     _hostUid :: UserID,
     _appHomeDir :: Maybe FilePath,
-    _rootfsHome :: FilePath -> IO (Maybe FilePath)
+    -- environment query
+    _isNVIDIAEnabled :: IO Bool,
+    _ensureResolvConf :: FilePath -> IO (Context -> Context),
+    _getVideoDevices :: IO [FilePath]
   }
 
-$(makeLenses ''AppEnv)
+-- | This newtype hide the inner IO so that only the ones defined below are available.
+newtype AppEnvT a = AppEnvT (ReaderT AppEnv IO a)
+  deriving newtype (Functor, Applicative, Monad)
+  deriving newtype (MonadReader AppEnv)
 
-type AppEnvT a = ReaderT AppEnv IO a
+isNVIDIAEnabled :: AppEnvT Bool
+isNVIDIAEnabled = AppEnvT $ lift =<< asks _isNVIDIAEnabled
+
+getVideoDevices :: AppEnvT [FilePath]
+getVideoDevices = AppEnvT $ lift =<< asks _getVideoDevices
+
+ensureResolvConf :: FilePath -> AppEnvT (Context -> Context)
+ensureResolvConf fp = AppEnvT $ do
+  ensure <- asks _ensureResolvConf
+  lift $ ensure fp
+
+runAppEnv :: AppEnv -> AppEnvT a -> IO a
+runAppEnv env (AppEnvT r) = runReaderT r env
 
 -- | Get the current uid home path in the rootfs
 getRootfsHome :: UserID -> Maybe FilePath -> FilePath -> IO (Maybe FilePath)
@@ -39,14 +78,44 @@ getRootfsHome uid _ fp = do
       (_ : _ : uid' : _ : _ : home : _) | readMaybe (toString uid') == Just uid -> Just home
       _ -> Nothing
 
-new :: IO AppEnv
-new = do
-  uid <- getRealUserID
-  home <- lookupEnv "HOME"
-  AppEnv
-    <$> lookupEnv "XDG_RUNTIME_DIR"
-    <*> pure home
-    <*> getCurrentDirectory
-    <*> pure uid
-    <*> pure Nothing
-    <*> pure (getRootfsHome uid home)
+doEnsureResolvConf :: FilePath -> IO (Ctx.Context -> Ctx.Context)
+doEnsureResolvConf fp
+  -- When using host rootfs, then we need to mount /etc/resolv.conf target when it is a symlink
+  | fp == "/" = do
+    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
+    if symlink
+      then do
+        realResolvConf <- getSymlinkPath
+        pure $ Ctx.addMount realResolvConf $ Ctx.roHostPath realResolvConf
+      else pure id
+  -- Otherwise we can just mount it directly
+  | otherwise = pure $ Ctx.addMount "/etc/resolv.conf" (Ctx.roHostPath "/etc/resolv.conf")
+  where
+    getSymlinkPath = do
+      realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
+      pure $
+        if "../" `isPrefixOf` realResolvConf
+          then drop 2 realResolvConf
+          else realResolvConf
+
+doGetVideoDevices :: IO [FilePath]
+doGetVideoDevices = map toString . filter ("video" `Text.isPrefixOf`) . map toText <$> listDirectory "/dev"
+
+createLocalhostEnv :: Runtime -> IO AppEnv
+createLocalhostEnv r = do
+  _hostUid <- getRealUserID
+  _hostHomeDir <- lookupEnv "HOME"
+  _hostXdgRunDir <- lookupEnv "XDG_RUNTIME_DIR"
+  _hostWaylandSocket <- fmap SocketName <$> lookupEnv "WAYLAND_DISPLAY"
+  _hostDisplay <- fromMaybe ":0" <$> lookupEnv "DISPLAY"
+  _hostSSHAgent <- lookupEnv "SSH_AUTH_SOCK"
+  _hostCwd <- getCurrentDirectory
+  _appHomeDir <- case r of
+    Container cb -> pure $ toString <$> cb ^. cbImage_home
+    Rootfs fp -> getRootfsHome _hostUid _hostHomeDir (toString fp)
+    Nix _ -> pure _hostHomeDir
+    Image _ -> pure Nothing
+  let _isNVIDIAEnabled = doesPathExist "/dev/nvidiactl"
+      _ensureResolvConf = doEnsureResolvConf
+      _getVideoDevices = doGetVideoDevices
+  pure $ AppEnv {..}
