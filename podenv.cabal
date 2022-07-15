@@ -81,6 +81,7 @@ library
                   , Podenv.Prelude
                   , Podenv.Runtime
                   , Podenv.Version
+                  , Podenv
   other-modules:    Paths_podenv
   autogen-modules:  Paths_podenv
 

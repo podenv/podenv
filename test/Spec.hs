@@ -130,7 +130,7 @@ spec config = describe "unit tests" $ do
     it "name override keep image" $ do
       cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"]
       (app, mode, ctxName, re) <- Podenv.Main.cliConfigLoad cli
-      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      ctx <- Podenv.Application.preparePure mode testEnv app ctxName
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` ["run", "--rm", "--read-only=true", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
@@ -162,7 +162,7 @@ spec config = describe "unit tests" $ do
       cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])
       (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
-      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      ctx <- Podenv.Application.preparePure mode testEnv app ctxName
       Podenv.Runtime.bwrapRunArgs re ctx (getFP ctx) `shouldBe` expected
 
     getImg ctx = case Podenv.Context._runtimeCtx ctx of
@@ -174,12 +174,12 @@ spec config = describe "unit tests" $ do
       (cliApp, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
       (_, app) <- Podenv.Build.prepare re' cliApp
       let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
-      ctx <- Podenv.Application.preparePure testEnv app mode ctxName
+      ctx <- Podenv.Application.preparePure mode testEnv app ctxName
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True, rw = True")
-      ctx <- Podenv.Application.prepare app Podenv.Application.Regular (Podenv.Context.Name "env")
+      ctx <- Podenv.Application.prepare Podenv.Application.Regular app (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
 
     getApp code args = do

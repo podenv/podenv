@@ -12,6 +12,8 @@
 module Podenv.Runtime
   ( execute,
     showRuntimeCmd,
+    getPodmanPodStatus,
+    deletePodmanPod,
 
     -- * Podman helpers
     podman,
@@ -247,19 +249,23 @@ data PodmanStatus
     Unknown Text
   deriving (Show, Eq)
 
-getPodmanStatus :: String -> ContextEnvT PodmanStatus
-getPodmanStatus cname = do
-  (_, stdout', _) <- P.readProcess (podman ["inspect", cname, "--format", "{{.State.Status}}"])
+getPodmanPodStatus :: MonadIO m => Name -> m PodmanStatus
+getPodmanPodStatus (Name cname) = do
+  (_, stdout', _) <- P.readProcess (podman ["inspect", Text.unpack cname, "--format", "{{.State.Status}}"])
   pure $ case stdout' of
     "" -> NotFound
     "running\n" -> Running
     other -> Unknown (Text.dropWhileEnd (== '\n') $ decodeUtf8 other)
 
+deletePodmanPod :: MonadIO m => Name -> m ()
+deletePodmanPod (Name cname) =
+  P.runProcess_ (podman ["rm", toString cname])
+
 ensureInfraNet :: Text -> ContextEnvT ()
 ensureInfraNet ns = do
   debug $ "Ensuring infra net for: " <> show ns
   let pod = infraName ns
-  infraStatus <- getPodmanStatus (toString pod)
+  infraStatus <- getPodmanPodStatus (Name pod)
   case infraStatus of
     Running -> pure ()
     _ -> do
@@ -286,9 +292,9 @@ executePodman ctx image = do
     (Just ns, True) | ns /= mempty -> ensureInfraNet ns
     _ -> pure ()
 
-  status <- getPodmanStatus cname
-  debug $ "Podman status of " <> toText cname <> ": " <> show status
-  let cfail err = liftIO . mayFail . Left $ toText cname <> ": " <> err
+  status <- getPodmanPodStatus (ctx ^. name)
+  debug $ "Podman status of " <> cname <> ": " <> show status
+  let cfail err = liftIO . mayFail . Left $ cname <> ": " <> err
   args <-
     case status of
       NotFound -> pure $ podmanRunArgs re ctx image
@@ -298,8 +304,8 @@ executePodman ctx image = do
   debug $ show cmd
   P.runProcess_ cmd
   where
-    cname = toString (unName $ ctx ^. name)
+    cname = unName $ ctx ^. name
     -- Delete a non-kept container and return the run args
     recreateContainer re = do
-      P.runProcess_ (podman ["rm", cname])
+      deletePodmanPod (ctx ^. name)
       pure $ podmanRunArgs re ctx image
