@@ -36,6 +36,7 @@ import Data.Text qualified as Text
 import Podenv.Config (defaultSystemConfig)
 import Podenv.Context
 import Podenv.Dhall (SystemConfig (..), sysDns)
+import Podenv.Image
 import Podenv.Prelude
 import System.Process.Typed qualified as P
 

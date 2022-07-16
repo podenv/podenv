@@ -21,11 +21,9 @@ module Podenv.Context where
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Lens.Family.TH (makeLenses)
+import Podenv.Image (ImageName)
 import Podenv.Prelude
 import System.Linux.Capabilities (Capability)
-
-newtype ImageName = ImageName {unImageName :: Text}
-  deriving (Show)
 
 data RuntimeContext
   = Container ImageName

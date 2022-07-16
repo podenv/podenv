@@ -7,8 +7,6 @@
 module Podenv.Build
   ( prepare,
     BuildEnv (..),
-    containerBuildRuntime,
-    nixRuntime,
   )
 where
 
@@ -18,8 +16,8 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Podenv.Config qualified
 import Podenv.Dhall
+import Podenv.Image (ImageName (..))
 import Podenv.Prelude
-import Podenv.Runtime (ImageName (..))
 import Podenv.Runtime qualified
 import System.Directory (doesDirectoryExist, renameFile)
 import System.Exit (ExitCode (ExitSuccess))
@@ -52,9 +50,6 @@ prepare re app = case runtime app of
   Nix expr -> prepareNix re app expr
   where
     addArgs = appCommand %~ (<> Podenv.Runtime.extraArgs re)
-
-containerBuildRuntime :: ContainerBuild -> Podenv.Runtime.RuntimeContext
-containerBuildRuntime = Podenv.Runtime.Container . mkImageName
 
 mkImageName :: ContainerBuild -> ImageName
 mkImageName containerBuild = ImageName $ "localhost/" <> name
@@ -90,10 +85,6 @@ prepareContainer containerBuild = BuildEnv {..}
           (fileName <> "-update")
           (unlines ["FROM " <> imageName, "RUN " <> cmd])
           (containerBuild ^. cbImage_volumes)
-
--- | Nix runtime re-use the host root filesystem, prepareNix added the nix-store volume.
-nixRuntime :: Podenv.Runtime.RuntimeContext
-nixRuntime = Podenv.Runtime.Bubblewrap "/"
 
 getCertLocation :: IO (Maybe FilePath)
 getCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$> paths)

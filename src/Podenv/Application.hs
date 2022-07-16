@@ -24,9 +24,9 @@ where
 import Data.Map qualified
 import Data.Set qualified as Set
 import Data.Text qualified as Text
-import Podenv.Build qualified
 import Podenv.Dhall
 import Podenv.Env
+import Podenv.Image
 import Podenv.Prelude
 import Podenv.Runtime qualified as Ctx
 
@@ -79,10 +79,10 @@ prepare mode app ctxName = do
   pure (validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes $ ctx)
   where
     runtimeCtx = case app ^. appRuntime of
-      Image x -> Ctx.Container $ Ctx.ImageName x
+      Image x -> Ctx.Container $ ImageName x
       Rootfs root -> Ctx.Bubblewrap $ toString root
-      Container cb -> Podenv.Build.containerBuildRuntime cb
-      Nix _ -> Podenv.Build.nixRuntime
+      Container cb -> Ctx.Container . mkImageName $ cb
+      Nix _ -> Ctx.Bubblewrap "/"
 
     validate ctx = case runtimeCtx of
       Ctx.Bubblewrap _ | null (ctx ^. Ctx.command) -> ctx & Ctx.command .~ ["/bin/sh"]
