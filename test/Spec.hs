@@ -4,11 +4,10 @@
 
 module Main where
 
-import Data.Text (Text, pack)
+import Data.Text (pack)
 import Data.Text qualified as Text
-import Podenv hiding (command)
+import Podenv hiding (command, loadConfig)
 import Podenv.Application qualified
-import Podenv.Build qualified
 import Podenv.Config qualified
 import Podenv.Context (command)
 import Podenv.Context qualified
@@ -21,9 +20,9 @@ import System.Environment (getEnv, setEnv)
 import Test.Hspec
 
 main :: IO ()
-main = mockEnv >> loadConfig >>= hspec . spec
+main = mockEnv >> doLoadConfig >>= hspec . spec
   where
-    loadConfig = Podenv.Config.load Nothing (Just "./test/config.dhall")
+    doLoadConfig = Podenv.Config.load Nothing (Just "./test/config.dhall")
 
     -- Fix env values while keeping the host cache for dhall
     mockEnv = do
@@ -41,12 +40,12 @@ spec config = describe "unit tests" $ do
   describe "builder config" $ do
     it "load firefox" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["firefox"]
-      be <- Podenv.Build.prepare defRe baseApp
-      Text.take 34 (Podenv.Build.beInfos be) `shouldBe` "# Containerfile localhost/3c922bca"
+      let be = Podenv.Runtime.createLocalhostRunEnv testEnv baseApp (Name "firefox")
+      Text.take 34 (Podenv.Runtime.buildInfo be) `shouldBe` "# Containerfile localhost/3c922bca"
     it "load nixify" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
-      be <- Podenv.Build.prepare defRe baseApp
-      Text.take 34 (Podenv.Build.beInfos be) `shouldBe` "# Containerfile localhost/3c922bca"
+      let be = Podenv.Runtime.createLocalhostRunEnv testEnv baseApp (Name "firefox")
+      Text.take 34 (Podenv.Runtime.buildInfo be) `shouldBe` "# Containerfile localhost/3c922bca"
     it "override nixpkgs when necessary" $ do
       let mkApp installables pin =
             Podenv.Config.defaultApp
@@ -139,8 +138,6 @@ spec config = describe "unit tests" $ do
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultRuntimeEnv "/data"
 
-    runPrepare' :: Application -> IO Context
-    runPrepare' app = runPrepare (Podenv.Application.Regular []) testEnv app (Name "test")
     runPrepare mode env app ctxName = runAppEnv env $ Podenv.Application.prepare mode app ctxName
 
     testEnv =
@@ -193,7 +190,7 @@ spec config = describe "unit tests" $ do
 
     getApp code args = do
       cli <- Podenv.Main.usage args
-      (app, mode, name, re) <- Podenv.Main.cliConfigLoad (cli {Podenv.Main.configExpr = Just . mkConfig $ code})
+      (app, mode, name, _) <- Podenv.Main.cliConfigLoad (cli {Podenv.Main.configExpr = Just . mkConfig $ code})
       ctx <- runPrepare mode (testEnv {_appHomeDir = Just "/home"}) app name
       pure (app, ctx)
 

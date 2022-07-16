@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -15,7 +16,6 @@
 -- * Runtime: execute with podman or kubernetes
 module Podenv.Main
   ( main,
-    runApp,
 
     -- * exports for tests
     usage,
@@ -31,7 +31,6 @@ import Data.Version (showVersion)
 import Options.Applicative hiding (command)
 import Paths_podenv (version)
 import Podenv.Application qualified
-import Podenv.Build qualified
 import Podenv.Config qualified
 import Podenv.Dhall
 import Podenv.Env
@@ -50,23 +49,16 @@ main = do
   when listApps (printApps configExpr >> exitSuccess)
 
   (app, mode, ctxName, re) <- cliConfigLoad cli
-  be <- Podenv.Build.prepare re app
   env <- createLocalhostEnv (app ^. appRuntime)
   ctx <- runAppEnv env $ Podenv.Application.prepare mode app ctxName
+  let run = Podenv.Runtime.createLocalhostRunEnv env app ctxName
 
   if showApplication
-    then putTextLn $ showApp app ctx be re
-    else do
-      Podenv.Build.beEnsure be (runApp re)
-      when update $ Podenv.Build.beUpdate be (runApp re)
-      Podenv.Runtime.execute re ctx
-
--- | helper function to run a Application.
-runApp :: Podenv.Runtime.RuntimeEnv -> Application -> IO ()
-runApp re app = do
-  env <- createLocalhostEnv (app ^. appRuntime)
-  ctx <- runAppEnv env $ Podenv.Application.prepare (Podenv.Application.Regular []) app (Name $ app ^. appName)
-  Podenv.Runtime.execute re ctx
+    then putTextLn $ showApp app ctx re
+    else flip runReaderT re do
+      Podenv.Runtime.buildRuntime run
+      when update $ Podenv.Runtime.updateRuntime run
+      Podenv.Runtime.execute run ctx
 
 usage :: [String] -> IO CLI
 usage args = do
@@ -195,7 +187,7 @@ cliConfigLoad cli@CLI {..} = do
   (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
   let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
-      re = RuntimeEnv {verbose, detach, system, volumesDir}
+      re = RuntimeEnv {verbose, detach, system, volumesDir, config = Just config}
       mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular extraArgs
   pure (app, mode, name', re)
 
@@ -214,12 +206,11 @@ cliPrepare CLI {..} = setShell . setEnvs . setVolumes . setCaps . setNS
 
     setCaps app' = foldr (appCapabilities %~) app' capsOverride
 
-showApp :: Application -> Context -> Podenv.Build.BuildEnv -> RuntimeEnv -> Text
-showApp Application {..} ctx be re = unlines infos
+showApp :: Application -> Context -> RuntimeEnv -> Text
+showApp Application {..} ctx re = unlines infos
   where
     infos =
-      ["[+] runtime: " <> Podenv.Build.beInfos be, ""]
-        <> ["[+] Capabilities", unwords (sort appCaps), ""]
+      ["[+] Capabilities", unwords appCaps, ""]
         <> ["[+] Command", cmd]
     cmd = Podenv.Runtime.showRuntimeCmd re ctx
     appCaps = concatMap showCap Podenv.Application.capsAll

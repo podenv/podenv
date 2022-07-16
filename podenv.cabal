@@ -72,7 +72,6 @@ library
                   , unix
   hs-source-dirs:   src
   exposed-modules:  Podenv.Application
-                  , Podenv.Build
                   , Podenv.Config
                   , Podenv.Context
                   , Podenv.Dhall

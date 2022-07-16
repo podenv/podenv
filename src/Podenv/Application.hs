@@ -18,17 +18,18 @@ module Podenv.Application
     capsAll,
     Cap (..),
     Mode (..),
+    setNix,
   )
 where
 
 import Data.Map qualified
 import Data.Set qualified as Set
 import Data.Text qualified as Text
+import Podenv.Context qualified as Ctx
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
-import Podenv.Runtime qualified as Ctx
 
 data Mode = Regular [Text] | Shell deriving (Show, Eq)
 
@@ -65,17 +66,8 @@ prepare mode app ctxName = do
 
     pure $ setEnv . ensureWorkdir . ensureHome . setRunAs
 
-  setNix <- case app ^. appRuntime of
-    Nix _ -> do
-      certs <- toText . fromMaybe (error "Can't find ca-bundle") <$> getCertLocation
-      setNixVolumes <- addVolumes ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
-      let setEnv =
-            Ctx.addEnv "NIX_SSL_CERT_FILE" certs
-              . Ctx.addEnv "TERM" "xterm"
-              . Ctx.addEnv "LC_ALL" "C.UTF-8"
-              . Ctx.addEnv "PATH" "/nix/var/nix/profiles/nix-install/bin:/bin"
-
-      pure $ setEnv . setNixVolumes
+  setNixEnv <- case app ^. appRuntime of
+    Nix _ -> setNix
     _ -> pure id
 
   setResolv <- case runtimeCtx of
@@ -98,7 +90,7 @@ prepare mode app ctxName = do
       | otherwise -> pure $ Ctx.command .~ command extraArgs
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
 
-  pure (disableSelinux . validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes . setNix $ ctx)
+  pure (disableSelinux . validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes . setNixEnv $ ctx)
   where
     runtimeCtx = case app ^. appRuntime of
       Image x -> Ctx.Container $ ImageName x
@@ -155,6 +147,18 @@ data Cap = Cap
     -- | How the capability change the context:
     capSet :: AppEnvT (Ctx.Context -> Ctx.Context)
   }
+
+setNix :: AppEnvT (Ctx.Context -> Ctx.Context)
+setNix = do
+  certs <- toText . fromMaybe (error "Can't find ca-bundle") <$> getCertLocation
+  setNixVolumes <- addVolumes ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
+  let setEnv =
+        Ctx.addEnv "NIX_SSL_CERT_FILE" certs
+          . Ctx.addEnv "TERM" "xterm"
+          . Ctx.addEnv "LC_ALL" "C.UTF-8"
+          . Ctx.addEnv "PATH" "/nix/var/nix/profiles/nix-install/bin:/bin"
+
+  pure $ setEnv . setNixVolumes
 
 -- | The main list of capabilities
 capsAll, capsToggle :: [Cap]
