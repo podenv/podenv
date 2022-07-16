@@ -36,15 +36,14 @@ data Mode = Regular | Shell
 prepare :: Mode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
 prepare mode app ctxName = do
   uid <- asks _hostUid
-  let baseCtx =
+  let ctx =
         (Ctx.defaultContext ctxName runtimeCtx)
           { Ctx._uid = uid,
             Ctx._namespace = app ^. appNamespace
           }
+  setVolumes <- addVolumes (app ^. appVolumes)
 
-  ctx <-
-    foldM addVolume baseCtx (app ^. appVolumes)
-      >>= flip (foldM setCaps) capsAll
+  setCaps <- addCaps (app ^. appCapabilities)
 
   setHome <- do
     appHome <- asks _appHomeDir
@@ -77,7 +76,7 @@ prepare mode app ctxName = do
         else pure $ Ctx.command .~ app ^. appCommand
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
 
-  pure (validate . setHome . setCommand . setResolv . modifiers $ ctx)
+  pure (validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes $ ctx)
   where
     runtimeCtx = case app ^. appRuntime of
       Image x -> Ctx.Container $ Ctx.ImageName x
@@ -125,13 +124,6 @@ prepare mode app ctxName = do
       let (k, v) = Text.breakOn "=" env
        in Ctx.addEnv k (Text.drop 1 v)
 
-    setCaps = capContextApply $ app ^. appCapabilities
-    capContextApply :: Capabilities -> Ctx.Context -> Cap -> AppEnvT Ctx.Context
-    capContextApply appCaps ctx Cap {..} =
-      if appCaps ^. capLens
-        then capSet ctx
-        else pure ctx
-
 -- | CapInfo describes a capability and how it modify the runtime context
 data Cap = Cap
   { capName :: Text,
@@ -139,7 +131,7 @@ data Cap = Cap
     -- | How to get the capability value from the user provided record:
     capLens :: Lens' Capabilities Bool,
     -- | How the capability change the context:
-    capSet :: Ctx.Context -> AppEnvT Ctx.Context
+    capSet :: AppEnvT (Ctx.Context -> Ctx.Context)
   }
 
 -- | The main list of capabilities
@@ -154,89 +146,82 @@ capsToggle =
     Cap "pipewire" "share pipewire socket" capPipewire setPipewire,
     Cap "video" "share video devices" capVideo setVideo,
     Cap "dri" "share graphic device" capDri setDri,
-    Cap "kvm" "share kvm device" capKvm (pure . Ctx.addDevice "/dev/kvm"),
-    Cap "tun" "share tun device" capTun (pure . Ctx.addDevice "/dev/net/tun"),
-    Cap "alsa" "share alsa devices" capAlsa (pure . Ctx.addDevice "/dev/snd"),
+    Cap "kvm" "share kvm device" capKvm (pure $ Ctx.addDevice "/dev/kvm"),
+    Cap "tun" "share tun device" capTun (pure $ Ctx.addDevice "/dev/net/tun"),
+    Cap "alsa" "share alsa devices" capAlsa (pure $ Ctx.addDevice "/dev/snd"),
     Cap "pulseaudio" "share pulseaudio socket" capPulseaudio setPulseaudio,
     Cap "ssh" "share ssh agent and keys" capSsh setSsh,
     Cap "gpg" "share gpg agent and keys" capGpg setGpg,
     Cap "x11" "share x11 socket" capX11 setX11,
     Cap "cwd" "mount cwd" capCwd setCwd,
     Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
-    Cap "hostfile" "mount command file arg" capHostfile pure,
+    Cap "hostfile" "mount command file arg" capHostfile (pure id),
     Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False),
     Cap "privileged" "run with extra privileges" capPrivileged (contextSet Ctx.privileged True)
   ]
 
-setTerminal :: Ctx.Context -> AppEnvT Ctx.Context
-setTerminal ctx =
-  pure $ ctx & (Ctx.interactive .~ True) . (Ctx.terminal .~ True) . Ctx.addEnv "TERM" "xterm-256color"
+setTerminal :: AppEnvT (Ctx.Context -> Ctx.Context)
+setTerminal =
+  pure $ (Ctx.interactive .~ True) . (Ctx.terminal .~ True) . Ctx.addEnv "TERM" "xterm-256color"
 
-setWayland :: Ctx.Context -> AppEnvT Ctx.Context
-setWayland ctx = do
+setWayland :: AppEnvT (Ctx.Context -> Ctx.Context)
+setWayland = do
   sktM <- asks _hostWaylandSocket
   case sktM of
-    Nothing -> setX11 ctx
-    Just skt -> setWayland' skt ctx
+    Nothing -> setX11
+    Just skt -> setWayland' skt
 
-setWayland' :: SocketName -> Ctx.Context -> AppEnvT Ctx.Context
-setWayland' (SocketName skt) ctx = do
+setWayland' :: SocketName -> AppEnvT (Ctx.Context -> Ctx.Context)
+setWayland' (SocketName skt) = do
   shareSkt <- addXdgRun skt
   pure $
-    ctx
-      & Ctx.directMount "/etc/machine-id"
-        . shareSkt
-        . Ctx.addEnv "GDK_BACKEND" "wayland"
-        . Ctx.addEnv "QT_QPA_PLATFORM" "wayland"
-        . Ctx.addEnv "WAYLAND_DISPLAY" (toText skt)
-        . Ctx.addEnv "XDG_SESSION_TYPE" "wayland"
-        . Ctx.addMount "/dev/shm" Ctx.tmpfs
+    Ctx.directMount "/etc/machine-id"
+      . shareSkt
+      . Ctx.addEnv "GDK_BACKEND" "wayland"
+      . Ctx.addEnv "QT_QPA_PLATFORM" "wayland"
+      . Ctx.addEnv "WAYLAND_DISPLAY" (toText skt)
+      . Ctx.addEnv "XDG_SESSION_TYPE" "wayland"
+      . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
-setPipewire :: Ctx.Context -> AppEnvT Ctx.Context
-setPipewire ctx = do
+setPipewire :: AppEnvT (Ctx.Context -> Ctx.Context)
+setPipewire = do
   let skt = "pipewire-0" -- TODO discover skt name
   shareSkt <- addXdgRun skt
-  pure $
-    ctx
-      & Ctx.directMount "/etc/machine-id"
-        . shareSkt
+  pure $ Ctx.directMount "/etc/machine-id" . shareSkt
 
-setDbus :: Ctx.Context -> AppEnvT Ctx.Context
-setDbus ctx = do
+setDbus :: AppEnvT (Ctx.Context -> Ctx.Context)
+setDbus = do
   let skt = "bus" -- TODO discover skt name
   (sktPath, shareSkt) <- addXdgRun' skt
   pure $
-    ctx
-      & Ctx.directMount "/etc/machine-id"
-        . Ctx.addEnv "DBUS_SESSION_BUS_ADDRESS" ("unix:path=" <> toText sktPath)
-        . shareSkt
+    Ctx.directMount "/etc/machine-id"
+      . Ctx.addEnv "DBUS_SESSION_BUS_ADDRESS" ("unix:path=" <> toText sktPath)
+      . shareSkt
 
-setVideo :: Ctx.Context -> AppEnvT Ctx.Context
-setVideo ctx = do
+setVideo :: AppEnvT (Ctx.Context -> Ctx.Context)
+setVideo = do
   devices <- getVideoDevices
   let addDevices =
         map (Ctx.addDevice . mappend "/dev/") devices
-  pure $ foldr (\c a -> c a) ctx addDevices
+  pure $ foldr (.) id addDevices
 
-setDri :: Ctx.Context -> AppEnvT Ctx.Context
-setDri ctx = do
+setDri :: AppEnvT (Ctx.Context -> Ctx.Context)
+setDri = do
   nvidia <- isNVIDIAEnabled
   pure $
-    ctx
-      & if nvidia
-        then Ctx.addDevice "/dev/nvidiactl" . Ctx.addDevice "/dev/nvidia0"
-        else Ctx.addDevice "/dev/dri"
+    if nvidia
+      then Ctx.addDevice "/dev/nvidiactl" . Ctx.addDevice "/dev/nvidia0"
+      else Ctx.addDevice "/dev/dri"
 
-setPulseaudio :: Ctx.Context -> AppEnvT Ctx.Context
-setPulseaudio ctx = do
+setPulseaudio :: AppEnvT (Ctx.Context -> Ctx.Context)
+setPulseaudio = do
   shareSkt <- addXdgRun "pulse"
   uid <- asks _hostUid
   let pulseServer = "/run/user/" <> show uid <> "/pulse/native"
   pure $
-    ctx
-      & Ctx.directMount "/etc/machine-id"
-        . shareSkt
-        . Ctx.addEnv "PULSE_SERVER" pulseServer
+    Ctx.directMount "/etc/machine-id"
+      . shareSkt
+      . Ctx.addEnv "PULSE_SERVER" pulseServer
 
 getHomes :: Text -> AppEnvT (FilePath, FilePath)
 getHomes help = do
@@ -255,38 +240,50 @@ setAgent var value = do
     Nothing -> id
     Just path -> Ctx.addEnv (toText var) (toText path) . Ctx.directMount (takeDirectory path)
 
-setSsh :: Ctx.Context -> AppEnvT Ctx.Context
-setSsh ctx = do
-  shareAgent <- setAgent "SSH_AUTH_SOCK" =<< asks _hostSSHAgent
-  pure $ ctx & shareAgent
+setSsh :: AppEnvT (Ctx.Context -> Ctx.Context)
+setSsh = setAgent "SSH_AUTH_SOCK" =<< asks _hostSSHAgent
 
-setGpg :: Ctx.Context -> AppEnvT Ctx.Context
-setGpg ctx = do
+setGpg :: AppEnvT (Ctx.Context -> Ctx.Context)
+setGpg = do
   shareConfig <- mountHomeConfig "gpg" ".gnupg"
   shareGpg <- addXdgRun "gnupg"
-  pure $ ctx & shareGpg . shareConfig
+  pure $ shareGpg . shareConfig
 
-setX11 :: Ctx.Context -> AppEnvT Ctx.Context
-setX11 ctx = do
+setX11 :: AppEnvT (Ctx.Context -> Ctx.Context)
+setX11 = do
   display <- asks _hostDisplay
   pure $
-    ctx
-      & Ctx.directMount "/tmp/.X11-unix" . Ctx.addEnv "DISPLAY" (toText display) . Ctx.addMount "/dev/shm" Ctx.tmpfs
+    Ctx.directMount "/tmp/.X11-unix" . Ctx.addEnv "DISPLAY" (toText display) . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
-setCwd :: Ctx.Context -> AppEnvT Ctx.Context
-setCwd ctx = do
+setCwd :: AppEnvT (Ctx.Context -> Ctx.Context)
+setCwd = do
   cwd <- asks _hostCwd
-  pure $ ctx & Ctx.addMount "/data" (Ctx.rwHostPath cwd) . (Ctx.workdir ?~ "/data")
+  pure $ Ctx.addMount "/data" (Ctx.rwHostPath cwd) . (Ctx.workdir ?~ "/data")
 
-addVolume :: Ctx.Context -> Text -> AppEnvT Ctx.Context
-addVolume ctx volume = do
+addVolumes :: [Text] -> AppEnvT (Ctx.Context -> Ctx.Context)
+addVolumes volumes = do
+  ops <- traverse addVolume volumes
+  pure $ foldr (>>>) id ops
+
+addVolume :: Text -> AppEnvT (Ctx.Context -> Ctx.Context)
+addVolume volume = do
   containerPath' <- resolveContainerPath containerPath
   hostPath' <- resolveVolume hostPath
-  pure $ Ctx.addMount containerPath' hostPath' ctx
+  pure $ Ctx.addMount containerPath' hostPath'
   where
     (hostPath, containerPath) = case Text.breakOn ":" volume of
       (x, "") -> (x, x)
       (x, y) -> (x, Text.drop 1 y)
+
+addCaps :: Capabilities -> AppEnvT (Ctx.Context -> Ctx.Context)
+addCaps appCaps = do
+  caps <- traverse (addCap appCaps) capsAll
+  pure $ foldr (.) id caps
+
+addCap :: Capabilities -> Cap -> AppEnvT (Ctx.Context -> Ctx.Context)
+addCap appCaps Cap {..}
+  | appCaps ^. capLens = capSet
+  | otherwise = pure id
 
 resolveFileArgs :: [Text] -> AppEnvT (Ctx.Context -> Ctx.Context)
 resolveFileArgs args = do
@@ -373,5 +370,5 @@ addXdgRun' fp = do
     )
 
 -- | Helper for capabilities that are directly represented in the context
-contextSet :: Lens' Ctx.Context a -> a -> Ctx.Context -> AppEnvT Ctx.Context
-contextSet lens value ctx = pure ((lens .~ value) ctx)
+contextSet :: Lens' Ctx.Context a -> a -> AppEnvT (Ctx.Context -> Ctx.Context)
+contextSet lens value = pure ((lens .~ value))
