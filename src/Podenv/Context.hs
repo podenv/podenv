@@ -28,25 +28,25 @@ import System.Linux.Capabilities (Capability)
 data RuntimeContext
   = Container ImageName
   | Bubblewrap FilePath
-  deriving (Show)
+  deriving (Show, Eq)
 
 data Mode = RO | RW
-  deriving (Show)
+  deriving (Show, Eq)
 
 data VolumeType = HostPath FilePath | TmpFS | Volume Text
-  deriving (Show)
+  deriving (Show, Eq)
 
 data Volume = MkVolume Mode VolumeType
-  deriving (Show)
+  deriving (Show, Eq)
 
 data RunAs = RunAsRoot | RunAsHostUID | RunAsAnyUID
-  deriving (Show)
+  deriving (Show, Eq)
 
 data Port = PortTcp Natural | PortUdp Natural
-  deriving (Show)
+  deriving (Show, Eq)
 
 newtype Name = Name {unName :: Text}
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- | The application context to be executed by podman or kubectl
 data Context = Context
@@ -80,7 +80,7 @@ data Context = Context
     _terminal :: Bool,
     _privileged :: Bool
   }
-  deriving (Show)
+  deriving (Show, Eq)
 
 $(makeLenses ''Context)
 

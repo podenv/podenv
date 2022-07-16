@@ -19,10 +19,10 @@ import Podenv.Dhall hiding (name)
 import Podenv.Prelude
 
 newtype ImageName = ImageName {unImageName :: Text}
-  deriving (Show)
+  deriving (Show, Eq)
 
 newtype Containerfile = Containerfile Text
-  deriving (Show)
+  deriving (Show, Eq)
 
 mkImageName :: ContainerBuild -> ImageName
 mkImageName containerBuild = ImageName $ "localhost/" <> name

@@ -16,9 +16,11 @@ module Podenv.Env
     isNVIDIAEnabled,
     ensureResolvConf,
     getVideoDevices,
+    getCertLocation,
   )
 where
 
+import Control.Monad (msum)
 import Data.List.NonEmpty qualified
 import Data.Maybe qualified
 import Data.Text qualified
@@ -43,7 +45,8 @@ data AppEnv = AppEnv
     -- environment query
     _isNVIDIAEnabled :: IO Bool,
     _ensureResolvConf :: FilePath -> IO (Context -> Context),
-    _getVideoDevices :: IO [FilePath]
+    _getVideoDevices :: IO [FilePath],
+    _getCertLocation :: IO (Maybe FilePath)
   }
 
 -- | This newtype hide the inner IO so that only the ones defined below are available.
@@ -61,6 +64,9 @@ ensureResolvConf :: FilePath -> AppEnvT (Context -> Context)
 ensureResolvConf fp = AppEnvT $ do
   ensure <- asks _ensureResolvConf
   lift $ ensure fp
+
+getCertLocation :: AppEnvT (Maybe FilePath)
+getCertLocation = AppEnvT $ lift =<< asks _getCertLocation
 
 runAppEnv :: AppEnv -> AppEnvT a -> IO a
 runAppEnv env (AppEnvT r) = runReaderT r env
@@ -101,6 +107,28 @@ doEnsureResolvConf fp
 doGetVideoDevices :: IO [FilePath]
 doGetVideoDevices = map toString . filter ("video" `Text.isPrefixOf`) . map toText <$> listDirectory "/dev"
 
+doGetCertLocation :: IO (Maybe FilePath)
+doGetCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$> paths)
+  where
+    checkEnv :: MaybeT IO FilePath
+    checkEnv = do
+      env <- lift $ lookupEnv "NIX_SSL_CERT_FILE"
+      case env of
+        Just fp -> checkPath fp
+        Nothing -> mzero
+    checkPath :: FilePath -> MaybeT IO FilePath
+    checkPath fp = do
+      exist <- lift $ doesPathExist fp
+      unless exist mzero
+      pure fp
+    -- Copied from profile.d/nix.sh
+    paths =
+      [ "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/ssl/ca-bundle.pem",
+        "/etc/ssl/certs/ca-bundle.crt"
+      ]
+
 createLocalhostEnv :: Runtime -> IO AppEnv
 createLocalhostEnv r = do
   _hostUid <- getRealUserID
@@ -118,4 +146,5 @@ createLocalhostEnv r = do
   let _isNVIDIAEnabled = doesPathExist "/dev/nvidiactl"
       _ensureResolvConf = doEnsureResolvConf
       _getVideoDevices = doGetVideoDevices
+      _getCertLocation = doGetCertLocation
   pure $ AppEnv {..}

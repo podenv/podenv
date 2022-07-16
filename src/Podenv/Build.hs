@@ -10,13 +10,11 @@ module Podenv.Build
   )
 where
 
-import Control.Monad qualified
-import Data.Digest.Pure.SHA qualified as SHA
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Podenv.Config qualified
 import Podenv.Dhall
-import Podenv.Image (ImageName (..))
+import Podenv.Image
 import Podenv.Prelude
 import Podenv.Runtime qualified
 import System.Directory (doesDirectoryExist, renameFile)
@@ -42,22 +40,12 @@ defaultBuildEnv beInfos = BuildEnv {..}
     beUpdate = const $ pure ()
 
 -- | Create the build env
-prepare :: Podenv.Runtime.RuntimeEnv -> Application -> IO (BuildEnv, Application)
+prepare :: Podenv.Runtime.RuntimeEnv -> Application -> IO BuildEnv
 prepare re app = case runtime app of
-  Image name -> pure (defaultBuildEnv name, addArgs app)
-  Container cb -> pure (prepareContainer cb, addArgs app)
-  Rootfs fp -> pure (defaultBuildEnv fp, addArgs app)
+  Image name -> pure (defaultBuildEnv name)
+  Container cb -> pure (prepareContainer cb)
+  Rootfs fp -> pure (defaultBuildEnv fp)
   Nix expr -> prepareNix re app expr
-  where
-    addArgs = appCommand %~ (<> Podenv.Runtime.extraArgs re)
-
-mkImageName :: ContainerBuild -> ImageName
-mkImageName containerBuild = ImageName $ "localhost/" <> name
-  where
-    -- The image name can be set by the container build,
-    -- otherwise it default to the Containerfile hash
-    name = fromMaybe imageHash (containerBuild ^. cbImage_name)
-    imageHash = toText . SHA.showDigest . SHA.sha256 . encodeUtf8 $ containerBuild ^. cbContainerfile
 
 -- | Container build env
 prepareContainer :: ContainerBuild -> BuildEnv
@@ -86,66 +74,33 @@ prepareContainer containerBuild = BuildEnv {..}
           (unlines ["FROM " <> imageName, "RUN " <> cmd])
           (containerBuild ^. cbImage_volumes)
 
-getCertLocation :: IO (Maybe FilePath)
-getCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$> paths)
-  where
-    checkEnv :: MaybeT IO FilePath
-    checkEnv = do
-      env <- lift $ lookupEnv "NIX_SSL_CERT_FILE"
-      case env of
-        Just fp -> checkPath fp
-        Nothing -> mzero
-    checkPath :: FilePath -> MaybeT IO FilePath
-    checkPath fp = do
-      exist <- lift $ doesPathExist fp
-      unless exist mzero
-      pure fp
-    -- Copied from profile.d/nix.sh
-    paths =
-      [ "/etc/pki/tls/certs/ca-bundle.crt",
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/ssl/ca-bundle.pem",
-        "/etc/ssl/certs/ca-bundle.crt"
-      ]
-
 -- | Nix build env
-prepareNix :: Podenv.Runtime.RuntimeEnv -> Application -> Flakes -> IO (BuildEnv, Application)
+prepareNix :: Podenv.Runtime.RuntimeEnv -> Application -> Flakes -> IO BuildEnv
 prepareNix re app flakes = do
-  certs <- toText . fromMaybe (error "Can't find ca-bundle") <$> getCertLocation
   -- TODO: check howto re-use the host /nix
-  pure
-    ( BuildEnv
-        { beInfos = "# Nix expr:\n" <> Text.unwords nixArgs,
-          beEnsure = beEnsure certs,
-          beUpdate = const $ error "Nix update is not implemented"
-        },
-      updateApp certs app
-    )
+  let certs = undefined
+  pure $
+    BuildEnv
+      { beInfos = "# Nix expr:\n" <> Text.unwords (nixArgs flakes),
+        beEnsure = beEnsure certs,
+        beUpdate = const $ error "Nix update is not implemented"
+      }
   where
     name = app ^. appName
     fileName = toString $ "nix_" <> name
 
     -- The location where we expect to find the `nix` command
     nixStore = Podenv.Runtime.volumesDir re </> "nix-store"
-    nixCommandProfile = "var/nix/profiles/nix-install"
-    nixCommandPath = "/nix/" <> nixCommandProfile <> "/bin/nix"
-    nixFlags = ["--extra-experimental-features", "nix-command flakes"]
-
-    -- The nix command args
-    nixExtraArgs = case nixpkgs flakes of
-      Just pin | not (all (Text.isPrefixOf pin) (installables flakes)) -> ["--override-input", "nixpkgs", pin]
-      _ -> []
-    nixArgs = nixExtraArgs <> installables flakes
 
     beEnsure certs runApp = do
-      built <- checkIfBuilt fileName (show nixArgs)
+      built <- checkIfBuilt fileName (show $ nixArgs flakes)
       unless built $ do
         ensureNixInstalled
         _ <- runApp (buildApp certs)
 
         -- save that the build succeeded
         cacheDir <- getCacheDir
-        Text.writeFile (cacheDir </> fileName) (show nixArgs)
+        Text.writeFile (cacheDir </> fileName) (show $ nixArgs flakes)
 
     debug = when (Podenv.Runtime.verbose re) . hPutStrLn stderr . mappend "[+] "
 
@@ -172,28 +127,9 @@ prepareNix re app flakes = do
             [toText nixCommandPath, "--verbose"]
               <> nixFlags
               <> ["build", "--no-link"]
-              <> nixArgs
+              <> nixArgs flakes
         }
         & (appCapabilities . capNetwork .~ True)
-
-    runCommand =
-      [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
-        [] ->
-          ["run"] <> nixArgs <> case Podenv.Runtime.extraArgs re of
-            [] -> []
-            xs -> ["--"] <> xs
-        appArgs -> ["shell"] <> nixArgs <> ["--command"] <> appArgs <> Podenv.Runtime.extraArgs re
-    addCommand = appCommand .~ runCommand
-    addVolumes = appVolumes %~ mappend ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
-    addEnvirons certs =
-      appEnviron
-        %~ mappend
-          [ "NIX_SSL_CERT_FILE=" <> certs,
-            "TERM=xterm",
-            "LC_ALL=C.UTF-8",
-            "PATH=/nix/var/nix/profiles/nix-install/bin:/bin"
-          ]
-    updateApp certs = addCommand . addVolumes . addEnvirons certs
 
 -- | Build a container image
 buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()

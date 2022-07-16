@@ -30,7 +30,7 @@ import Podenv.Image
 import Podenv.Prelude
 import Podenv.Runtime qualified as Ctx
 
-data Mode = Regular | Shell
+data Mode = Regular [Text] | Shell deriving (Show, Eq)
 
 -- | Converts an Application into a Context
 prepare :: Mode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
@@ -65,18 +65,40 @@ prepare mode app ctxName = do
 
     pure $ setEnv . ensureWorkdir . ensureHome . setRunAs
 
+  setNix <- case app ^. appRuntime of
+    Nix _ -> do
+      certs <- toText . fromMaybe (error "Can't find ca-bundle") <$> getCertLocation
+      setNixVolumes <- addVolumes ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
+      let setEnv =
+            Ctx.addEnv "NIX_SSL_CERT_FILE" certs
+              . Ctx.addEnv "TERM" "xterm"
+              . Ctx.addEnv "LC_ALL" "C.UTF-8"
+              . Ctx.addEnv "PATH" "/nix/var/nix/profiles/nix-install/bin:/bin"
+
+      pure $ setEnv . setNixVolumes
+    _ -> pure id
+
   setResolv <- case runtimeCtx of
     Ctx.Bubblewrap fp -> ensureResolvConf fp
     _ -> pure id
 
+  let command = \extraArgs -> case app ^. appRuntime of
+        Nix flakes ->
+          [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
+            [] ->
+              ["run"] <> nixArgs flakes <> case extraArgs of
+                [] -> []
+                xs -> ["--"] <> xs
+            appArgs -> ["shell"] <> nixArgs flakes <> ["--command"] <> appArgs <> extraArgs
+        _ -> (app ^. appCommand) <> extraArgs
+
   setCommand <- case mode of
-    Regular ->
-      if app ^. appCapabilities . capHostfile
-        then resolveFileArgs $ app ^. appCommand
-        else pure $ Ctx.command .~ app ^. appCommand
+    Regular extraArgs
+      | app ^. appCapabilities . capHostfile -> resolveFileArgs (command extraArgs)
+      | otherwise -> pure $ Ctx.command .~ command extraArgs
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
 
-  pure (validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes $ ctx)
+  pure (disableSelinux . validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes . setNix $ ctx)
   where
     runtimeCtx = case app ^. appRuntime of
       Image x -> Ctx.Container $ ImageName x
@@ -89,7 +111,7 @@ prepare mode app ctxName = do
       _ -> ctx
 
     modifiers :: Ctx.Context -> Ctx.Context
-    modifiers = disableSelinux . addSysCaps . addEnvs
+    modifiers = addSysCaps . addEnvs
 
     -- Check if path is part of a mount point
     isMounted :: FilePath -> Ctx.Context -> Bool

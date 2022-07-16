@@ -10,7 +10,10 @@ module Podenv
     select,
 
     -- * Context
-    appToContext,
+    AppEnv (..),
+    Context (..),
+    Name (..),
+    prepare,
 
     -- * Runtime
     RuntimeEnv (..),
@@ -28,9 +31,6 @@ import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
 import Podenv.Runtime
-
-appToContext :: AppEnv -> Application -> Name -> IO Context
-appToContext env app = runAppEnv env . prepare Regular app
 
 loadConfig :: Text -> IO Config
 loadConfig = Podenv.Config.load Nothing . Just

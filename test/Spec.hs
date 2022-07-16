@@ -4,16 +4,18 @@
 
 module Main where
 
-import Data.Text (pack)
+import Data.Text (Text, pack)
 import Data.Text qualified as Text
+import Podenv hiding (command)
 import Podenv.Application qualified
 import Podenv.Build qualified
 import Podenv.Config qualified
+import Podenv.Context (command)
 import Podenv.Context qualified
 import Podenv.Dhall qualified
 import Podenv.Env
 import Podenv.Main qualified
-import Podenv.Prelude (mayFail)
+import Podenv.Prelude (mayFail, (^.))
 import Podenv.Runtime qualified
 import System.Environment (getEnv, setEnv)
 import Test.Hspec
@@ -39,26 +41,28 @@ spec config = describe "unit tests" $ do
   describe "builder config" $ do
     it "load firefox" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["firefox"]
-      (be, _) <- Podenv.Build.prepare defRe baseApp
+      be <- Podenv.Build.prepare defRe baseApp
       Text.take 34 (Podenv.Build.beInfos be) `shouldBe` "# Containerfile localhost/3c922bca"
     it "load nixify" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
-      (be, _) <- Podenv.Build.prepare defRe baseApp
+      be <- Podenv.Build.prepare defRe baseApp
       Text.take 34 (Podenv.Build.beInfos be) `shouldBe` "# Containerfile localhost/3c922bca"
     it "override nixpkgs when necessary" $ do
       let mkApp installables pin =
             Podenv.Config.defaultApp
               { Podenv.Dhall.runtime = Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables pin)
               }
+          checkCommand test app expected = do
+            ctx <- runPrepare (Podenv.Application.Regular []) (testEnv {_appHomeDir = Just "/tmp"}) app (Name "test")
+            (ctx ^. command) `test` expected
+          commandShouldContain = checkCommand shouldContain
+          commandShouldNotContain = checkCommand shouldNotContain
 
-      (_, app0) <- Podenv.Build.prepare defRe (mkApp ["nixpkgs#hello"] (Just "nixpkgs/42"))
-      (Podenv.Dhall.command app0) `shouldContain` ["--override-input", "nixpkgs"]
+      mkApp ["nixpkgs#hello"] (Just "nixpkgs/42") `commandShouldContain` ["--override-input", "nixpkgs"]
 
-      (_, app1) <- Podenv.Build.prepare defRe (mkApp ["nixpkgs/42#hello"] (Just "nixpkgs/42"))
-      (Podenv.Dhall.command app1) `shouldNotContain` ["--override-input", "nixpkgs"]
+      mkApp ["nixpkgs/42#hello"] (Just "nixpkgs/42") `commandShouldNotContain` ["--override-input", "nixpkgs"]
 
-      (_, app2) <- Podenv.Build.prepare defRe (mkApp ["nixpkgs/42#hello", "nixGL"] (Just "nixpkgs/42"))
-      (Podenv.Dhall.command app2) `shouldContain` ["--override-input", "nixpkgs"]
+      mkApp ["nixpkgs/42#hello", "nixGL"] (Just "nixpkgs/42") `commandShouldContain` ["--override-input", "nixpkgs"]
 
   describe "cli parser" $ do
     it "pass command args" $ do
@@ -102,7 +106,7 @@ spec config = describe "unit tests" $ do
       let cmd = ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--env", "GDK_BACKEND=wayland", "--env", "QT_QPA_PLATFORM=wayland", "--env", "WAYLAND_DISPLAY=wayland-0", "--env", "XDG_RUNTIME_DIR=/run/user/1000", "--env", "XDG_SESSION_TYPE=wayland", "--mount", "type=tmpfs,destination=/dev/shm", "--volume", "/etc/machine-id:/etc/machine-id", "--mount", "type=tmpfs,destination=/run/user", "--volume", "/run/user/1000/wayland-0:/run/user/1000/wayland-0", "--name", "image-8bfbaa", "ubi8"]
        in podmanCliTest ["--wayland", "image:ubi8"] cmd
     it "hostfile are substituted" $
-      let cmd = ["run", "--rm", "--network", "none", "--volume", "/proc/cmdline:/data/cmdline", "--volume", "/etc/hosts:/data/hosts", "--name", "image-8bfbaa", "ubi8", "cat", "/data/hosts", "/data/cmdline"]
+      let cmd = ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/proc/cmdline:/data/cmdline", "--volume", "/etc/hosts:/data/hosts", "--name", "image-8bfbaa", "ubi8", "cat", "/data/hosts", "/data/cmdline"]
        in podmanCliTest ["--hostfile", "image:ubi8", "cat", "/etc/hosts", "/proc/cmdline"] cmd
     it "run with name" $
       podmanCliTest
@@ -113,14 +117,14 @@ spec config = describe "unit tests" $ do
         ["--network", "--shell", "image:ubi8"]
         ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "image-8bfbaa", "--env", "TERM=xterm-256color", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
     it "shell override hostfile" $ do
-      let expected extra = ["run", "-i", "--detach-keys", "", "-t", "--rm", "--network", "none", "--env", "TERM=xterm-256color"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
+      let expected seArgs extra = ["run", "-i", "--detach-keys", "", "-t", "--rm"] <> seArgs <> ["--network", "none", "--env", "TERM=xterm-256color"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
           cmd = ["--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"]
       podmanCliTest
         (["--shell"] <> cmd)
-        (expected [] <> ["/bin/sh"])
+        (expected [] [] <> ["/bin/sh"])
       podmanCliTest
         cmd
-        (expected ["--volume", "/etc/hosts:/data/hosts"] <> ["vi", "/data/hosts"])
+        (expected ["--security-opt", "label=disable"] ["--volume", "/etc/hosts:/data/hosts"] <> ["vi", "/data/hosts"])
     it "run many volumes" $
       podmanCliTest
         ["--volume", "/home/data:/tmp/data", "--volume", "/tmp", "--volume", "/old:/tmp/data", "image:ubi8"]
@@ -135,6 +139,8 @@ spec config = describe "unit tests" $ do
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultRuntimeEnv "/data"
 
+    runPrepare' :: Application -> IO Context
+    runPrepare' app = runPrepare (Podenv.Application.Regular []) testEnv app (Name "test")
     runPrepare mode env app ctxName = runAppEnv env $ Podenv.Application.prepare mode app ctxName
 
     testEnv =
@@ -149,7 +155,8 @@ spec config = describe "unit tests" $ do
           _hostSSHAgent = Nothing,
           _isNVIDIAEnabled = pure False,
           _ensureResolvConf = const $ pure id,
-          _getVideoDevices = pure []
+          _getVideoDevices = pure [],
+          _getCertLocation = pure $ Just "/etc/ca"
         }
 
     getFP ctx = case Podenv.Context._runtimeCtx ctx of
@@ -174,31 +181,30 @@ spec config = describe "unit tests" $ do
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage (["--rw"] <> args)
-      (cliApp, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
-      (_, app) <- Podenv.Build.prepare re' cliApp
-      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
       ctx <- runPrepare mode testEnv app ctxName
+      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
       Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True, rw = True")
-      ctx <- runPrepare Podenv.Application.Regular testEnv app (Podenv.Context.Name "env")
+      ctx <- runPrepare (Podenv.Application.Regular []) testEnv app (Podenv.Context.Name "env")
       Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
 
     getApp code args = do
       cli <- Podenv.Main.usage args
-      (baseApp, _, _, re) <- Podenv.Main.cliConfigLoad (cli {Podenv.Main.configExpr = Just . mkConfig $ code})
-      (_, app) <- Podenv.Build.prepare re baseApp
-      pure app
+      (app, mode, name, re) <- Podenv.Main.cliConfigLoad (cli {Podenv.Main.configExpr = Just . mkConfig $ code})
+      ctx <- runPrepare mode (testEnv {_appHomeDir = Just "/home"}) app name
+      pure (app, ctx)
 
     cliTest gotCode args expectedCode = do
-      got <- getApp gotCode args
-      expected <- getApp expectedCode []
+      (_, got) <- getApp gotCode args
+      (_, expected) <- getApp expectedCode []
       got `shouldBe` expected
 
     nixTest code args expectedCommand = do
-      app <- getApp code args
-      drop 3 (Podenv.Dhall.command app) `shouldBe` expectedCommand
+      (_, ctx) <- getApp code args
+      drop 3 (ctx ^. command) `shouldBe` expectedCommand
 
     loadTest code expected = do
       config' <- loadConfig Nothing code
