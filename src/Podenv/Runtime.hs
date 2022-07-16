@@ -10,7 +10,7 @@
 
 -- | This module contains the podman/bubblewrap context wrapper
 module Podenv.Runtime
-  ( execute,
+  ( createLocalhostRunEnv,
     showRuntimeCmd,
     getPodmanPodStatus,
     deletePodmanPod,
@@ -24,6 +24,7 @@ module Podenv.Runtime
     bwrapRunArgs,
 
     -- * data type and lenses
+    RunEnv (..),
     module Podenv.Context,
     RuntimeEnv (..),
     defaultRuntimeEnv,
@@ -33,17 +34,150 @@ where
 import Data.Map.Strict qualified as Map
 import Data.Set qualified
 import Data.Text qualified as Text
-import Podenv.Config (defaultSystemConfig)
+import Data.Text.IO qualified as Text
+import Podenv.Application qualified
+import Podenv.Config (Config, defaultSystemConfig, select)
 import Podenv.Context
-import Podenv.Dhall (SystemConfig (..), sysDns)
+import Podenv.Dhall hiding (Container, command, environ, name, namespace, network)
+import Podenv.Dhall qualified as Podenv
+import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
+import System.Directory (doesDirectoryExist, renameFile)
+import System.Exit (ExitCode (ExitSuccess))
 import System.Process.Typed qualified as P
 
-execute :: RuntimeEnv -> Context -> IO ()
-execute re ctx = do
-  traverse_ (ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
-  runReaderT (doExecute ctx) re
+data RunEnv = RunEnv
+  { buildInfo :: Text,
+    buildRuntime :: ContextEnvT (),
+    updateRuntime :: ContextEnvT (),
+    execute :: Context -> ContextEnvT ()
+  }
+
+createLocalhostRunEnv :: AppEnv -> Application -> Name -> RunEnv
+createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
+  where
+    (buildInfo, (buildRuntime, updateRuntime)) = case app ^. appRuntime of
+      Podenv.Image iname -> ("image:" <> iname, noBuilder)
+      Podenv.Rootfs fp -> ("rootfs:" <> fp, noBuilder)
+      Podenv.Container cb -> manageContainer cb
+      Podenv.Nix expr -> ("nix:" <> show expr, (prepareNix expr, error "Nix update is not implemented"))
+      where
+        noBuilder = (pure (), pure ())
+
+    execute :: Context -> ContextEnvT ()
+    execute ctx = do
+      re <- ask
+      traverse_ (liftIO . ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
+      case ctx ^. runtimeCtx of
+        Container image -> executePodman ctx image
+        Bubblewrap fp -> executeBubblewrap ctx fp
+
+    manageContainer cb = ("# Containerfile " <> imageName, (buildContainer, updateContainer))
+      where
+        buildContainer = do
+          imageReady <- liftIO $ checkImageExist imageName
+          unless imageReady $ do
+            debug $ "Building image: " <> imageName
+            liftIO $ buildImage imageName fileName fileContent (cb ^. cbImage_volumes)
+
+        updateContainer = case cb ^. cbImage_update of
+          Nothing -> error "The container is missing the `image_update` attribute"
+          Just cmd -> liftIO do
+            buildImage
+              imageName
+              (fileName <> "-update")
+              (unlines ["FROM " <> imageName, "RUN " <> cmd])
+              (cb ^. cbImage_volumes)
+
+        fileContent = cb ^. cbContainerfile
+        ImageName imageName = mkImageName cb
+        fileName = "Containerfile_" <> toString (imageNameToFP imageName)
+          where
+            imageNameToFP = Text.replace "/" "_" . Text.replace ":" "-"
+
+    prepareNix :: Flakes -> ContextEnvT ()
+    prepareNix flakes = do
+      built <- checkIfBuilt fileName (show $ nixArgs flakes)
+      unless built $ do
+        ensureNixInstalled
+        ctx <- liftIO buildCtx
+        execute ctx
+        liftIO do
+          cacheDir <- getCacheDir
+          Text.writeFile (cacheDir </> fileName) (show $ nixArgs flakes)
+      where
+        fileName = toString $ "nix_" <> unName ctxName
+
+        -- The location where we expect to find the `nix` command
+        nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
+        ensureNixInstalled = do
+          re <- ask
+          let store = nixStore re
+          debug $ toText $ "Checking if " <> store </> nixCommandProfile <> " exists"
+          nixInstalled <- liftIO $ doesSymlinkExist $ store </> nixCommandProfile
+          unless nixInstalled $ do
+            debug $ toText $ "Checking if " <> store </> "store" <> " exists"
+            storeExist <- liftIO $ doesDirectoryExist $ store </> "store"
+            when storeExist $ error $ "existing nix-store is invalid, try removing " <> toText (nixStore re)
+
+            let cfg = fromMaybe (error "Need config") $ config re
+                nixSetupApp = case Podenv.Config.select cfg ["nix.setup"] of
+                  Left e -> error e
+                  Right (_, setupApp) -> setupApp
+                mode = Podenv.Application.Regular []
+            debug "[+] Installing nix-store with nix.setup"
+            ctx <- liftIO $ runAppEnv appEnv $ Podenv.Application.prepare mode nixSetupApp (Name "nix.setup")
+            execute ctx
+
+        builderName = Name $ "nix-builder-" <> unName ctxName
+        buildCtx = runAppEnv appEnv do
+          let ctx = Podenv.Context.defaultContext builderName (Bubblewrap "/")
+          setNix <- Podenv.Application.setNix
+          pure $ ctx & setNix . (Podenv.Context.network .~ True)
+
+-- | Build a container image
+buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()
+buildImage imageName fileName containerfile volumes = do
+  hostUid <- getRealUserID
+  cacheDir <- getCacheDir
+  createDirectoryIfMissing True cacheDir
+  let want = fileName <> ".want"
+      wantfp = cacheDir </> want
+  Text.writeFile wantfp containerfile
+  -- podman build does not support regular volume, lets ensure absolute path
+  volumesArgs <- traverse (mkVolumeArg cacheDir) volumes
+  let buildArgs =
+        ["build"]
+          <> ["-t", toString imageName]
+          <> ["--build-arg", "USER_UID=" <> show hostUid]
+          <> map toString volumesArgs
+          <> ["-f", want, cacheDir]
+      cmd = Podenv.Runtime.podman buildArgs
+  -- putTextLn $ "Building " <> imageName <> " with " <> toText want <> ": " <> show cmd
+  P.runProcess_ cmd
+  -- save that the build succeeded
+  renameFile wantfp (cacheDir </> fileName)
+  where
+    mkVolumeArg :: FilePath -> Text -> IO Text
+    mkVolumeArg cacheDir volume = do
+      createDirectoryIfMissing True hostPath
+      pure $ "-v=" <> toText hostPath <> ":" <> containerPath <> ":Z"
+      where
+        (p1, p2) = Text.break (== ':') volume
+        hostPath = cacheDir </> toString p1
+        containerPath = Text.drop 1 p2
+
+checkImageExist :: Text -> IO Bool
+checkImageExist imageName = do
+  res <- P.runProcess (Podenv.Runtime.podman ["image", "exists", Text.unpack imageName])
+  pure $ res == ExitSuccess
+
+checkIfBuilt :: MonadIO m => FilePath -> Text -> m Bool
+checkIfBuilt filename expected = liftIO do
+  cacheDir <- getCacheDir
+  current <- readFileM (cacheDir </> filename)
+  pure $ current == expected
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
@@ -58,11 +192,6 @@ ensureHostDirectory' fp = do
   unless exist $ do
     createDirectoryIfMissing True fp
     P.runProcess_ $ P.proc "/bin/chcon" ["system_u:object_r:container_file_t:s0", fp]
-
-doExecute :: Context -> ContextEnvT ()
-doExecute ctx = case ctx ^. runtimeCtx of
-  Container image -> executePodman ctx image
-  Bubblewrap fp -> executeBubblewrap ctx fp
 
 executeBubblewrap :: Context -> FilePath -> ContextEnvT ()
 executeBubblewrap ctx fp = do
@@ -151,13 +280,13 @@ data RuntimeEnv = RuntimeEnv
   { verbose :: Bool,
     detach :: Bool,
     system :: SystemConfig,
+    config :: Maybe Config,
     -- | The host location of the volumes directory, default to ~/.local/share/podenv/volumes
     volumesDir :: FilePath
   }
-  deriving (Show)
 
 defaultRuntimeEnv :: FilePath -> RuntimeEnv
-defaultRuntimeEnv = RuntimeEnv True False defaultSystemConfig
+defaultRuntimeEnv = RuntimeEnv True False defaultSystemConfig Nothing
 
 type ContextEnvT a = ReaderT RuntimeEnv IO a
 
