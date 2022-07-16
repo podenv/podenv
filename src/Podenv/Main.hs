@@ -49,8 +49,8 @@ main = do
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
 
-  (baseApp, mode, ctxName, re) <- cliConfigLoad cli
-  (be, app) <- Podenv.Build.prepare re baseApp
+  (app, mode, ctxName, re) <- cliConfigLoad cli
+  be <- Podenv.Build.prepare re app
   env <- createLocalhostEnv (app ^. appRuntime)
   ctx <- runAppEnv env $ Podenv.Application.prepare mode app ctxName
 
@@ -65,7 +65,7 @@ main = do
 runApp :: Podenv.Runtime.RuntimeEnv -> Application -> IO ()
 runApp re app = do
   env <- createLocalhostEnv (app ^. appRuntime)
-  ctx <- runAppEnv env $ Podenv.Application.prepare Podenv.Application.Regular app (Name $ app ^. appName)
+  ctx <- runAppEnv env $ Podenv.Application.prepare (Podenv.Application.Regular []) app (Name $ app ^. appName)
   Podenv.Runtime.execute re ctx
 
 usage :: [String] -> IO CLI
@@ -195,8 +195,8 @@ cliConfigLoad cli@CLI {..} = do
   (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
   let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
-      re = RuntimeEnv {verbose, detach, system, extraArgs, volumesDir}
-      mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular
+      re = RuntimeEnv {verbose, detach, system, volumesDir}
+      mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular extraArgs
   pure (app, mode, name', re)
 
 -- | Apply the CLI argument to the application
