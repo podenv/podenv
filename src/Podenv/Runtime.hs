@@ -86,7 +86,7 @@ ensureResolvConf fp
           else realResolvConf
 
 createLocalhostRunEnv :: AppEnv -> Application -> Name -> RuntimeEnv
-createLocalhostRunEnv appEnv app ctxName = RuntimeEnv {..}
+createLocalhostRunEnv appEnv app name = RuntimeEnv {..}
   where
     appToContext amode = do
       setResolv <- case runtimeBackend of
@@ -95,7 +95,7 @@ createLocalhostRunEnv appEnv app ctxName = RuntimeEnv {..}
       let validate ctx = case runtimeBackend of
             Bubblewrap _ | null (ctx ^. command) -> ctx & command .~ ["/bin/sh"]
             _ -> ctx
-      ctx <- runAppEnv appEnv $ Podenv.Capability.prepare amode app ctxName
+      ctx <- runAppEnv appEnv $ Podenv.Capability.prepare amode app name
       pure $ ctx & setResolv . validate
     runtimeBackend = case app ^. appRuntime of
       Image x -> Podman $ ImageName x
@@ -153,7 +153,7 @@ createLocalhostRunEnv appEnv app ctxName = RuntimeEnv {..}
           cacheDir <- getCacheDir
           Text.writeFile (cacheDir </> fileName) (show $ nixArgs flakes)
       where
-        fileName = toString $ "nix_" <> unName ctxName
+        fileName = toString $ "nix_" <> unName name
 
         -- The location where we expect to find the `nix` command
         nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
@@ -176,7 +176,7 @@ createLocalhostRunEnv appEnv app ctxName = RuntimeEnv {..}
             ctx <- liftIO $ runAppEnv appEnv $ Podenv.Capability.prepare mode nixSetupApp (Name "nix.setup")
             execute Foreground ctx
 
-        builderName = Name $ "nix-builder-" <> unName ctxName
+        builderName = Name $ "nix-builder-" <> unName name
         buildCtx = runAppEnv appEnv do
           let ctx = Podenv.Context.defaultContext builderName
           setNix <- Podenv.Capability.setNix
@@ -462,7 +462,7 @@ executePodman rm ctx image = do
     (Just ns, True) | ns /= mempty -> ensureInfraNet ns
     _ -> pure ()
 
-  status <- getPodmanPodStatus (ctx ^. name)
+  status <- getPodmanPodStatus (ctx ^. ctxName)
   debug $ "Podman status of " <> cname <> ": " <> show status
   let cfail err = liftIO . mayFail . Left $ cname <> ": " <> err
   args <-
@@ -474,8 +474,8 @@ executePodman rm ctx image = do
   debug $ show cmd
   P.runProcess_ cmd
   where
-    cname = unName $ ctx ^. name
+    cname = unName $ ctx ^. ctxName
     -- Delete a non-kept container and return the run args
     recreateContainer re = do
-      deletePodmanPod (ctx ^. name)
+      deletePodmanPod (ctx ^. ctxName)
       pure $ podmanRunArgs re rm ctx image

@@ -22,7 +22,7 @@ where
 import Data.Map qualified
 import Data.Set qualified as Set
 import Data.Text qualified as Text
-import Podenv.Context qualified as Ctx
+import Podenv.Context as Ctx
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Image
@@ -30,13 +30,13 @@ import Podenv.Prelude
 
 -- | Converts an Application into a Context
 prepare :: AppMode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
-prepare mode app ctxName = do
-  uid <- asks _hostUid
+prepare mode app name = do
+  hostUID <- asks _hostUid
   let ctx =
-        (Ctx.defaultContext ctxName)
-          { Ctx._uid = uid,
-            Ctx._namespace = app ^. appNamespace
-          }
+        Ctx.defaultContext name
+          & (Ctx.uid .~ hostUID)
+            . (Ctx.namespace .~ app ^. appNamespace)
+
   setVolumes <- addVolumes (app ^. appVolumes)
 
   setCaps <- addCaps (app ^. appCapabilities)
@@ -45,13 +45,13 @@ prepare mode app ctxName = do
     appHome <- asks _appHomeDir
     let ensureHome = case appHome of
           Just fp ->
-            let volumeName = fromMaybe (Ctx.unName ctxName) (app ^. appNamespace)
+            let volumeName = fromMaybe (Ctx.unName name) (app ^. appNamespace)
              in Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ volumeName <> "-home"))
           Nothing -> id
         ensureWorkdir ctx' = case appHome of
           (Just x) | isMounted (toString x) ctx' -> ctx' & Ctx.workdir `setWhenNothing` toString x
           _ -> ctx'
-        setEnv = case appHome of
+        setHome = case appHome of
           Just x -> Ctx.addEnv "HOME" (toText x)
           _ -> id
         setRunAs = case appHome of
@@ -59,13 +59,13 @@ prepare mode app ctxName = do
           Just h | "/home" `Text.isPrefixOf` toText h -> Ctx.runAs `setWhenNothing` Ctx.RunAsHostUID
           _ -> id
 
-    pure $ setEnv . ensureWorkdir . ensureHome . setRunAs
+    pure $ setHome . ensureWorkdir . ensureHome . setRunAs
 
   setNixEnv <- case app ^. appRuntime of
     Nix _ -> setNix
     _ -> pure id
 
-  let command = \extraArgs -> case app ^. appRuntime of
+  let mkCommand = \extraArgs -> case app ^. appRuntime of
         Nix flakes ->
           [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
             [] ->
@@ -77,8 +77,8 @@ prepare mode app ctxName = do
 
   setCommand <- case mode of
     Regular extraArgs
-      | app ^. appCapabilities . capHostfile -> resolveFileArgs (command extraArgs)
-      | otherwise -> pure $ Ctx.command .~ command extraArgs
+      | app ^. appCapabilities . capHostfile -> resolveFileArgs (mkCommand extraArgs)
+      | otherwise -> pure $ Ctx.command .~ mkCommand extraArgs
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
 
   pure (disableSelinux . setHome . setCommand . modifiers . setCaps . setVolumes . setNixEnv $ ctx)
@@ -113,9 +113,9 @@ prepare mode app ctxName = do
       Nothing -> error $ "Can't read syscap: " <> show syscap
       Just c -> Ctx.syscaps %~ Set.insert c
 
-    addEnvs ctx = foldr addEnv ctx (app ^. appEnviron)
-    addEnv :: Text -> Ctx.Context -> Ctx.Context
-    addEnv env =
+    addEnvs ctx = foldr setEnv ctx (app ^. appEnviron)
+    setEnv :: Text -> Ctx.Context -> Ctx.Context
+    setEnv env =
       let (k, v) = Text.breakOn "=" env
        in Ctx.addEnv k (Text.drop 1 v)
 
@@ -207,9 +207,9 @@ setDbus = do
 
 setVideo :: AppEnvT (Ctx.Context -> Ctx.Context)
 setVideo = do
-  devices <- getVideoDevices
+  deviceList <- getVideoDevices
   let addDevices =
-        map (Ctx.addDevice . mappend "/dev/") devices
+        map (Ctx.addDevice . mappend "/dev/") deviceList
   pure $ foldr (.) id addDevices
 
 setDri :: AppEnvT (Ctx.Context -> Ctx.Context)
@@ -223,8 +223,8 @@ setDri = do
 setPulseaudio :: AppEnvT (Ctx.Context -> Ctx.Context)
 setPulseaudio = do
   shareSkt <- addXdgRun "pulse"
-  uid <- asks _hostUid
-  let pulseServer = "/run/user/" <> show uid <> "/pulse/native"
+  huid <- asks _hostUid
+  let pulseServer = "/run/user/" <> show huid <> "/pulse/native"
   pure $
     Ctx.directMount "/etc/machine-id"
       . shareSkt
@@ -363,11 +363,11 @@ addXdgRun fp = snd <$> addXdgRun' fp
 addXdgRun' :: FilePath -> AppEnvT (FilePath, Ctx.Context -> Ctx.Context)
 addXdgRun' fp = do
   hostXdg <- getXdgRuntimeDir
-  uid <- asks _hostUid
+  huid <- asks _hostUid
   let containerPath = runDir </> fp
       hostPath = hostXdg </> fp
       runBaseDir = "/run/user"
-      runDir = runBaseDir <> "/" <> show uid
+      runDir = runBaseDir <> "/" <> show huid
   pure
     ( containerPath,
       Ctx.addEnv "XDG_RUNTIME_DIR" (toText runDir)
@@ -378,4 +378,4 @@ addXdgRun' fp = do
 
 -- | Helper for capabilities that are directly represented in the context
 contextSet :: Lens' Ctx.Context a -> a -> AppEnvT (Ctx.Context -> Ctx.Context)
-contextSet lens value = pure ((lens .~ value))
+contextSet lens value = pure (lens .~ value)
