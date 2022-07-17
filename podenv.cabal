@@ -71,7 +71,7 @@ library
                   , typed-process
                   , unix
   hs-source-dirs:   src
-  exposed-modules:  Podenv.Application
+  exposed-modules:  Podenv.Capability
                   , Podenv.Config
                   , Podenv.Context
                   , Podenv.Dhall

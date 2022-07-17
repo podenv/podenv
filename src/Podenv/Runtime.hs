@@ -28,6 +28,7 @@ module Podenv.Runtime
     module Podenv.Context,
     RuntimeEnv (..),
     defaultRuntimeEnv,
+    RuntimeBackend (..),
   )
 where
 
@@ -35,28 +36,72 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import Podenv.Application qualified
+import Podenv.Capability qualified
 import Podenv.Config (Config, defaultSystemConfig, select)
 import Podenv.Context
-import Podenv.Dhall hiding (Container, command, environ, name, namespace, network)
+import Podenv.Dhall hiding (command, environ, name, namespace, network)
 import Podenv.Dhall qualified as Podenv
 import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
 import System.Directory (doesDirectoryExist, renameFile)
 import System.Exit (ExitCode (ExitSuccess))
+import System.Posix.Files qualified
 import System.Process.Typed qualified as P
 
 data RunEnv = RunEnv
   { buildInfo :: Text,
     buildRuntime :: ContextEnvT (),
     updateRuntime :: ContextEnvT (),
-    execute :: Context -> ContextEnvT ()
+    appToContext :: Podenv.Capability.Mode -> IO Context,
+    execute :: Context -> ContextEnvT (),
+    runtimeBackend :: RuntimeBackend
   }
+
+data RuntimeBackend
+  = Podman ImageName
+  | Bubblewrap FilePath
+
+data RunMode = Foreground | Background deriving (Eq, Show)
+
+ensureResolvConf :: FilePath -> IO (Context -> Context)
+ensureResolvConf fp
+  -- When using host rootfs, then we need to mount /etc/resolv.conf target when it is a symlink
+  | fp == "/" = do
+    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
+    if symlink
+      then do
+        realResolvConf <- getSymlinkPath
+        pure $ addMount realResolvConf (roHostPath realResolvConf)
+      else pure id
+  -- Otherwise we can just mount it directly
+  | otherwise = pure $ addMount "/etc/resolv.conf" (roHostPath "/etc/resolv.conf")
+  where
+    getSymlinkPath = do
+      realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
+      pure $
+        if "../" `isPrefixOf` realResolvConf
+          then drop 2 realResolvConf
+          else realResolvConf
 
 createLocalhostRunEnv :: AppEnv -> Application -> Name -> RunEnv
 createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
   where
+    appToContext amode = do
+      setResolv <- case runtimeBackend of
+        Bubblewrap fp -> ensureResolvConf fp
+        _ -> pure id
+      let validate ctx = case runtimeBackend of
+            Bubblewrap _ | null (ctx ^. command) -> ctx & command .~ ["/bin/sh"]
+            _ -> ctx
+      ctx <- runAppEnv appEnv $ Podenv.Capability.prepare amode app ctxName
+      pure $ ctx & setResolv . validate
+    runtimeBackend = case app ^. appRuntime of
+      Image x -> Podman $ ImageName x
+      Rootfs root -> Bubblewrap $ toString root
+      Container cb -> Podman . mkImageName $ cb
+      Nix _ -> Bubblewrap "/"
+
     (buildInfo, (buildRuntime, updateRuntime)) = case app ^. appRuntime of
       Podenv.Image iname -> ("image:" <> iname, noBuilder)
       Podenv.Rootfs fp -> ("rootfs:" <> fp, noBuilder)
@@ -69,8 +114,8 @@ createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
     execute ctx = do
       re <- ask
       traverse_ (liftIO . ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
-      case ctx ^. runtimeCtx of
-        Container image -> executePodman ctx image
+      case runtimeBackend of
+        Podman image -> executePodman ctx image
         Bubblewrap fp -> executeBubblewrap ctx fp
 
     manageContainer cb = ("# Containerfile " <> imageName, (buildContainer, updateContainer))
@@ -125,15 +170,15 @@ createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
                 nixSetupApp = case Podenv.Config.select cfg ["nix.setup"] of
                   Left e -> error e
                   Right (_, setupApp) -> setupApp
-                mode = Podenv.Application.Regular []
+                mode = Podenv.Capability.Regular []
             debug "[+] Installing nix-store with nix.setup"
-            ctx <- liftIO $ runAppEnv appEnv $ Podenv.Application.prepare mode nixSetupApp (Name "nix.setup")
+            ctx <- liftIO $ runAppEnv appEnv $ Podenv.Capability.prepare mode nixSetupApp (Name "nix.setup")
             execute ctx
 
         builderName = Name $ "nix-builder-" <> unName ctxName
         buildCtx = runAppEnv appEnv do
-          let ctx = Podenv.Context.defaultContext builderName (Bubblewrap "/")
-          setNix <- Podenv.Application.setNix
+          let ctx = Podenv.Context.defaultContext builderName
+          setNix <- Podenv.Capability.setNix
           pure $ ctx & setNix . (Podenv.Context.network .~ True)
 
 -- | Build a container image
@@ -271,9 +316,9 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
         <> maybe [] (\wd -> ["--chdir", toText wd]) _workdir
         <> _command
 
-showRuntimeCmd :: RuntimeEnv -> Context -> Text
-showRuntimeCmd re ctx = case ctx ^. runtimeCtx of
-  Container image -> show . P.proc "podman" $ podmanRunArgs re ctx image
+showRuntimeCmd :: RuntimeEnv -> Context -> RuntimeBackend -> Text
+showRuntimeCmd re ctx = \case
+  Podman image -> show . P.proc "podman" $ podmanRunArgs re ctx image
   Bubblewrap fp -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
 
 data RuntimeEnv = RuntimeEnv

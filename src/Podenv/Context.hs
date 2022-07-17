@@ -21,14 +21,8 @@ module Podenv.Context where
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Lens.Family.TH (makeLenses)
-import Podenv.Image (ImageName)
 import Podenv.Prelude
 import System.Linux.Capabilities (Capability)
-
-data RuntimeContext
-  = Container ImageName
-  | Bubblewrap FilePath
-  deriving (Show, Eq)
 
 data Mode = RO | RW
   deriving (Show, Eq)
@@ -53,8 +47,6 @@ data Context = Context
   { -- | identifier
     _name :: Name,
     _namespace :: Maybe Text,
-    -- | container image name
-    _runtimeCtx :: RuntimeContext,
     -- | network namespace name
     _network :: Bool,
     _ports :: [Port],
@@ -84,11 +76,10 @@ data Context = Context
 
 $(makeLenses ''Context)
 
-defaultContext :: Name -> RuntimeContext -> Context
-defaultContext _name _runtimeCtx =
+defaultContext :: Name -> Context
+defaultContext _name =
   Context
     { _name,
-      _runtimeCtx,
       _command = [],
       _uid = 0,
       _namespace = Nothing,

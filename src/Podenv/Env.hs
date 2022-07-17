@@ -14,7 +14,6 @@ module Podenv.Env
     createLocalhostEnv,
     runAppEnv,
     isNVIDIAEnabled,
-    ensureResolvConf,
     getVideoDevices,
     getCertLocation,
   )
@@ -25,11 +24,8 @@ import Data.List.NonEmpty qualified
 import Data.Maybe qualified
 import Data.Text qualified
 import Data.Text qualified as Text
-import Podenv.Context hiding (Container, uid)
-import Podenv.Context qualified as Ctx
 import Podenv.Dhall hiding (runtime)
 import Podenv.Prelude
-import System.Posix.Files qualified
 
 newtype SocketName = SocketName FilePath
 
@@ -44,7 +40,6 @@ data AppEnv = AppEnv
     _appHomeDir :: Maybe FilePath,
     -- environment query
     _isNVIDIAEnabled :: IO Bool,
-    _ensureResolvConf :: FilePath -> IO (Context -> Context),
     _getVideoDevices :: IO [FilePath],
     _getCertLocation :: IO (Maybe FilePath)
   }
@@ -59,11 +54,6 @@ isNVIDIAEnabled = AppEnvT $ lift =<< asks _isNVIDIAEnabled
 
 getVideoDevices :: AppEnvT [FilePath]
 getVideoDevices = AppEnvT $ lift =<< asks _getVideoDevices
-
-ensureResolvConf :: FilePath -> AppEnvT (Context -> Context)
-ensureResolvConf fp = AppEnvT $ do
-  ensure <- asks _ensureResolvConf
-  lift $ ensure fp
 
 getCertLocation :: AppEnvT (Maybe FilePath)
 getCertLocation = AppEnvT $ lift =<< asks _getCertLocation
@@ -83,26 +73,6 @@ getRootfsHome uid _ fp = do
     isUser l = case Data.Text.splitOn ":" l of
       (_ : _ : uid' : _ : _ : home : _) | readMaybe (toString uid') == Just uid -> Just home
       _ -> Nothing
-
-doEnsureResolvConf :: FilePath -> IO (Ctx.Context -> Ctx.Context)
-doEnsureResolvConf fp
-  -- When using host rootfs, then we need to mount /etc/resolv.conf target when it is a symlink
-  | fp == "/" = do
-    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
-    if symlink
-      then do
-        realResolvConf <- getSymlinkPath
-        pure $ Ctx.addMount realResolvConf $ Ctx.roHostPath realResolvConf
-      else pure id
-  -- Otherwise we can just mount it directly
-  | otherwise = pure $ Ctx.addMount "/etc/resolv.conf" (Ctx.roHostPath "/etc/resolv.conf")
-  where
-    getSymlinkPath = do
-      realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
-      pure $
-        if "../" `isPrefixOf` realResolvConf
-          then drop 2 realResolvConf
-          else realResolvConf
 
 doGetVideoDevices :: IO [FilePath]
 doGetVideoDevices = map toString . filter ("video" `Text.isPrefixOf`) . map toText <$> listDirectory "/dev"
@@ -144,7 +114,6 @@ createLocalhostEnv r = do
     Nix _ -> pure _hostHomeDir
     Image _ -> pure Nothing
   let _isNVIDIAEnabled = doesPathExist "/dev/nvidiactl"
-      _ensureResolvConf = doEnsureResolvConf
       _getVideoDevices = doGetVideoDevices
       _getCertLocation = doGetCertLocation
   pure $ AppEnv {..}

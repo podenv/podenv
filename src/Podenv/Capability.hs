@@ -11,9 +11,7 @@
 
 -- | This module contains the capability logic.
 -- The goal is to convert an Application into a Context
---
--- This module performs read-only IO
-module Podenv.Application
+module Podenv.Capability
   ( prepare,
     capsAll,
     Cap (..),
@@ -38,7 +36,7 @@ prepare :: Mode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
 prepare mode app ctxName = do
   uid <- asks _hostUid
   let ctx =
-        (Ctx.defaultContext ctxName runtimeCtx)
+        (Ctx.defaultContext ctxName)
           { Ctx._uid = uid,
             Ctx._namespace = app ^. appNamespace
           }
@@ -70,10 +68,6 @@ prepare mode app ctxName = do
     Nix _ -> setNix
     _ -> pure id
 
-  setResolv <- case runtimeCtx of
-    Ctx.Bubblewrap fp -> ensureResolvConf fp
-    _ -> pure id
-
   let command = \extraArgs -> case app ^. appRuntime of
         Nix flakes ->
           [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
@@ -90,18 +84,8 @@ prepare mode app ctxName = do
       | otherwise -> pure $ Ctx.command .~ command extraArgs
     Shell -> pure $ Ctx.command .~ ["/bin/sh"]
 
-  pure (disableSelinux . validate . setHome . setCommand . setResolv . modifiers . setCaps . setVolumes . setNixEnv $ ctx)
+  pure (disableSelinux . setHome . setCommand . modifiers . setCaps . setVolumes . setNixEnv $ ctx)
   where
-    runtimeCtx = case app ^. appRuntime of
-      Image x -> Ctx.Container $ ImageName x
-      Rootfs root -> Ctx.Bubblewrap $ toString root
-      Container cb -> Ctx.Container . mkImageName $ cb
-      Nix _ -> Ctx.Bubblewrap "/"
-
-    validate ctx = case runtimeCtx of
-      Ctx.Bubblewrap _ | null (ctx ^. Ctx.command) -> ctx & Ctx.command .~ ["/bin/sh"]
-      _ -> ctx
-
     modifiers :: Ctx.Context -> Ctx.Context
     modifiers = addSysCaps . addEnvs
 

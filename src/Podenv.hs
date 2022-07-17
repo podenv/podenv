@@ -24,7 +24,7 @@ module Podenv
   )
 where
 
-import Podenv.Application
+import Podenv.Capability
 import Podenv.Config
 import Podenv.Context
 import Podenv.Dhall
