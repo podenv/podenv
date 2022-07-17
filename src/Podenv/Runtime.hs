@@ -54,7 +54,7 @@ data RuntimeEnv = RuntimeEnv
   { buildInfo :: Text,
     buildRuntime :: ContextEnvT (),
     updateRuntime :: ContextEnvT (),
-    appToContext :: Podenv.Capability.Mode -> IO Context,
+    appToContext :: AppMode -> IO Context,
     execute :: RunMode -> Context -> ContextEnvT (),
     runtimeBackend :: RuntimeBackend
   }
@@ -171,7 +171,7 @@ createLocalhostRunEnv appEnv app ctxName = RuntimeEnv {..}
                 nixSetupApp = case Podenv.Config.select cfg ["nix.setup"] of
                   Left e -> error e
                   Right (_, setupApp) -> setupApp
-                mode = Podenv.Capability.Regular []
+                mode = Regular []
             debug "[+] Installing nix-store with nix.setup"
             ctx <- liftIO $ runAppEnv appEnv $ Podenv.Capability.prepare mode nixSetupApp (Name "nix.setup")
             execute Foreground ctx

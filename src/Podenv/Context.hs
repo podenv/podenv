@@ -24,13 +24,13 @@ import Lens.Family.TH (makeLenses)
 import Podenv.Prelude
 import System.Linux.Capabilities (Capability)
 
-data Mode = RO | RW
+data DirMode = RO | RW
   deriving (Show, Eq)
 
 data VolumeType = HostPath FilePath | TmpFS | Volume Text
   deriving (Show, Eq)
 
-data Volume = MkVolume Mode VolumeType
+data Volume = MkVolume DirMode VolumeType
   deriving (Show, Eq)
 
 data RunAs = RunAsRoot | RunAsHostUID | RunAsAnyUID
