@@ -9,6 +9,7 @@
 -- | The platform environment
 module Podenv.Env
   ( AppEnv (..),
+    AppMode (..),
     SocketName (..),
     AppEnvT,
     createLocalhostEnv,
@@ -26,6 +27,8 @@ import Data.Text qualified
 import Data.Text qualified as Text
 import Podenv.Dhall hiding (runtime)
 import Podenv.Prelude
+
+data AppMode = Regular [Text] | Shell deriving (Show, Eq)
 
 newtype SocketName = SocketName FilePath
 

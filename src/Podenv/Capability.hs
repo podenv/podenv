@@ -15,7 +15,6 @@ module Podenv.Capability
   ( prepare,
     capsAll,
     Cap (..),
-    Mode (..),
     setNix,
   )
 where
@@ -29,10 +28,8 @@ import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
 
-data Mode = Regular [Text] | Shell deriving (Show, Eq)
-
 -- | Converts an Application into a Context
-prepare :: Mode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
+prepare :: AppMode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
 prepare mode app ctxName = do
   uid <- asks _hostUid
   let ctx =

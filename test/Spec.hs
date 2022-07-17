@@ -53,7 +53,7 @@ spec config = describe "unit tests" $ do
               { Podenv.Dhall.runtime = Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables pin)
               }
           checkCommand test app expected = do
-            ctx <- runPrepare (Podenv.Capability.Regular []) (testEnv {_appHomeDir = Just "/tmp"}) app (Name "test")
+            ctx <- runPrepare (Regular []) (testEnv {_appHomeDir = Just "/tmp"}) app (Name "test")
             (ctx ^. command) `test` expected
           commandShouldContain = checkCommand shouldContain
           commandShouldNotContain = checkCommand shouldNotContain
@@ -190,7 +190,7 @@ spec config = describe "unit tests" $ do
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True, rw = True")
-      ctx <- runPrepare (Podenv.Capability.Regular []) testEnv app (Podenv.Context.Name "env")
+      ctx <- runPrepare (Regular []) testEnv app (Podenv.Context.Name "env")
       let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
       Podenv.Runtime.podmanRunArgs defRe fg ctx (getImg re) `shouldBe` expected
 
