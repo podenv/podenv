@@ -24,10 +24,11 @@ module Podenv.Runtime
     bwrapRunArgs,
 
     -- * data type and lenses
-    RunEnv (..),
-    module Podenv.Context,
     RuntimeEnv (..),
-    defaultRuntimeEnv,
+    RunMode (..),
+    module Podenv.Context,
+    GlobalEnv (..),
+    defaultGlobalEnv,
     RuntimeBackend (..),
   )
 where
@@ -49,12 +50,12 @@ import System.Exit (ExitCode (ExitSuccess))
 import System.Posix.Files qualified
 import System.Process.Typed qualified as P
 
-data RunEnv = RunEnv
+data RuntimeEnv = RuntimeEnv
   { buildInfo :: Text,
     buildRuntime :: ContextEnvT (),
     updateRuntime :: ContextEnvT (),
     appToContext :: Podenv.Capability.Mode -> IO Context,
-    execute :: Context -> ContextEnvT (),
+    execute :: RunMode -> Context -> ContextEnvT (),
     runtimeBackend :: RuntimeBackend
   }
 
@@ -84,8 +85,8 @@ ensureResolvConf fp
           then drop 2 realResolvConf
           else realResolvConf
 
-createLocalhostRunEnv :: AppEnv -> Application -> Name -> RunEnv
-createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
+createLocalhostRunEnv :: AppEnv -> Application -> Name -> RuntimeEnv
+createLocalhostRunEnv appEnv app ctxName = RuntimeEnv {..}
   where
     appToContext amode = do
       setResolv <- case runtimeBackend of
@@ -110,12 +111,12 @@ createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
       where
         noBuilder = (pure (), pure ())
 
-    execute :: Context -> ContextEnvT ()
-    execute ctx = do
+    execute :: RunMode -> Context -> ContextEnvT ()
+    execute rm ctx = do
       re <- ask
       traverse_ (liftIO . ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
       case runtimeBackend of
-        Podman image -> executePodman ctx image
+        Podman image -> executePodman rm ctx image
         Bubblewrap fp -> executeBubblewrap ctx fp
 
     manageContainer cb = ("# Containerfile " <> imageName, (buildContainer, updateContainer))
@@ -147,7 +148,7 @@ createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
       unless built $ do
         ensureNixInstalled
         ctx <- liftIO buildCtx
-        execute ctx
+        execute Foreground ctx
         liftIO do
           cacheDir <- getCacheDir
           Text.writeFile (cacheDir </> fileName) (show $ nixArgs flakes)
@@ -173,7 +174,7 @@ createLocalhostRunEnv appEnv app ctxName = RunEnv {..}
                 mode = Podenv.Capability.Regular []
             debug "[+] Installing nix-store with nix.setup"
             ctx <- liftIO $ runAppEnv appEnv $ Podenv.Capability.prepare mode nixSetupApp (Name "nix.setup")
-            execute ctx
+            execute Foreground ctx
 
         builderName = Name $ "nix-builder-" <> unName ctxName
         buildCtx = runAppEnv appEnv do
@@ -253,8 +254,8 @@ commonArgs :: Context -> [Text]
 commonArgs Context {..} =
   concatMap (\c -> ["--cap-add", show c]) $ sort $ Data.Set.toList _syscaps
 
-bwrapRunArgs :: RuntimeEnv -> Context -> FilePath -> [String]
-bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
+bwrapRunArgs :: GlobalEnv -> Context -> FilePath -> [String]
+bwrapRunArgs GlobalEnv {..} ctx@Context {..} fp = toString <$> args
   where
     userArg = case ctx ^. runAs of
       Just RunAsRoot -> ["--unshare-user", "--uid", "0"]
@@ -316,24 +317,23 @@ bwrapRunArgs RuntimeEnv {..} ctx@Context {..} fp = toString <$> args
         <> maybe [] (\wd -> ["--chdir", toText wd]) _workdir
         <> _command
 
-showRuntimeCmd :: RuntimeEnv -> Context -> RuntimeBackend -> Text
-showRuntimeCmd re ctx = \case
-  Podman image -> show . P.proc "podman" $ podmanRunArgs re ctx image
+showRuntimeCmd :: GlobalEnv -> RunMode -> Context -> RuntimeBackend -> Text
+showRuntimeCmd re rm ctx = \case
+  Podman image -> show . P.proc "podman" $ podmanRunArgs re rm ctx image
   Bubblewrap fp -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
 
-data RuntimeEnv = RuntimeEnv
+data GlobalEnv = GlobalEnv
   { verbose :: Bool,
-    detach :: Bool,
     system :: SystemConfig,
     config :: Maybe Config,
     -- | The host location of the volumes directory, default to ~/.local/share/podenv/volumes
     volumesDir :: FilePath
   }
 
-defaultRuntimeEnv :: FilePath -> RuntimeEnv
-defaultRuntimeEnv = RuntimeEnv True False defaultSystemConfig Nothing
+defaultGlobalEnv :: FilePath -> GlobalEnv
+defaultGlobalEnv = GlobalEnv True defaultSystemConfig Nothing
 
-type ContextEnvT a = ReaderT RuntimeEnv IO a
+type ContextEnvT a = ReaderT GlobalEnv IO a
 
 debug :: Text -> ContextEnvT ()
 debug msg = do
@@ -349,8 +349,8 @@ infraName ns = ns <> "-ns"
 podmanArgs :: Context -> [Text]
 podmanArgs Context {..} = cond _interactive ["-i", "--detach-keys", ""] <> cond _terminal ["-t"]
 
-podmanRunArgs :: RuntimeEnv -> Context -> ImageName -> [String]
-podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
+podmanRunArgs :: GlobalEnv -> RunMode -> Context -> ImageName -> [String]
+podmanRunArgs GlobalEnv {..} rmode ctx@Context {..} image = toString <$> args
   where
     portArgs = concatMap publishArg _ports
     publishArg port = ["--publish", showPort port]
@@ -393,7 +393,7 @@ podmanRunArgs RuntimeEnv {..} ctx@Context {..} image = toString <$> args
     args =
       ["run"]
         <> podmanArgs ctx
-        <> ["--detach" | detach]
+        <> ["--detach" | rmode == Background]
         <> maybe [] (\h -> ["--hostname", h]) _hostname
         <> cond _privileged ["--privileged"]
         <> ["--rm"]
@@ -458,8 +458,8 @@ ensureInfraNet ns = do
       debug $ show cmd
       P.runProcess_ cmd
 
-executePodman :: Context -> ImageName -> ContextEnvT ()
-executePodman ctx image = do
+executePodman :: RunMode -> Context -> ImageName -> ContextEnvT ()
+executePodman rm ctx image = do
   re <- ask
   case (ctx ^. namespace, ctx ^. network) of
     (Just ns, True) | ns /= mempty -> ensureInfraNet ns
@@ -470,7 +470,7 @@ executePodman ctx image = do
   let cfail err = liftIO . mayFail . Left $ cname <> ": " <> err
   args <-
     case status of
-      NotFound -> pure $ podmanRunArgs re ctx image
+      NotFound -> pure $ podmanRunArgs re rm ctx image
       Running -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
       Unknown _ -> recreateContainer re
   let cmd = podman args
@@ -481,4 +481,4 @@ executePodman ctx image = do
     -- Delete a non-kept container and return the run args
     recreateContainer re = do
       deletePodmanPod (ctx ^. name)
-      pure $ podmanRunArgs re ctx image
+      pure $ podmanRunArgs re rm ctx image

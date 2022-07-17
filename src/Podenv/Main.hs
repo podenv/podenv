@@ -35,7 +35,7 @@ import Podenv.Config qualified
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
-import Podenv.Runtime (Name (..), RuntimeEnv (..), runtimeBackend)
+import Podenv.Runtime (GlobalEnv (..), Name (..), RunMode (..), runtimeBackend)
 import Podenv.Runtime qualified
 import Podenv.Version qualified (version)
 
@@ -54,11 +54,11 @@ main = do
   ctx <- Podenv.Runtime.appToContext run mode
 
   if showApplication
-    then putTextLn $ showApp app (Podenv.Runtime.showRuntimeCmd re ctx (runtimeBackend run))
+    then putTextLn $ showApp app (Podenv.Runtime.showRuntimeCmd re runMode ctx (runtimeBackend run))
     else flip runReaderT re do
       Podenv.Runtime.buildRuntime run
       when update $ Podenv.Runtime.updateRuntime run
-      Podenv.Runtime.execute run ctx
+      Podenv.Runtime.execute run runMode ctx
 
 usage :: [String] -> IO CLI
 usage args = do
@@ -98,7 +98,7 @@ data CLI = CLI
     -- runtime env:
     update :: Bool,
     verbose :: Bool,
-    detach :: Bool,
+    runMode :: RunMode,
     -- app modifiers:
     capsOverride :: [Capabilities -> Capabilities],
     shell :: Bool,
@@ -125,7 +125,7 @@ cliParser =
     -- runtime env:
     <*> switch (long "update" <> help "Update the runtime")
     <*> switch (long "verbose" <> help "Increase verbosity")
-    <*> switch (long "detach" <> hidden)
+    <*> (bool Foreground Background <$> switch (long "detach" <> help "Run application in the background" <> hidden))
     -- app modifiers:
     <*> capsParser
     <*> switch (long "shell" <> help "Start a shell instead of the application command")
@@ -175,7 +175,7 @@ cliInfo =
         (long "version" <> help "Show version")
 
 -- | Load the config
-cliConfigLoad :: CLI -> IO (Application, Podenv.Capability.Mode, Name, RuntimeEnv)
+cliConfigLoad :: CLI -> IO (Application, Podenv.Capability.Mode, Name, GlobalEnv)
 cliConfigLoad cli@CLI {..} = do
   system <- Podenv.Config.loadSystem
   -- The volumes dir may be provided by the system config, otherwise default to ~/.local/share/podenv/volumes
@@ -187,7 +187,7 @@ cliConfigLoad cli@CLI {..} = do
   (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
   let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
-      re = RuntimeEnv {verbose, detach, system, volumesDir, config = Just config}
+      re = GlobalEnv {verbose, system, volumesDir, config = Just config}
       mode = if shell then Podenv.Capability.Shell else Podenv.Capability.Regular extraArgs
   pure (app, mode, name', re)
 
