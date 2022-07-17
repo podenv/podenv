@@ -16,7 +16,46 @@
 {-# OPTIONS_GHC -fno-warn-missing-export-lists #-}
 
 -- | Runtime Context data types and lenses
-module Podenv.Context where
+module Podenv.Context
+  ( DirMode (..),
+    Name (..),
+    VolumeType (..),
+    Volume (..),
+    Port (..),
+    RunAs (..),
+    Context (..),
+
+    -- * Helpers
+    defaultContext,
+    addMount,
+    addEnv,
+    addDevice,
+    directMount,
+    tmpfs,
+    roHostPath,
+    rwHostPath,
+
+    -- * Lenses
+    ctxName,
+    uid,
+    namespace,
+    workdir,
+    runAs,
+    command,
+    mounts,
+    devices,
+    selinux,
+    syscaps,
+    interactive,
+    network,
+    ro,
+    privileged,
+    terminal,
+    ports,
+    anyUid,
+    hostname,
+  )
+where
 
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -75,6 +114,9 @@ data Context = Context
   deriving (Show, Eq)
 
 $(makeLenses ''Context)
+
+ctxName :: Lens' Context Name
+ctxName = name
 
 defaultContext :: Name -> Context
 defaultContext _name =
