@@ -30,12 +30,12 @@ import Data.Text qualified
 import Data.Version (showVersion)
 import Options.Applicative hiding (command)
 import Paths_podenv (version)
-import Podenv.Application qualified
+import Podenv.Capability qualified
 import Podenv.Config qualified
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
-import Podenv.Runtime (Context, Name (..), RuntimeEnv (..))
+import Podenv.Runtime (Name (..), RuntimeEnv (..), runtimeBackend)
 import Podenv.Runtime qualified
 import Podenv.Version qualified (version)
 
@@ -50,11 +50,11 @@ main = do
 
   (app, mode, ctxName, re) <- cliConfigLoad cli
   env <- createLocalhostEnv (app ^. appRuntime)
-  ctx <- runAppEnv env $ Podenv.Application.prepare mode app ctxName
   let run = Podenv.Runtime.createLocalhostRunEnv env app ctxName
+  ctx <- Podenv.Runtime.appToContext run mode
 
   if showApplication
-    then putTextLn $ showApp app ctx re
+    then putTextLn $ showApp app (Podenv.Runtime.showRuntimeCmd re ctx (runtimeBackend run))
     else flip runReaderT re do
       Podenv.Runtime.buildRuntime run
       when update $ Podenv.Runtime.updateRuntime run
@@ -142,15 +142,15 @@ strOptions = ["--config", "--namespace", "--name", "--env", "--volume", "-v"]
 
 -- | Parse all capabilities toggles
 capsParser :: Parser [Capabilities -> Capabilities]
-capsParser = catMaybes <$> traverse mkCapParser Podenv.Application.capsAll
+capsParser = catMaybes <$> traverse mkCapParser Podenv.Capability.capsAll
   where
-    mkCapParser :: Podenv.Application.Cap -> Parser (Maybe (Capabilities -> Capabilities))
+    mkCapParser :: Podenv.Capability.Cap -> Parser (Maybe (Capabilities -> Capabilities))
     mkCapParser cap =
       toggleCapParser cap True <|> toggleCapParser cap False
 
 -- | A helper function to parse CLI capability toggle
-toggleCapParser :: Podenv.Application.Cap -> Bool -> Parser (Maybe (Capabilities -> Capabilities))
-toggleCapParser Podenv.Application.Cap {..} isOn = setMaybeCap <$> flagParser
+toggleCapParser :: Podenv.Capability.Cap -> Bool -> Parser (Maybe (Capabilities -> Capabilities))
+toggleCapParser Podenv.Capability.Cap {..} isOn = setMaybeCap <$> flagParser
   where
     -- We parse a dummy flag from the command line
     flagParser :: Parser (Maybe ())
@@ -175,7 +175,7 @@ cliInfo =
         (long "version" <> help "Show version")
 
 -- | Load the config
-cliConfigLoad :: CLI -> IO (Application, Podenv.Application.Mode, Name, RuntimeEnv)
+cliConfigLoad :: CLI -> IO (Application, Podenv.Capability.Mode, Name, RuntimeEnv)
 cliConfigLoad cli@CLI {..} = do
   system <- Podenv.Config.loadSystem
   -- The volumes dir may be provided by the system config, otherwise default to ~/.local/share/podenv/volumes
@@ -188,7 +188,7 @@ cliConfigLoad cli@CLI {..} = do
   let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
       re = RuntimeEnv {verbose, detach, system, volumesDir, config = Just config}
-      mode = if shell then Podenv.Application.Shell else Podenv.Application.Regular extraArgs
+      mode = if shell then Podenv.Capability.Shell else Podenv.Capability.Regular extraArgs
   pure (app, mode, name', re)
 
 -- | Apply the CLI argument to the application
@@ -206,22 +206,21 @@ cliPrepare CLI {..} = setShell . setEnvs . setVolumes . setCaps . setNS
 
     setCaps app' = foldr (appCapabilities %~) app' capsOverride
 
-showApp :: Application -> Context -> RuntimeEnv -> Text
-showApp Application {..} ctx re = unlines infos
+showApp :: Application -> Text -> Text
+showApp Application {..} cmd = unlines infos
   where
     infos =
       ["[+] Capabilities", unwords appCaps, ""]
         <> ["[+] Command", cmd]
-    cmd = Podenv.Runtime.showRuntimeCmd re ctx
-    appCaps = concatMap showCap Podenv.Application.capsAll
-    showCap Podenv.Application.Cap {..} =
+    appCaps = concatMap showCap Podenv.Capability.capsAll
+    showCap Podenv.Capability.Cap {..} =
       [capName | capabilities ^. capLens]
 
 printCaps :: IO ()
 printCaps = do
-  putText $ unlines $ sort $ map showCap Podenv.Application.capsAll
+  putText $ unlines $ sort $ map showCap Podenv.Capability.capsAll
   where
-    showCap Podenv.Application.Cap {..} =
+    showCap Podenv.Capability.Cap {..} =
       let sep = if Data.Text.length capName < 8 then "\t\t" else "\t"
        in capName <> sep <> capDescription
 
@@ -249,13 +248,14 @@ configToAtoms = \case
 printManifest :: Maybe Text -> IO ()
 printManifest configTxt = do
   atoms <- configToAtoms <$> Podenv.Config.load Nothing configTxt
-  let re = Podenv.Runtime.defaultRuntimeEnv "/volume"
+  let re = Podenv.Runtime.defaultGlobalEnv "/volume"
       addNL = Data.Text.replace "--" "\\\n  --"
-      doPrint name ar = do
+      doPrint name app = do
         putTextLn name
-        (be, app) <- Podenv.Build.prepare re ar
-        ctx <- Podenv.Application.prepare (Podenv.Application.Regular) app (Name name)
-        putTextLn . addNL $ showApp app ctx be re
+        env <- createLocalhostEnv (app ^. appRuntime)
+        let run = Podenv.Runtime.createLocalhostRunEnv env app (Name name)
+        ctx <- Podenv.Runtime.appToContext run (Regular [])
+        putTextLn . addNL $ showApp app (Podenv.Runtime.showRuntimeCmd re Foreground ctx (runtimeBackend run))
 
       printAppContext :: (Text, Podenv.Config.Atom) -> IO ()
       printAppContext (name, atom) = case atom of

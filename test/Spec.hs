@@ -7,7 +7,7 @@ module Main where
 import Data.Text (pack)
 import Data.Text qualified as Text
 import Podenv hiding (command, loadConfig)
-import Podenv.Application qualified
+import Podenv.Capability qualified
 import Podenv.Config qualified
 import Podenv.Context (command)
 import Podenv.Context qualified
@@ -52,7 +52,7 @@ spec config = describe "unit tests" $ do
               { Podenv.Dhall.runtime = Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables pin)
               }
           checkCommand test app expected = do
-            ctx <- runPrepare (Podenv.Application.Regular []) (testEnv {_appHomeDir = Just "/tmp"}) app (Name "test")
+            ctx <- runPrepare (Podenv.Capability.Regular []) (testEnv {_appHomeDir = Just "/tmp"}) app (Name "test")
             (ctx ^. command) `test` expected
           commandShouldContain = checkCommand shouldContain
           commandShouldNotContain = checkCommand shouldNotContain
@@ -130,15 +130,16 @@ spec config = describe "unit tests" $ do
         ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data", "--name", "image-8bfbaa", "ubi8"]
     it "name override keep image" $ do
       cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"]
-      (app, mode, ctxName, re) <- Podenv.Main.cliConfigLoad cli
+      (app, mode, ctxName, gl) <- Podenv.Main.cliConfigLoad cli
       ctx <- runPrepare mode testEnv app ctxName
-      Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` ["run", "--rm", "--read-only=true", "--network", "none", "--name", "tmp", "localhost/firefox"]
+      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
+      Podenv.Runtime.podmanRunArgs gl ctx (getImg re) `shouldBe` ["run", "--rm", "--read-only=true", "--network", "none", "--name", "tmp", "localhost/firefox"]
   where
     defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultRuntimeEnv "/data"
 
-    runPrepare mode env app ctxName = runAppEnv env $ Podenv.Application.prepare mode app ctxName
+    runPrepare mode env app ctxName = runAppEnv env $ Podenv.Capability.prepare mode app ctxName
 
     testEnv =
       AppEnv
@@ -156,8 +157,8 @@ spec config = describe "unit tests" $ do
           _getCertLocation = pure $ Just "/etc/ca"
         }
 
-    getFP ctx = case Podenv.Context._runtimeCtx ctx of
-      Podenv.Context.Bubblewrap fp -> fp
+    getFP re = case Podenv.Runtime.runtimeBackend re of
+      Podenv.Runtime.Bubblewrap fp -> fp
       _ -> error "Not bwrap"
 
     defBwrap =
@@ -167,26 +168,29 @@ spec config = describe "unit tests" $ do
 
     bwrapTest args expected = do
       cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])
-      (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
-      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      (app, mode, ctxName, gl') <- Podenv.Main.cliConfigLoad cli
+      let gl = gl' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
       ctx <- runPrepare mode testEnv app ctxName
-      Podenv.Runtime.bwrapRunArgs re ctx (getFP ctx) `shouldBe` expected
+      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
+      Podenv.Runtime.bwrapRunArgs gl ctx (getFP re) `shouldBe` expected
 
-    getImg ctx = case Podenv.Context._runtimeCtx ctx of
-      Podenv.Context.Container image -> image
+    getImg re = case Podenv.Runtime.runtimeBackend re of
+      Podenv.Runtime.Podman image -> image
       _ -> error "Not podman"
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage (["--rw"] <> args)
-      (app, mode, ctxName, re') <- Podenv.Main.cliConfigLoad cli
+      (app, mode, ctxName, gl') <- Podenv.Main.cliConfigLoad cli
       ctx <- runPrepare mode testEnv app ctxName
-      let re = re' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
-      Podenv.Runtime.podmanRunArgs re ctx (getImg ctx) `shouldBe` expected
+      let gl = gl' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
+      Podenv.Runtime.podmanRunArgs gl ctx (getImg re) `shouldBe` expected
 
     podmanTest code expected = do
       app <- loadOne (addCap code "network = True, rw = True")
-      ctx <- runPrepare (Podenv.Application.Regular []) testEnv app (Podenv.Context.Name "env")
-      Podenv.Runtime.podmanRunArgs defRe ctx (getImg ctx) `shouldBe` expected
+      ctx <- runPrepare (Podenv.Capability.Regular []) testEnv app (Podenv.Context.Name "env")
+      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
+      Podenv.Runtime.podmanRunArgs defRe ctx (getImg re) `shouldBe` expected
 
     getApp code args = do
       cli <- Podenv.Main.usage args
