@@ -5,13 +5,13 @@ let
   # pin the upstream nixpkgs
   nixpkgsPath = fetchTarball {
     url =
-      "https://github.com/NixOS/nixpkgs/archive/d00b5a5fa6fe8bdf7005abb06c46ae0245aec8b5.tar.gz";
-    sha256 = "08497wbpnf3w5dalcasqzymw3fmcn8qrnbkf8rxxwwvyjdnczxdv";
+      "https://github.com/NixOS/nixpkgs/archive/d46be5b0e8baad998f8277e04370f0fd30dde11b.tar.gz";
+    sha256 = "sha256:06mjr9k3hi4d9cnffxmhh48fnlsjqcav2r9zghcb62m3zcaxvsr9";
   };
   nixpkgsSrc = (import nixpkgsPath);
 
   # update haskell dependencies
-  compilerVersion = "8104";
+  compilerVersion = "923";
   compiler = "ghc" + compilerVersion;
 
   pkgsBase = nixpkgsSrc { system = "x86_64-linux"; };
@@ -41,22 +41,17 @@ let
 
       haskellOverrides = {
         overrides = hpFinal: hpPrev: {
-          # relude>1 featuer exposed modules
-          relude = pkgs.haskell.lib.overrideCabal hpPrev.relude {
-            version = "1.0.0.1";
-            sha256 = "0cw9a1gfvias4hr36ywdizhysnzbzxy20fb3jwmqmgjy40lzxp2g";
-          };
+          relude = pkgs.haskell.lib.dontCheck
+            (pkgs.haskell.lib.overrideCabal hpPrev.relude {
+              version = "1.1.0.0";
+              sha256 = "sha256-tR3wipPvEzHdVjieFY5nrHtoxizBVhwokNNXLHZKtgk=";
+            });
 
-          # latest version has a print fix
-          typed-process = pkgs.haskell.lib.overrideCabal hpPrev.typed-process {
-            version = "0.2.8.0";
-            sha256 = "sha256-hXjaVF1rL6Swtylr44mnNnORU87RnR3/ve5orsl4wKk=";
-          };
-
-          linux-capabilities = pkgs.haskell.lib.overrideCabal hpPrev.linux-capabilities {
-            version = "0.1.1.0";
-            sha256 = "sha256-xrLOxd8K8p+vnXJ8cmqHdgY4ZE5DNYEWnHWNp1sjuEg=";
-          };
+          linux-capabilities =
+            pkgs.haskell.lib.overrideCabal hpPrev.linux-capabilities {
+              version = "0.1.1.0";
+              sha256 = "sha256-xrLOxd8K8p+vnXJ8cmqHdgY4ZE5DNYEWnHWNp1sjuEg=";
+            };
 
           podenv = (hpPrev.callCabal2nix "podenv" (gitignoreSource ./.)
             { }).overrideAttrs (_: {
@@ -80,10 +75,7 @@ let
               (pkgs.haskell.lib.dontCheck drv)))) [
                 "--enable-executable-static"
                 "--extra-lib-dirs=${
-                  pkgs.ncurses.override {
-                    enableStatic = true;
-                    enableShared = true;
-                  }
+                  pkgs.ncurses.override { enableStatic = true; }
                 }/lib"
                 "--extra-lib-dirs=${
                   pkgs.gmp6.override { withStatic = true; }
