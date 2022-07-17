@@ -16,8 +16,8 @@ module Podenv
     prepare,
 
     -- * Runtime
-    RuntimeEnv (..),
-    defaultRuntimeEnv,
+    GlobalEnv (..),
+    defaultGlobalEnv,
     execute,
     getPodmanPodStatus,
     deletePodmanPod,
