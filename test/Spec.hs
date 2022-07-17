@@ -168,8 +168,7 @@ spec config = describe "unit tests" $ do
 
     bwrapTest args expected = do
       cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])
-      (app, mode, ctxName, gl') <- Podenv.Main.cliConfigLoad cli
-      let gl = gl' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
+      (app, mode, ctxName, gl) <- Podenv.Main.cliConfigLoad cli
       ctx <- runPrepare mode testEnv app ctxName
       let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
       Podenv.Runtime.bwrapRunArgs gl ctx (getFP re) `shouldBe` expected
@@ -182,9 +181,8 @@ spec config = describe "unit tests" $ do
 
     podmanCliTest args expected = do
       cli <- Podenv.Main.usage (["--rw"] <> args)
-      (app, mode, ctxName, gl') <- Podenv.Main.cliConfigLoad cli
+      (app, mode, ctxName, gl) <- Podenv.Main.cliConfigLoad cli
       ctx <- runPrepare mode testEnv app ctxName
-      let gl = gl' {Podenv.Runtime.system = Podenv.Config.defaultSystemConfig}
       let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
       Podenv.Runtime.podmanRunArgs gl fg ctx (getImg re) `shouldBe` expected
 

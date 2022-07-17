@@ -38,7 +38,7 @@ import Data.Set qualified
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Podenv.Capability qualified
-import Podenv.Config (Config, defaultSystemConfig, select)
+import Podenv.Config (Config, select)
 import Podenv.Context
 import Podenv.Dhall hiding (command, environ, name, namespace, network)
 import Podenv.Dhall qualified as Podenv
@@ -324,14 +324,13 @@ showRuntimeCmd re rm ctx = \case
 
 data GlobalEnv = GlobalEnv
   { verbose :: Bool,
-    system :: SystemConfig,
     config :: Maybe Config,
     -- | The host location of the volumes directory, default to ~/.local/share/podenv/volumes
     volumesDir :: FilePath
   }
 
 defaultGlobalEnv :: FilePath -> GlobalEnv
-defaultGlobalEnv = GlobalEnv True defaultSystemConfig Nothing
+defaultGlobalEnv = GlobalEnv True Nothing
 
 type ContextEnvT a = ReaderT GlobalEnv IO a
 
@@ -365,7 +364,7 @@ podmanRunArgs GlobalEnv {..} rmode ctx@Context {..} image = toString <$> args
         hostnameArg <> case _namespace of
           Just "host" -> ["--network", "host"]
           Just ns -> ["--network", "container:" <> infraName ns]
-          Nothing -> maybe [] (\dns -> ["--dns=" <> dns]) (system ^. sysDns) <> portArgs
+          Nothing -> portArgs
       | otherwise = ["--network", "none"]
 
     volumeArg :: (FilePath, Volume) -> [Text]
@@ -446,13 +445,11 @@ ensureInfraNet ns = do
         -- Try to delete any left-over infra container
         P.runProcess_ (podman ["rm", toString pod])
 
-      system' <- asks system
       let cmd =
             podman $
               map toString $
                 ["run", "--rm", "--name", pod]
                   <> ["--detach"]
-                  <> maybe [] (\dns -> ["--dns=" <> dns]) (system' ^. sysDns)
                   <> ["ubi8"]
                   <> ["sleep", "infinity"]
       debug $ show cmd

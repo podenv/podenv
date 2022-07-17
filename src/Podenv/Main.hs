@@ -177,17 +177,14 @@ cliInfo =
 -- | Load the config
 cliConfigLoad :: CLI -> IO (Application, AppMode, Name, GlobalEnv)
 cliConfigLoad cli@CLI {..} = do
-  system <- Podenv.Config.loadSystem
   -- The volumes dir may be provided by the system config, otherwise default to ~/.local/share/podenv/volumes
-  volumesDir <- case data_volumes_dir system of
-    Just fp -> pure $ toString fp
-    Nothing -> getDataDir >>= \fp -> pure $ fp </> "volumes"
+  volumesDir <- getDataDir >>= \fp -> pure $ fp </> "volumes"
 
   config <- Podenv.Config.load selector configExpr
   (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
   let app = cliPrepare cli baseApp
       name' = Name $ fromMaybe (app ^. appName) name
-      re = GlobalEnv {verbose, system, volumesDir, config = Just config}
+      re = GlobalEnv {verbose, volumesDir, config = Just config}
       mode = if shell then Shell else Regular extraArgs
   pure (app, mode, name', re)
 
