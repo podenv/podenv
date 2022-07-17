@@ -13,8 +13,6 @@ module Podenv.Config
     ApplicationRecord (..),
     defaultConfigPath,
     defaultApp,
-    loadSystem,
-    defaultSystemConfig,
     podenvImportTxt,
   )
 where
@@ -33,7 +31,6 @@ import Dhall.Parser qualified
 import Dhall.Src qualified
 import Podenv.Dhall hiding (name)
 import Podenv.Prelude
-import System.Directory
 import System.Environment (setEnv, unsetEnv)
 import System.FilePath.Posix (dropExtension, isExtensionOf, splitPath)
 import Text.Show qualified
@@ -186,10 +183,10 @@ loadConfig baseSelector expr = case expr of
   Dhall.RecordLit kv
     | -- When the node has a "runtime" attribute, assume it is an app.
       DM.member "runtime" kv ->
-        (\app -> [(baseSelector, app)]) <$> loadApp expr
+      (\app -> [(baseSelector, app)]) <$> loadApp expr
     | -- Otherwise, traverse each attributes
       otherwise ->
-        concat <$> traverse (uncurry loadCollection) (DM.toList kv)
+      concat <$> traverse (uncurry loadCollection) (DM.toList kv)
     where
       loadCollection n e
         -- Skip leaf starting with `use`, otherwise they can be used and likely fail with:
@@ -325,23 +322,8 @@ loadApp expr = case expr of
   Dhall.Lam _ fb1 (Dhall.Lam _ fb2 _) -> LamArg2 (getArgName fb1) (getArgName fb2) <$> Dhall.extract Dhall.auto expr
   Dhall.Lam _ fb _
     | Dhall.denote (Dhall.functionBindingAnnotation fb) == appType ->
-        LamApp <$> Dhall.extract Dhall.auto expr
+      LamApp <$> Dhall.extract Dhall.auto expr
     | otherwise -> LamArg (getArgName fb) <$> Dhall.extract Dhall.auto expr
   _ -> Lit <$> Dhall.extract Dhall.auto expr
   where
     getArgName = ArgName . Dhall.functionBindingVariable
-
-loadSystem :: IO SystemConfig
-loadSystem = do
-  confDir <- getXdgDirectory XdgConfig "podenv"
-  let fp = confDir </> "system.dhall"
-  exist <- doesFileExist fp
-  if exist
-    then Dhall.input Dhall.auto (toText fp)
-    else pure defaultSystemConfig
-
--- | The default system config
-defaultSystemConfig :: SystemConfig
-defaultSystemConfig = case Dhall.extract Dhall.auto (Dhall.renote systemConfigDefault) of
-  Success x -> x
-  Failure v -> error $ "Invalid default system config: " <> show v

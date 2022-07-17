@@ -39,9 +39,6 @@ appDefault =
 capsDefault :: Expr Void Void
 capsDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Capabilities.dhall).default")
 
-systemConfigDefault :: Expr Void Void
-systemConfigDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/System.dhall).default")
-
 -- | Generate Haskell Types from Dhall Types.
 -- See: https://hackage.haskell.org/package/dhall-1.39.0/docs/Dhall-TH.html
 Dhall.TH.makeHaskellTypes
@@ -52,7 +49,6 @@ Dhall.TH.makeHaskellTypes
           main "Application",
           main "ContainerBuild",
           main "Flakes",
-          main' "SystemConfig" "System",
           Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall"
         ]
   )
@@ -82,9 +78,3 @@ deriving instance Eq Capabilities
 deriving instance Show Application
 
 deriving instance Eq Application
-
-$(makeLensesBy (\n -> Just $ "sys" <> [toUpper $ head n] <> tail n) ''SystemConfig)
-
-deriving instance Show SystemConfig
-
-deriving instance Eq SystemConfig
