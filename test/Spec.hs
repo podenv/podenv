@@ -1,29 +1,33 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Main where
 
-import Data.Text (pack)
 import Data.Text qualified as Text
-import Podenv hiding (command, loadConfig)
+import Data.Text.IO qualified as Text
+import Podenv hiding (loadConfig)
+import Podenv.Capability (AppMode (..))
 import Podenv.Capability qualified
-import Podenv.Config qualified
-import Podenv.Context (command)
-import Podenv.Context qualified
-import Podenv.Dhall qualified
+import Podenv.Config
+import Podenv.Context
+import Podenv.Dhall
 import Podenv.Env
-import Podenv.Main qualified
-import Podenv.Prelude (mayFail, (^.))
-import Podenv.Runtime (RunMode (..))
+import Podenv.Image
+import Podenv.Main
+import Podenv.Prelude
+import Podenv.Runtime (ExecMode (..))
 import Podenv.Runtime qualified
-import System.Environment (getEnv, setEnv)
+import System.Environment (setEnv)
 import Test.Hspec
 
 main :: IO ()
 main = mockEnv >> doLoadConfig >>= hspec . spec
   where
-    doLoadConfig = Podenv.Config.load Nothing (Just "./test/config.dhall")
+    doLoadConfig = do
+      testConfig <- Podenv.Config.loadConfig (Just "./test/config.dhall")
+      goldenConfig <- Podenv.Config.loadConfig (Just "./test/golden.dhall")
+      pure (testConfig, goldenConfig)
 
     -- Fix env values while keeping the host cache for dhall
     mockEnv = do
@@ -31,30 +35,106 @@ main = mockEnv >> doLoadConfig >>= hspec . spec
       setEnv "XDG_CACHE_HOME" (curHome <> "/.cache")
       setEnv "NIX_SSL_CERT_FILE" "/etc/hosts"
 
-spec :: Podenv.Config.Config -> Spec
-spec config = describe "unit tests" $ do
+spec :: (Config, Config) -> Spec
+spec (config, goldenConfig) = describe "unit tests" $ do
   describe "config" $ do
-    it "load simple" $ loadTest "env" []
+    let loadTest code expected = do
+          config' <- Podenv.Config.unConfig <$> loadConfig' code
+          map fst config' `shouldBe` expected
+
+    it "load simple" $ loadTest "env" [""]
     it "load collection" $ loadTest "{ a = env, b = env}" ["a", "b"]
     it "load nested" $ loadTest "{ a = { b = env, c = env}, d = env}" ["a.b", "a.c", "d"]
     it "load weak" $ loadTest "{ image = { runtime.image = \"ubi\" }, nix = { runtime.nix = \"n\" } }" ["image", "nix"]
+
+  describe "golden" $ do
+    let mkGoldenConfig :: Maybe Config -> [String] -> IO Text
+        mkGoldenConfig configM args = do
+          cli <- usage args
+          cfg <- maybe (loadConfig (configExpr cli)) pure configM
+          (ar, mode, gl, run) <- cliConfigLoad "/volumes" testEnv cfg cli
+          ctx <- Podenv.Runtime.appToContext run mode ar
+          mappend ("==== " <> show args <> "\n") . Text.replace " --" "\n  --"
+            <$> runReaderT (Podenv.Runtime.showCmd run Foreground ctx) gl
+        mkGolden = mkGoldenConfig (Just goldenConfig)
+        writeGolden :: [[String]] -> [[String]] -> IO ()
+        writeGolden xs ys = do
+          content <- Text.unlines <$> traverse mkGolden xs
+          content2 <- Text.unlines <$> traverse (mkGoldenConfig Nothing) ys
+          current <- Text.readFile "test/golden.txt"
+          let new =
+                Text.unlines
+                  [ show $ map fst (unConfig goldenConfig),
+                    content,
+                    content2
+                  ]
+          when (current /= new) $ do
+            Text.writeFile "test/golden.txt" new
+            exitFailure
+
+    it "update golden.txt" $ do
+      writeGolden
+        [ ["legacy.vpn"],
+          ["legacy.web"],
+          ["corp.vpn"],
+          ["corp.bridge"],
+          ["--root", "--name", "ubi", "ubi"],
+          ["--root", "--name", "ubi", "--namespace", "testns", "ubi"],
+          ["--headless", "./test/headless.dhall", "firefox"],
+          ["--network", "container:sway.vnc", "vnc-viewer", "localhost"]
+        ]
+        [ -- selector is removed from arg because it match the single app selector
+          ["--config", "{env = {runtime.image = \"ubi8\" }}", "env", "id"],
+          -- the single app is automatically selected
+          ["--config", "{env = {runtime.image = \"ubi8\" }}", "id"],
+          -- image selector
+          ["image:ubi8"],
+          -- nix selector
+          ["nix:test"],
+          -- run with name
+          ["--name", "test", "image:ubi8"],
+          -- run net default
+          ["--config", "{ runtime.image = \"ubi8\", capabilities.network = True }"],
+          -- run no-network
+          ["--no-network", "--config", "{ runtime.image = \"ubi8\", capabilities.network = True }"],
+          -- run net private
+          ["--network", "private", "image:ubi8"],
+          -- run net host
+          ["--network", "host", "image:ubi8"],
+          -- run shared net
+          ["--network", "vpn", "image:ubi8"],
+          -- wayland disable selinux
+          ["--wayland", "image:ubi8"],
+          -- hostfile are substituted
+          ["--hostfile", "image:ubi8", "cat", "/etc/hosts", "/proc/cmdline"],
+          -- shell override hostfile
+          ["--shell", "--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"],
+          ["--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"],
+          -- many volumes
+          ["--volume", "/home/data:/tmp/data", "--volume", "/tmp", "--volume", "/old:/tmp/data", "image:ubi8"],
+          -- name override keep image
+          ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"],
+          -- bwrap test
+          ["--shell", "rootfs:/srv"]
+        ]
+
   describe "builder config" $ do
     it "load firefox" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["firefox"]
-      let be = Podenv.Runtime.createLocalhostRunEnv testEnv baseApp (Name "firefox")
-      Text.take 34 (Podenv.Runtime.buildInfo be) `shouldBe` "# Containerfile localhost/3c922bca"
+      let be = Podenv.Runtime.createLocalhostRunEnv testEnv
+      Text.take 34 (Podenv.Runtime.showBuildInfo be (baseApp ^. arApplication . appRuntime)) `shouldBe` "# Containerfile localhost/3c922bca"
     it "load nixify" $ do
       (_, baseApp) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
-      let be = Podenv.Runtime.createLocalhostRunEnv testEnv baseApp (Name "firefox")
-      Text.take 34 (Podenv.Runtime.buildInfo be) `shouldBe` "# Containerfile localhost/3c922bca"
+      let be = Podenv.Runtime.createLocalhostRunEnv testEnv
+      Text.take 34 (Podenv.Runtime.showBuildInfo be (baseApp ^. arApplication . appRuntime)) `shouldBe` "# Containerfile localhost/3c922bca"
     it "override nixpkgs when necessary" $ do
-      let mkApp installables pin =
-            Podenv.Config.defaultApp
-              { Podenv.Dhall.runtime = Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables pin)
-              }
+      let mkApp installables' pin =
+            Podenv.Config.defaultApp (Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables' pin))
+              & (appName .~ "test")
+
           checkCommand test app expected = do
-            ctx <- runPrepare (Regular []) (testEnv {_appHomeDir = Just "/tmp"}) app (Name "test")
-            (ctx ^. command) `test` expected
+            ctx <- runPrepare (Regular []) testEnv (defaultAppRes app)
+            (ctx ^. ctxCommand) `test` expected
           commandShouldContain = checkCommand shouldContain
           commandShouldNotContain = checkCommand shouldNotContain
 
@@ -71,6 +151,7 @@ spec config = describe "unit tests" $ do
     it "handle separator" $ do
       cli <- Podenv.Main.usage ["--name", "test", "image:ubi8", "--", "ls", "-la"]
       Podenv.Main.cliExtraArgs cli `shouldBe` ["ls", "-la"]
+
   describe "cli with single config" $ do
     it "select app" $ cliTest "env" [] "env"
     it "add args" $ cliTest "env" ["ls"] "env // { command = [\"ls\"]}"
@@ -78,161 +159,120 @@ spec config = describe "unit tests" $ do
     it "set cap" $ cliTest "env" ["--wayland"] (addCap "env" "wayland = True")
     it "unset cap" $ cliTest (addCap "env" "wayland = True") ["--no-wayland"] "env"
     it "set volume" $ cliTest "env" ["--volume", "/tmp/test"] "env // { volumes = [\"/tmp/test\"]}"
-    it "one args" $ cliTest "\\(name : Text) -> env // { name }" ["a"] "env // { name = \"a\"}"
-    it "two args" $ cliTest "\\(name : Text) -> \\(desc : Text) -> env // { name, description = Some desc }" ["a", "b"] "env // { name = \"a\", description = Some \"b\"}"
-  describe "cli default" $ do
-    it "image:name" $ cliTest "env" ["image:testy"] "def // { runtime = Podenv.Image \"testy\", name = \"image-b2effd\" }"
-    it "nix:expr" $ cliTest "env" ["nix:test"] "def // { runtime.nix = \"test\", name = \"nix-a94a8f\" }"
-  describe "bwrap ctx" $ do
-    it "run simple" $ bwrapTest ["--shell"] (defBwrap <> ["/bin/sh"])
+    it "one args" $ cliTest "\\(a : Text) -> env // { description = Some a }" ["a"] "env // { description = Some \"a\"}"
+    it "two args" $
+      cliTest
+        "\\(a : Text) -> \\(b : Text) -> env // { description = Some (a ++ b) }"
+        ["a", "b"]
+        "env // { description = Some \"ab\"}"
+
   describe "nix test" $ do
     it "nix run without args" $ nixTest "{ runtime.nix = \"test\"}" [] ["run", "test"]
-    it "nix run with args" $ nixTest "{env, test = { runtime.nix = \"test\"}}" ["test", "--help"] ["run", "test", "--", "--help"]
-    it "nix run with shell" $ nixTest "{env, test = { runtime.nix = \"test\", command = [\"test\"]}}" ["test", "--help"] ["shell", "test", "--command", "test", "--help"]
+    it "nix run with args" $
+      nixTest
+        "{env, test = { runtime.nix = \"test\"}}"
+        ["test", "--help"]
+        ["run", "test", "--", "--help"]
+    it "nix run with shell" $
+      nixTest
+        "{env, test = { runtime.nix = \"test\", command = [\"cmd\"]}}"
+        ["test", "--help"]
+        ["shell", "test", "--command", "cmd", "--help"]
+
   describe "podman ctx" $ do
-    it "run simple" $ podmanTest "env" ["run", "--rm", "--hostname", "env", "--name", "env", defImg]
-    it "run syscaps" $ podmanTest "env // { syscaps = [\"NET_ADMIN\"] }" (defRun ["--hostname", "env", "--cap-add", "CAP_NET_ADMIN"])
-    it "run hostdir" $ podmanTest "env // { volumes = [\"/tmp/test\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp/test:/tmp/test"])
-    it "run volumes" $ podmanTest "env // { volumes = [\"nix-store:/nix\"]}" (defRun ["--hostname", "env", "--volume", "/data/nix-store:/nix"])
+    let defRun xs = ["run", "--rm"] <> xs <> ["--label", "podenv.selector=unknown", defImg]
+    let podmanTest code expected = do
+          ar <- loadOne (addCap code "network = True, rw = True")
+          ctx <- runPrepare (Regular []) testEnv ar
+          Podenv.Runtime.podmanRunArgs defRe fg ctx (getImg ar) `shouldBe` expected
+    it "run simple" $ podmanTest "env" (defRun [])
+    it "run simple root" $
+      podmanTest
+        "env // { capabilities.root = True }"
+        (defRun ["--user", "0", "--workdir", "/root", "--env", "HOME=/root", "--volume", "/data/podenv-home:/root"])
+    it "run syscaps" $
+      podmanTest
+        "env // { syscaps = [\"NET_ADMIN\"] }"
+        (defRun ["--cap-add", "CAP_NET_ADMIN"])
+    it "run hostdir" $
+      podmanTest
+        "env // { volumes = [\"/tmp/test\"]}"
+        (defRun ["--security-opt", "label=disable", "--volume", "/tmp/test:/tmp/test"])
+    it "run volumes" $
+      podmanTest
+        "env // { volumes = [\"nix-store:/nix\"]}"
+        (defRun ["--volume", "/data/nix-store:/nix"])
     it "run home volumes" $
-      podmanTest "env // { volumes = [\"~/src:/data\"]}" (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/home/user/src:/data"])
+      podmanTest
+        "env // { volumes = [\"~/src:/data\"]}"
+        (defRun ["--security-opt", "label=disable", "--volume", "/home/user/src:/data"])
     it "run many volumes" $
       podmanTest
         "env // { volumes = [\"/home/data:/tmp/data\", \"/tmp\", \"/home/old-data:/tmp/data\"]}"
-        (defRun ["--security-opt", "label=disable", "--hostname", "env", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
-  describe "podman cli" $ do
-    it "run minimal" $ podmanCliTest ["image:ubi8"] ["run", "--rm", "--network", "none", "--name", "image-8bfbaa", "ubi8"]
-    it "wayland disable selinux" $
-      let cmd = ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--env", "GDK_BACKEND=wayland", "--env", "QT_QPA_PLATFORM=wayland", "--env", "WAYLAND_DISPLAY=wayland-0", "--env", "XDG_RUNTIME_DIR=/run/user/1000", "--env", "XDG_SESSION_TYPE=wayland", "--mount", "type=tmpfs,destination=/dev/shm", "--volume", "/etc/machine-id:/etc/machine-id", "--mount", "type=tmpfs,destination=/run/user", "--volume", "/run/user/1000/wayland-0:/run/user/1000/wayland-0", "--name", "image-8bfbaa", "ubi8"]
-       in podmanCliTest ["--wayland", "image:ubi8"] cmd
-    it "hostfile are substituted" $
-      let cmd = ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/proc/cmdline:/data/cmdline", "--volume", "/etc/hosts:/data/hosts", "--name", "image-8bfbaa", "ubi8", "cat", "/data/hosts", "/data/cmdline"]
-       in podmanCliTest ["--hostfile", "image:ubi8", "cat", "/etc/hosts", "/proc/cmdline"] cmd
-    it "run with name" $
-      podmanCliTest
-        ["--name", "test", "image:ubi8"]
-        ["run", "--rm", "--network", "none", "--name", "test", "ubi8"]
-    it "run simple" $
-      podmanCliTest
-        ["--network", "--shell", "image:ubi8"]
-        ["run", "-i", "--detach-keys", "", "-t", "--rm", "--hostname", "image-8bfbaa", "--env", "TERM=xterm-256color", "--name", "image-8bfbaa", "ubi8", "/bin/sh"]
-    it "shell override hostfile" $ do
-      let expected seArgs extra = ["run", "-i", "--detach-keys", "", "-t", "--rm"] <> seArgs <> ["--network", "none", "--env", "TERM=xterm-256color"] <> extra <> ["--name", "image-8bfbaa", "ubi8"]
-          cmd = ["--hostfile", "--terminal", "image:ubi8", "vi", "/etc/hosts"]
-      podmanCliTest
-        (["--shell"] <> cmd)
-        (expected [] [] <> ["/bin/sh"])
-      podmanCliTest
-        cmd
-        (expected ["--security-opt", "label=disable"] ["--volume", "/etc/hosts:/data/hosts"] <> ["vi", "/data/hosts"])
-    it "run many volumes" $
-      podmanCliTest
-        ["--volume", "/home/data:/tmp/data", "--volume", "/tmp", "--volume", "/old:/tmp/data", "image:ubi8"]
-        ["run", "--rm", "--security-opt", "label=disable", "--network", "none", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data", "--name", "image-8bfbaa", "ubi8"]
-    it "name override keep image" $ do
-      cli <- Podenv.Main.usage ["--name", "tmp", "--config", "{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"]
-      (app, mode, ctxName, gl) <- Podenv.Main.cliConfigLoad cli
-      ctx <- runPrepare mode testEnv app ctxName
-      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
-      Podenv.Runtime.podmanRunArgs gl fg ctx (getImg re) `shouldBe` ["run", "--rm", "--read-only=true", "--network", "none", "--name", "tmp", "localhost/firefox"]
+        (defRun ["--security-opt", "label=disable", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
   where
-    defRun xs = ["run", "--rm"] <> xs <> ["--name", "env", defImg]
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultGlobalEnv "/data"
 
-    runPrepare mode env app ctxName = runAppEnv env $ Podenv.Capability.prepare mode app ctxName
+    runPrepare mode env app = runAppEnv env app $ Podenv.Capability.prepare mode
 
     testEnv =
       AppEnv
-        { _hostXdgRunDir = Just "/run/user/1000",
-          _hostWaylandSocket = Just (SocketName "wayland-0"),
-          _hostHomeDir = Just "/home/user",
-          _hostCwd = "/usr/src/podenv",
-          _hostUid = 1000,
-          _appHomeDir = Nothing,
-          _hostDisplay = ":0",
-          _hostSSHAgent = Nothing,
-          _isNVIDIAEnabled = pure False,
-          _getVideoDevices = pure [],
-          _getCertLocation = pure $ Just "/etc/ca"
+        { _envHostXdgRunDir = Just "/run/user/1000",
+          _envHostWaylandSocket = Just (SocketName "wayland-0"),
+          _envHostHomeDir = Just "/home/user",
+          _envHostCwd = "/usr/src/podenv",
+          _envHostUid = 1000,
+          _envAppHomeDir = Nothing,
+          _envHostDisplay = ":0",
+          _envHostSSHAgent = Nothing,
+          _envIsNVIDIAEnabled = pure False,
+          _envGetAppHomeDir = \app -> pure $ case app ^. Podenv.Dhall.appRuntime of
+            Podenv.Dhall.Nix _ -> Just "/home/user"
+            Podenv.Dhall.Container cb -> toString <$> cb ^. cbImage_home
+            _ -> Nothing,
+          _envGetVideoDevices = pure [],
+          _envGetCertLocation = pure $ Just "/etc/ca"
         }
 
-    getFP re = case Podenv.Runtime.runtimeBackend re of
-      Podenv.Runtime.Bubblewrap fp -> fp
-      _ -> error "Not bwrap"
-
-    defBwrap =
-      ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net"]
-        <> ["--ro-bind", "/srv", "/", "--proc", "/proc", "--dev", "/dev", "--perms", "01777", "--tmpfs", "/tmp"]
-        <> ["--clearenv", "--setenv", "TERM", "xterm-256color"]
-
-    bwrapTest args expected = do
-      cli <- Podenv.Main.usage (args <> ["rootfs:/srv"])
-      (app, mode, ctxName, gl) <- Podenv.Main.cliConfigLoad cli
-      ctx <- runPrepare mode testEnv app ctxName
-      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
-      Podenv.Runtime.bwrapRunArgs gl ctx (getFP re) `shouldBe` expected
-
-    getImg re = case Podenv.Runtime.runtimeBackend re of
-      Podenv.Runtime.Podman image -> image
+    getImg app = case app ^. Podenv.Dhall.arApplication . Podenv.Dhall.appRuntime of
+      Podenv.Dhall.Image image -> ImageName image
       _ -> error "Not podman"
 
     fg = Foreground
 
-    podmanCliTest args expected = do
-      cli <- Podenv.Main.usage (["--rw"] <> args)
-      (app, mode, ctxName, gl) <- Podenv.Main.cliConfigLoad cli
-      ctx <- runPrepare mode testEnv app ctxName
-      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
-      Podenv.Runtime.podmanRunArgs gl fg ctx (getImg re) `shouldBe` expected
-
-    podmanTest code expected = do
-      app <- loadOne (addCap code "network = True, rw = True")
-      ctx <- runPrepare (Regular []) testEnv app (Podenv.Context.Name "env")
-      let re = Podenv.Runtime.createLocalhostRunEnv testEnv app (Name "test")
-      Podenv.Runtime.podmanRunArgs defRe fg ctx (getImg re) `shouldBe` expected
-
     getApp code args = do
       cli <- Podenv.Main.usage args
-      (app, mode, name, _) <- Podenv.Main.cliConfigLoad (cli {Podenv.Main.configExpr = Just . mkConfig $ code})
-      ctx <- runPrepare mode (testEnv {_appHomeDir = Just "/home"}) app name
-      pure (app, ctx)
+      cfg <- loadConfig' code
+      (app, mode, _, _) <- Podenv.Main.cliConfigLoad "/volumes" testEnv cfg cli
+      runPrepare mode (testEnv & envAppHomeDir ?~ "/home") app
 
+    cliTest :: Text -> [String] -> Text -> IO ()
     cliTest gotCode args expectedCode = do
-      (_, got) <- getApp gotCode args
-      (_, expected) <- getApp expectedCode []
-      got `shouldBe` expected
+      got <- getApp gotCode args
+      expected <- getApp expectedCode []
+      let removeSelector = ctxLabels .~ mempty
+      (got & removeSelector) `shouldBe` (expected & removeSelector)
 
     nixTest code args expectedCommand = do
-      (_, ctx) <- getApp code args
-      drop 3 (ctx ^. command) `shouldBe` expectedCommand
-
-    loadTest code expected = do
-      config' <- loadConfig Nothing code
-      let got = case config' of
-            Podenv.Config.ConfigApplication _ -> []
-            Podenv.Config.ConfigApplications xs -> map fst xs
-            _ -> error "Bad test config"
-      got `shouldBe` expected
+      ctx <- getApp code args
+      drop 3 (ctx ^. ctxCommand) `shouldBe` expectedCommand
 
     addCap code capCode =
       "( " <> code <> " // { capabilities = (" <> code <> ").capabilities // {" <> capCode <> "}})"
 
     mkConfig code =
-      pack $
-        unlines
-          [ "let Podenv = env:PODENV",
-            "let Nix = Podenv.Nix",
-            "let def = { capabilities = {=}, runtime = Podenv.Image \"ubi8\" }",
-            "let env = def // { name = \"env\" }",
-            "let env2 = env // { name = \"beta\" } in",
-            code
-          ]
-    loadConfig s code =
-      Podenv.Config.load s (Just . mkConfig $ code)
+      unlines
+        [ "let Podenv = env:PODENV",
+          "let Nix = Podenv.Nix",
+          "let def = { capabilities = {=}, runtime = Podenv.Image \"ubi8\" }",
+          "let env = def in ",
+          code
+        ]
+    loadConfig' code = Podenv.Config.loadConfig (Just . mkConfig $ code)
 
     loadOne code = do
-      config' <- loadConfig Nothing code
-      case config' of
-        Podenv.Config.ConfigApplication (Podenv.Config.Lit (Podenv.Config.ApplicationRecord x)) -> pure x
+      config' <- loadConfig' code
+      pure $ case Podenv.Config.unConfig config' of
+        [(_, Podenv.Config.LitApp x)] -> defaultAppRes (Podenv.Config.unRecord x)
         _ -> error "Expected a single app"

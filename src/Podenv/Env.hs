@@ -1,22 +1,38 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-missing-export-lists #-}
 
 -- | The platform environment
 module Podenv.Env
-  ( AppEnv (..),
-    AppMode (..),
-    SocketName (..),
+  ( SocketName (..),
+    AppEnvState (UnknownState),
     AppEnvT,
-    createLocalhostEnv,
     runAppEnv,
     isNVIDIAEnabled,
     getVideoDevices,
     getCertLocation,
+    createEnv,
+
+    -- * Lenses
+    envHostXdgRunDir,
+    envHostWaylandSocket,
+    envHostDisplay,
+    envHostSSHAgent,
+    envHostHomeDir,
+    envHostCwd,
+    envHostUid,
+    envAppHomeDir,
+
+    -- * For testing
+    AppEnv (..),
   )
 where
 
@@ -25,44 +41,65 @@ import Data.List.NonEmpty qualified
 import Data.Maybe qualified
 import Data.Text qualified
 import Data.Text qualified as Text
-import Podenv.Dhall hiding (runtime)
+import Lens.Family.TH (makeLenses)
+import Podenv.Dhall
 import Podenv.Prelude
-
-data AppMode = Regular [Text] | Shell deriving (Show, Eq)
 
 newtype SocketName = SocketName FilePath
 
-data AppEnv = AppEnv
-  { _hostXdgRunDir :: Maybe FilePath,
-    _hostWaylandSocket :: Maybe SocketName,
-    _hostDisplay :: String,
-    _hostSSHAgent :: Maybe FilePath,
-    _hostHomeDir :: Maybe FilePath,
-    _hostCwd :: FilePath,
-    _hostUid :: UserID,
-    _appHomeDir :: Maybe FilePath,
+-- | A data kind to keep track of the application environment such as its user uid and home directory.
+--   These values depends on the runtime, and it can be costly to resolve them.
+--   Thus we only query the information once before switching the state from Unknown to Resolved.
+--   See the 'resolveAppEnv' function below
+data AppEnvState = Resolved | UnknownState
+
+data AppEnv (s :: AppEnvState) = AppEnv
+  { _envHostXdgRunDir :: Maybe FilePath,
+    _envHostWaylandSocket :: Maybe SocketName,
+    _envHostDisplay :: String,
+    _envHostSSHAgent :: Maybe FilePath,
+    _envHostHomeDir :: Maybe FilePath,
+    _envHostCwd :: FilePath,
+    _envHostUid :: UserID,
+    _envAppHomeDir :: Maybe FilePath,
     -- environment query
-    _isNVIDIAEnabled :: IO Bool,
-    _getVideoDevices :: IO [FilePath],
-    _getCertLocation :: IO (Maybe FilePath)
+    _envGetAppHomeDir :: Application -> IO (Maybe FilePath),
+    _envGetVideoDevices :: IO [FilePath],
+    _envGetCertLocation :: IO (Maybe FilePath),
+    _envIsNVIDIAEnabled :: IO Bool
   }
 
+$(makeLenses ''AppEnv)
+
+resolveAppEnv :: AppEnv 'UnknownState -> Application -> IO (AppEnv 'Resolved)
+resolveAppEnv env app = do
+  appHomeDir <- resolveHomeDir
+  pure $ env & envAppHomeDir .~ appHomeDir
+  where
+    resolveHomeDir
+      | app ^. appCapabilities . capRoot = pure $ Just "/root"
+      | otherwise = (env ^. envGetAppHomeDir) app
+
 -- | This newtype hide the inner IO so that only the ones defined below are available.
-newtype AppEnvT a = AppEnvT (ReaderT AppEnv IO a)
+newtype AppEnvT a = AppEnvT (ReaderT (AppEnv 'Resolved) IO a)
   deriving newtype (Functor, Applicative, Monad)
-  deriving newtype (MonadReader AppEnv)
+  deriving newtype (MonadReader (AppEnv 'Resolved))
 
 isNVIDIAEnabled :: AppEnvT Bool
-isNVIDIAEnabled = AppEnvT $ lift =<< asks _isNVIDIAEnabled
+isNVIDIAEnabled = AppEnvT $ lift =<< askL envIsNVIDIAEnabled
 
 getVideoDevices :: AppEnvT [FilePath]
-getVideoDevices = AppEnvT $ lift =<< asks _getVideoDevices
+getVideoDevices = AppEnvT $ lift =<< askL envGetVideoDevices
 
 getCertLocation :: AppEnvT (Maybe FilePath)
-getCertLocation = AppEnvT $ lift =<< asks _getCertLocation
+getCertLocation = AppEnvT $ lift =<< askL envGetCertLocation
 
-runAppEnv :: AppEnv -> AppEnvT a -> IO a
-runAppEnv env (AppEnvT r) = runReaderT r env
+-- | 'runAppEnv' is the only available runner to perform a 'AppEnvT' action.
+runAppEnv :: AppEnv 'UnknownState -> ApplicationResource -> (ApplicationResource -> AppEnvT a) -> IO a
+runAppEnv env ar action = do
+  appEnv <- resolveAppEnv env (ar ^. arApplication)
+  let AppEnvT r = action ar
+  runReaderT r appEnv
 
 -- | Get the current uid home path in the rootfs
 getRootfsHome :: UserID -> Maybe FilePath -> FilePath -> IO (Maybe FilePath)
@@ -86,9 +123,7 @@ doGetCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$
     checkEnv :: MaybeT IO FilePath
     checkEnv = do
       env <- lift $ lookupEnv "NIX_SSL_CERT_FILE"
-      case env of
-        Just fp -> checkPath fp
-        Nothing -> mzero
+      maybe mzero checkPath env
     checkPath :: FilePath -> MaybeT IO FilePath
     checkPath fp = do
       exist <- lift $ doesPathExist fp
@@ -102,21 +137,22 @@ doGetCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$
         "/etc/ssl/certs/ca-bundle.crt"
       ]
 
-createLocalhostEnv :: Runtime -> IO AppEnv
-createLocalhostEnv r = do
-  _hostUid <- getRealUserID
-  _hostHomeDir <- lookupEnv "HOME"
-  _hostXdgRunDir <- lookupEnv "XDG_RUNTIME_DIR"
-  _hostWaylandSocket <- fmap SocketName <$> lookupEnv "WAYLAND_DISPLAY"
-  _hostDisplay <- fromMaybe ":0" <$> lookupEnv "DISPLAY"
-  _hostSSHAgent <- lookupEnv "SSH_AUTH_SOCK"
-  _hostCwd <- getCurrentDirectory
-  _appHomeDir <- case r of
-    Container cb -> pure $ toString <$> cb ^. cbImage_home
-    Rootfs fp -> getRootfsHome _hostUid _hostHomeDir (toString fp)
-    Nix _ -> pure _hostHomeDir
-    Image _ -> pure Nothing
-  let _isNVIDIAEnabled = doesPathExist "/dev/nvidiactl"
-      _getVideoDevices = doGetVideoDevices
-      _getCertLocation = doGetCertLocation
+createEnv :: IO (AppEnv 'UnknownState)
+createEnv = do
+  _envHostUid <- getRealUserID
+  _envHostHomeDir <- lookupEnv "HOME"
+  _envHostXdgRunDir <- lookupEnv "XDG_RUNTIME_DIR"
+  _envHostWaylandSocket <- fmap SocketName <$> lookupEnv "WAYLAND_DISPLAY"
+  _envHostDisplay <- fromMaybe ":0" <$> lookupEnv "DISPLAY"
+  _envHostSSHAgent <- lookupEnv "SSH_AUTH_SOCK"
+  _envHostCwd <- getCurrentDirectory
+  let _envAppHomeDir = Nothing
+      _envGetAppHomeDir app = case app ^. appRuntime of
+        Container cb -> pure $ toString <$> cb ^. cbImage_home
+        Rootfs fp -> getRootfsHome _envHostUid _envHostHomeDir (toString fp)
+        Nix _ -> pure _envHostHomeDir
+        Image _ -> pure Nothing
+      _envGetVideoDevices = doGetVideoDevices
+      _envGetCertLocation = doGetCertLocation
+      _envIsNVIDIAEnabled = doesPathExist "/dev/nvidiactl"
   pure $ AppEnv {..}

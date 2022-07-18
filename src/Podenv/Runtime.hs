@@ -1,17 +1,21 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 -- | This module contains the podman/bubblewrap context wrapper
 module Podenv.Runtime
   ( createLocalhostRunEnv,
-    showRuntimeCmd,
+    createHeadlessRunEnv,
     getPodmanPodStatus,
     deletePodmanPod,
 
@@ -24,24 +28,27 @@ module Podenv.Runtime
     bwrapRunArgs,
 
     -- * data type and lenses
-    RuntimeEnv (..),
-    RunMode (..),
+    RunEnv (..),
+    ExecMode (..),
     module Podenv.Context,
     GlobalEnv (..),
     defaultGlobalEnv,
-    RuntimeBackend (..),
   )
 where
 
+import Control.Concurrent (threadDelay)
+import Data.Aeson qualified as Aeson
+import Data.Digest.Pure.SHA qualified as SHA
+import Data.List qualified
 import Data.Map.Strict qualified as Map
 import Data.Set qualified
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import Podenv.Capability (AppMode (..))
 import Podenv.Capability qualified
 import Podenv.Config (Config, select)
 import Podenv.Context
-import Podenv.Dhall hiding (command, environ, name, namespace, network)
-import Podenv.Dhall qualified as Podenv
+import Podenv.Dhall
 import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
@@ -50,20 +57,20 @@ import System.Exit (ExitCode (ExitSuccess))
 import System.Posix.Files qualified
 import System.Process.Typed qualified as P
 
-data RuntimeEnv = RuntimeEnv
-  { buildInfo :: Text,
-    buildRuntime :: ContextEnvT (),
-    updateRuntime :: ContextEnvT (),
-    appToContext :: AppMode -> IO Context,
-    execute :: RunMode -> Context -> ContextEnvT (),
-    runtimeBackend :: RuntimeBackend
+data RunEnv = RunEnv
+  { showBuildInfo :: Runtime -> Text,
+    showCmd :: ExecMode -> Context -> ContextEnvT Text,
+    buildRuntime :: Runtime -> ContextEnvT (),
+    updateRuntime :: Runtime -> ContextEnvT (),
+    appToContext :: AppMode -> ApplicationResource -> IO Context,
+    execute :: ExecMode -> Context -> ContextEnvT ()
   }
 
 data RuntimeBackend
   = Podman ImageName
   | Bubblewrap FilePath
 
-data RunMode = Foreground | Background deriving (Eq, Show)
+data ExecMode = Foreground | Background deriving (Eq, Show)
 
 ensureResolvConf :: FilePath -> IO (Context -> Context)
 ensureResolvConf fp
@@ -85,41 +92,68 @@ ensureResolvConf fp
           then drop 2 realResolvConf
           else realResolvConf
 
-createLocalhostRunEnv :: AppEnv -> Application -> Name -> RuntimeEnv
-createLocalhostRunEnv appEnv app name = RuntimeEnv {..}
+createLocalhostRunEnv :: AppEnv 'UnknownState -> RunEnv
+createLocalhostRunEnv appEnv = RunEnv {..}
   where
-    appToContext amode = do
-      setResolv <- case runtimeBackend of
-        Bubblewrap fp -> ensureResolvConf fp
+    appToContext amode ar = do
+      let appRuntimeBackend = getRuntimeBackend (ar ^. arApplication . appRuntime)
+      setResolv <- case appRuntimeBackend of
+        Bubblewrap fp | ar ^. arApplication . appCapabilities . capNetwork -> ensureResolvConf fp
         _ -> pure id
-      let validate ctx = case runtimeBackend of
-            Bubblewrap _ | null (ctx ^. command) -> ctx & command .~ ["/bin/sh"]
+      let ensureCommand ctx = case appRuntimeBackend of
+            Bubblewrap _ | null (ctx ^. ctxCommand) -> ctx & ctxCommand .~ ["/bin/sh"]
             _ -> ctx
-      ctx <- runAppEnv appEnv $ Podenv.Capability.prepare amode app name
-      pure $ ctx & setResolv . validate
-    runtimeBackend = case app ^. appRuntime of
+      ctx <- runAppEnv appEnv ar $ Podenv.Capability.prepare amode
+      pure $ ctx & setResolv . ensureCommand
+
+    getRuntimeBackend = \case
       Image x -> Podman $ ImageName x
       Rootfs root -> Bubblewrap $ toString root
       Container cb -> Podman . mkImageName $ cb
       Nix _ -> Bubblewrap "/"
 
-    (buildInfo, (buildRuntime, updateRuntime)) = case app ^. appRuntime of
-      Podenv.Image iname -> ("image:" <> iname, noBuilder)
-      Podenv.Rootfs fp -> ("rootfs:" <> fp, noBuilder)
-      Podenv.Container cb -> manageContainer cb
-      Podenv.Nix expr -> ("nix:" <> show expr, (prepareNix expr, error "Nix update is not implemented"))
-      where
-        noBuilder = (pure (), pure ())
+    showBuildInfo = \case
+      Image iname -> "image:" <> iname
+      Rootfs fp -> "rootfs:" <> fp
+      Container cb -> fst $ manageContainer cb
+      Nix expr -> "nix:" <> show expr
 
-    execute :: RunMode -> Context -> ContextEnvT ()
-    execute rm ctx = do
+    buildRuntime = \case
+      Container cb -> fst . snd $ manageContainer cb
+      Nix flakes -> prepareNix flakes
+      _ -> pure ()
+
+    updateRuntime = \case
+      Image iname -> error $ "todo: podman pull " <> show iname
+      Container cb -> do
+        let buildUpdate = snd $ manageContainer cb
+        fst buildUpdate
+        snd buildUpdate
+      Nix _expr -> error "Nix update is not implemented"
+      Rootfs _ -> pure ()
+
+    execute :: ExecMode -> Context -> ContextEnvT ()
+    execute em ctx = do
       re <- ask
-      traverse_ (liftIO . ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. mounts)
-      case runtimeBackend of
-        Podman image -> executePodman rm ctx image
-        Bubblewrap fp -> executeBubblewrap ctx fp
+      traverse_ (liftIO . ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. ctxMounts)
+      -- Always ensure the runtime is built before running it
+      buildRuntime (ctx ^. ctxRuntime)
+      case getRuntimeBackend (ctx ^. ctxRuntime) of
+        Podman image -> executePodman em ctx image
+        Bubblewrap fp -> case em of
+          Foreground -> executeBubblewrap ctx fp
+          Background -> error "NotImplemented"
 
-    manageContainer cb = ("# Containerfile " <> imageName, (buildContainer, updateContainer))
+    showCmd em ctx = do
+      re <- ask
+      pure $ case getRuntimeBackend (ctx ^. ctxRuntime) of
+        Podman image -> show . P.proc "podman" $ podmanRunArgs re em ctx image
+        Bubblewrap fp -> case em of
+          Foreground -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
+          Background -> error "NotImplemented"
+
+    manageContainer :: ContainerBuild -> (Text, (ContextEnvT (), ContextEnvT ()))
+    manageContainer cb = ("# Containerfile " <> imageName <> "\n" <> fileContent <> "\n", (buildContainer, updateContainer))
       where
         buildContainer = do
           imageReady <- liftIO $ checkImageExist imageName
@@ -144,26 +178,25 @@ createLocalhostRunEnv appEnv app name = RuntimeEnv {..}
 
     prepareNix :: Flakes -> ContextEnvT ()
     prepareNix flakes = do
-      built <- checkIfBuilt fileName (show $ nixArgs flakes)
-      unless built $ do
+      withCacheFile fileName (show $ nixArgs flakes) $ do
         ensureNixInstalled
+        debug "Building flakes"
         ctx <- liftIO buildCtx
         execute Foreground ctx
-        liftIO do
-          cacheDir <- getCacheDir
-          Text.writeFile (cacheDir </> fileName) (show $ nixArgs flakes)
       where
-        fileName = toString $ "nix_" <> unName name
+        flakeName = Text.take 9 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ show @Text flakes
+        fileName = toString $ "nix_" <> flakeName
 
         -- The location where we expect to find the `nix` command
         nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
         ensureNixInstalled = do
           re <- ask
           let store = nixStore re
-          debug $ toText $ "Checking if " <> store </> nixCommandProfile <> " exists"
           nixInstalled <- liftIO $ doesSymlinkExist $ store </> nixCommandProfile
           unless nixInstalled $ do
-            debug $ toText $ "Checking if " <> store </> "store" <> " exists"
+            debug $ toText $ store </> nixCommandProfile <> " does not exists, installing nix.setup"
+
+            -- ensure we are not somehow overwritting an existing store
             storeExist <- liftIO $ doesDirectoryExist $ store </> "store"
             when storeExist $ error $ "existing nix-store is invalid, try removing " <> toText (nixStore re)
 
@@ -171,16 +204,95 @@ createLocalhostRunEnv appEnv app name = RuntimeEnv {..}
                 nixSetupApp = case Podenv.Config.select cfg ["nix.setup"] of
                   Left e -> error e
                   Right (_, setupApp) -> setupApp
-                mode = Regular []
-            debug "[+] Installing nix-store with nix.setup"
-            ctx <- liftIO $ runAppEnv appEnv $ Podenv.Capability.prepare mode nixSetupApp (Name "nix.setup")
+            debug "Installing nix-store with nix.setup"
+            ctx <- liftIO $ appToContext (Regular []) nixSetupApp
             execute Foreground ctx
 
-        builderName = Name $ "nix-builder-" <> unName name
-        buildCtx = runAppEnv appEnv do
-          let ctx = Podenv.Context.defaultContext builderName
-          setNix <- Podenv.Capability.setNix
-          pure $ ctx & setNix . (Podenv.Context.network .~ True)
+        builderName = Name $ "nix-builder-" <> flakeName
+        builderApp = defaultApp (Rootfs "/") & (appCapabilities . capNetwork) .~ True
+        buildCtx = do
+          let args =
+                [toText nixCommandPath, "--verbose"]
+                  <> nixFlags
+                  <> ["build", "--no-link"]
+                  <> nixArgs flakes
+          ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
+            setNix <- Podenv.Capability.setNix
+            setNix <$> Podenv.Capability.prepare (Regular args) ar
+          setResolv <- ensureResolvConf "/"
+          pure $ ctx & setResolv . (ctxName ?~ builderName)
+
+createHeadlessRunEnv :: Config -> AppEnv 'UnknownState -> RunEnv
+createHeadlessRunEnv cfg appEnv =
+  headlessRun
+    { showCmd = headlessShow,
+      execute = headlessExecute,
+      appToContext = appToHeadlessContext
+    }
+  where
+    headlessRun = createLocalhostRunEnv headlessEnv
+
+    getApp ns name = do
+      pure $ case Podenv.Config.select cfg [name] of
+        Left e -> error $ "Can't find " <> name <> ": " <> e
+        Right ([], app) -> app & (arMetadata . metaNamespace) .~ ns
+        Right (xs, _) -> error $ "Apps has argument?! " <> show xs
+
+    getHeadlessApp ns displayAppName = do
+      displayApp <- getApp ns displayAppName
+      let setCap = arApplication . appCapabilities %~ (capWayland .~ True) . (capX11 .~ True)
+          setName =
+            (arMetadata . metaName)
+              ?~ ( "headless-" <> case displayAppName of
+                     "default" -> "display"
+                     _ -> displayAppName
+                 )
+      liftIO $ appToHeadlessContext (Regular []) (displayApp & setCap . setName)
+
+    headlessShow em ctx = do
+      displayCtx <- getHeadlessApp (ctx ^. ctxNamespace) "default"
+      vncCtx <- getHeadlessApp (ctx ^. ctxNamespace) "vnc"
+      displayCmd <- showCmd headlessRun Background displayCtx
+      vncCmd <- showCmd headlessRun Background vncCtx
+      appCmd <- showCmd headlessRun em ctx
+      pure $ "Display " <> displayCmd <> "\nVnc " <> vncCmd <> "\n" <> appCmd
+
+    headlessEnv =
+      appEnv
+        & (envHostDisplay .~ ":0")
+          . (envHostWaylandSocket ?~ SocketName "wayland-1")
+
+    appToHeadlessContext amode ar = do
+      headlessContext <$> appToContext headlessRun amode ar
+
+    headlessContext :: Context -> Context
+    headlessContext ctx = ctx & ctxMounts %~ Map.fromList . map replaceVolume . Map.toList
+      where
+        nsPrefix = case ctx ^. ctxNamespace of
+          Nothing -> ""
+          Just ns -> ns <> "-"
+        mkVolume n = Volume $ nsPrefix <> n
+        replaceVolume :: (FilePath, Volume) -> (FilePath, Volume)
+        replaceVolume ("/tmp/.X11-unix", _) = ("/tmp/.X11-unix", MkVolume RW (mkVolume "headless-x11"))
+        replaceVolume ("/run/user/1000/wayland-1", _) = ("/run/user/1000", MkVolume RW (mkVolume "headless-xdg"))
+        replaceVolume ("/run/user/1000/pulse", _) = ("/run/user/1000/pulse", MkVolume RW (mkVolume "headless-pulse"))
+        replaceVolume v = v
+
+    headlessExecute em ctx = do
+      let localRun = createLocalhostRunEnv appEnv
+      displayCtx <- getHeadlessApp (ctx ^. ctxNamespace) "default"
+      vncCtx <- getHeadlessApp (ctx ^. ctxNamespace) "vnc"
+      clientApp <- getApp (ctx ^. ctxNamespace) "vnc-viewer"
+      clientCtx <-
+        liftIO $
+          appToContext
+            localRun
+            (Regular ["localhost"])
+            (clientApp & arNetwork .~ Shared "container:vnc")
+      execute localRun Background displayCtx
+      execute localRun Background vncCtx
+      execute localRun Background clientCtx
+      execute localRun em ctx
 
 -- | Build a container image
 buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()
@@ -219,11 +331,14 @@ checkImageExist imageName = do
   res <- P.runProcess (Podenv.Runtime.podman ["image", "exists", Text.unpack imageName])
   pure $ res == ExitSuccess
 
-checkIfBuilt :: MonadIO m => FilePath -> Text -> m Bool
-checkIfBuilt filename expected = liftIO do
-  cacheDir <- getCacheDir
-  current <- readFileM (cacheDir </> filename)
-  pure $ current == expected
+withCacheFile :: MonadIO m => FilePath -> Text -> m () -> m ()
+withCacheFile fileName expected action = do
+  cacheDir <- liftIO getCacheDir
+  let cachePath = cacheDir </> fileName
+  current <- liftIO $ readFileM cachePath
+  unless (current == expected) $ do
+    action
+    liftIO $ Text.writeFile cachePath expected
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
@@ -238,6 +353,8 @@ ensureHostDirectory' fp = do
   unless exist $ do
     createDirectoryIfMissing True fp
     P.runProcess_ $ P.proc "/bin/chcon" ["system_u:object_r:container_file_t:s0", fp]
+    -- Ensure x11 directory has the sticky bit
+    when ("-x11" `Data.List.isSuffixOf` fp) $ P.runProcess_ $ P.proc "/bin/chmod" ["1777", fp]
 
 executeBubblewrap :: Context -> FilePath -> ContextEnvT ()
 executeBubblewrap ctx fp = do
@@ -251,24 +368,23 @@ bwrap :: [String] -> P.ProcessConfig () () ()
 bwrap = P.setDelegateCtlc True . P.proc "bwrap"
 
 commonArgs :: Context -> [Text]
-commonArgs Context {..} =
-  concatMap (\c -> ["--cap-add", show c]) $ sort $ Data.Set.toList _syscaps
+commonArgs ctx =
+  concatMap (\c -> ["--cap-add", show c]) $ sort $ Data.Set.toList (ctx ^. ctxSyscaps)
 
 bwrapRunArgs :: GlobalEnv -> Context -> FilePath -> [String]
-bwrapRunArgs GlobalEnv {..} ctx@Context {..} fp = toString <$> args
+bwrapRunArgs GlobalEnv {..} ctx fp = toString <$> args
   where
-    userArg = case ctx ^. runAs of
+    userArg = case ctx ^. ctxRunAs of
       Just RunAsRoot -> ["--unshare-user", "--uid", "0"]
-      Just RunAsHostUID -> []
-      Just RunAsAnyUID -> ["--unshare-user", "--uid", show $ ctx ^. anyUid]
+      Just (RunAsUID _) -> []
+      Just RunAsAnyUID -> ["--unshare-user", "--uid", show $ ctx ^. ctxAnyUid]
       Nothing -> []
 
-    networkArg
-      | _network = case _namespace of
-        Just "host" -> []
-        Just _ns -> error "Shared netns not implemented"
-        Nothing -> [] -- TODO: implement private network namespace
-      | otherwise = ["--unshare-net"]
+    networkArg = case ctx ^. ctxNetwork of
+      Just Host -> []
+      Just (Shared _name) -> error "Shared netns not implemented"
+      Just Private -> [] -- TODO: implement private network namespace
+      Nothing -> ["--unshare-net"]
 
     volumeArg :: (FilePath, Volume) -> [Text]
     volumeArg (destPath, MkVolume mode vtype) = case vtype of
@@ -292,11 +408,11 @@ bwrapRunArgs GlobalEnv {..} ctx@Context {..} fp = toString <$> args
       _ -> doBind ""
 
     sysMounts
-      | Data.Set.null _devices = []
+      | Data.Set.null (ctx ^. ctxDevices) = []
       | otherwise = ["--ro-bind", "/sys", "/sys"]
 
     bindMode
-      | ctx ^. ro = "--ro-bind"
+      | ctx ^. ctxRO = "--ro-bind"
       | otherwise = "--bind"
     doBind p = toText <$> [bindMode, fp </> p, "/" </> p]
     args =
@@ -308,19 +424,14 @@ bwrapRunArgs GlobalEnv {..} ctx@Context {..} fp = toString <$> args
         <> ["--proc", "/proc"]
         <> ["--dev", "/dev"]
         <> ["--perms", "01777", "--tmpfs", "/tmp"]
-        <> concatMap volumeArg (Map.toAscList _mounts)
-        <> concatMap (\d -> ["--dev-bind", toText d, toText d]) _devices
+        <> concatMap volumeArg (Map.toAscList (ctx ^. ctxMounts))
+        <> concatMap (\d -> ["--dev-bind", toText d, toText d]) (ctx ^. ctxDevices)
         <> sysMounts
         <> ["--clearenv"]
-        <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList _environ)
-        <> cond (not _terminal) ["--new-session"]
-        <> maybe [] (\wd -> ["--chdir", toText wd]) _workdir
-        <> _command
-
-showRuntimeCmd :: GlobalEnv -> RunMode -> Context -> RuntimeBackend -> Text
-showRuntimeCmd re rm ctx = \case
-  Podman image -> show . P.proc "podman" $ podmanRunArgs re rm ctx image
-  Bubblewrap fp -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
+        <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList (ctx ^. ctxEnviron))
+        <> cond (not (ctx ^. ctxTerminal)) ["--new-session"]
+        <> maybe [] (\wd -> ["--chdir", toText wd]) (ctx ^. ctxWorkdir)
+        <> ctx ^. ctxCommand
 
 data GlobalEnv = GlobalEnv
   { verbose :: Bool,
@@ -342,35 +453,29 @@ debug msg = do
 cond :: Bool -> [a] -> [a]
 cond b xs = if b then xs else []
 
-infraName :: Text -> Text
-infraName ns = ns <> "-ns"
+infraName :: Text -> Name
+infraName ns = Name $ "infra-" <> ns
 
 podmanArgs :: Context -> [Text]
-podmanArgs Context {..} = cond _interactive ["-i", "--detach-keys", ""] <> cond _terminal ["-t"]
+podmanArgs ctx = cond (ctx ^. ctxInteractive) ["-i", "--detach-keys", ""] <> cond (ctx ^. ctxTerminal) ["-t"]
 
-podmanRunArgs :: GlobalEnv -> RunMode -> Context -> ImageName -> [String]
-podmanRunArgs GlobalEnv {..} rmode ctx@Context {..} image = toString <$> args
+podmanRunArgs :: GlobalEnv -> ExecMode -> Context -> ImageName -> [String]
+podmanRunArgs gl rmode ctx image = toString <$> args
   where
-    portArgs = concatMap publishArg _ports
-    publishArg port = ["--publish", showPort port]
-    showPort port = show $ case port of
-      -- podman does not seem to distinguish protocol
-      PortTcp p -> p
-      PortUdp p -> p
-
-    hostnameArg = ["--hostname", unName _name]
-    networkArg
-      | _network =
-        hostnameArg <> case _namespace of
-          Just "host" -> ["--network", "host"]
-          Just ns -> ["--network", "container:" <> infraName ns]
-          Nothing -> portArgs
-      | otherwise = ["--network", "none"]
+    networkArg = case ctx ^. ctxNetwork of
+      Just Host -> ["--network", "host"]
+      Just (Shared name) ->
+        let netName
+              | "container:" `Text.isPrefixOf` name = name
+              | otherwise = "container:" <> unName (infraName name)
+         in ["--network", netName]
+      Just Private -> []
+      Nothing -> ["--network", "none"]
 
     volumeArg :: (FilePath, Volume) -> [Text]
     volumeArg (fp, MkVolume mode vtype) = case vtype of
       HostPath x -> volume (toText x)
-      Volume x -> volume (toText $ volumesDir </> toString x)
+      Volume x -> volume (toText $ volumesDir gl </> toString x)
       TmpFS -> ["--mount", "type=tmpfs,destination=" <> toText fp]
       where
         volume hp = ["--volume", hp <> ":" <> toText fp <> showVolumeMode mode]
@@ -379,35 +484,38 @@ podmanRunArgs GlobalEnv {..} rmode ctx@Context {..} image = toString <$> args
           RW -> ""
 
     -- The goal here is to ensure host files created by the container are readable by the host user.
-    userArg = case ctx ^. runAs of
+    userArg = case ctx ^. ctxRunAs of
       Just RunAsRoot -> ["--user", "0"]
-      Just RunAsHostUID -> ["--user", show (ctx ^. uid), "--userns", "keep-id"]
+      Just (RunAsUID uid) -> ["--user", show uid, "--userns", "keep-id"]
       Just RunAsAnyUID ->
-        let x = ctx ^. anyUid
+        let x = ctx ^. ctxAnyUid
          in ["--user", show x, "--uidmap", show x <> ":0:1", "--uidmap", "0:1:" <> show x]
       Nothing -> []
 
-    nameArg = ["--name", unName _name]
+    labelArg = concatMap mkLabel (Map.toList $ ctx ^. ctxLabels)
+      where
+        mkLabel (k, v) = ["--label", k <> "=" <> v]
 
     args =
       ["run"]
         <> podmanArgs ctx
         <> ["--detach" | rmode == Background]
-        <> maybe [] (\h -> ["--hostname", h]) _hostname
-        <> cond _privileged ["--privileged"]
+        <> cond (ctx ^. ctxPrivileged) ["--privileged"]
         <> ["--rm"]
-        <> cond _ro ["--read-only=true"]
-        <> cond (not _selinux) ["--security-opt", "label=disable"]
+        <> cond (ctx ^. ctxRO) ["--read-only=true"]
+        <> cond (not (ctx ^. ctxSELinux)) ["--security-opt", "label=disable"]
         <> userArg
+        <> maybe [] (\n -> ["--hostname", n]) (ctx ^. ctxHostname)
         <> networkArg
         <> commonArgs ctx
-        <> concatMap (\d -> ["--device", toText d]) _devices
-        <> maybe [] (\wd -> ["--workdir", toText wd]) _workdir
-        <> concatMap (\(k, v) -> ["--env", toText $ k <> "=" <> v]) (Map.toAscList _environ)
-        <> concatMap volumeArg (Map.toAscList _mounts)
-        <> nameArg
+        <> concatMap (\d -> ["--device", toText d]) (ctx ^. ctxDevices)
+        <> maybe [] (\wd -> ["--workdir", toText wd]) (ctx ^. ctxWorkdir)
+        <> concatMap (\(k, v) -> ["--env", toText $ k <> "=" <> v]) (Map.toAscList (ctx ^. ctxEnviron))
+        <> concatMap volumeArg (Map.toAscList (ctx ^. ctxMounts))
+        <> maybe [] (\name -> ["--name", unName name]) (ctx ^. ctxName)
+        <> labelArg
         <> [unImageName image]
-        <> _command
+        <> (ctx ^. ctxCommand)
 
 podman :: [String] -> P.ProcessConfig () () ()
 podman = P.setDelegateCtlc True . P.proc "podman"
@@ -436,46 +544,69 @@ deletePodmanPod (Name cname) =
 ensureInfraNet :: Text -> ContextEnvT ()
 ensureInfraNet ns = do
   debug $ "Ensuring infra net for: " <> show ns
-  let pod = infraName ns
-  infraStatus <- getPodmanPodStatus (Name pod)
+  let infraPod = infraName ns
+  infraStatus <- getPodmanPodStatus infraPod
   case infraStatus of
     Running -> pure ()
     _ -> do
       when (infraStatus /= NotFound) $
         -- Try to delete any left-over infra container
-        P.runProcess_ (podman ["rm", toString pod])
+        deletePodmanPod infraPod
 
       let cmd =
             podman $
               map toString $
-                ["run", "--rm", "--name", pod]
+                ["run", "--rm", "--name", unName infraPod]
                   <> ["--detach"]
                   <> ["ubi8"]
                   <> ["sleep", "infinity"]
       debug $ show cmd
       P.runProcess_ cmd
 
-executePodman :: RunMode -> Context -> ImageName -> ContextEnvT ()
+executePodman :: ExecMode -> Context -> ImageName -> ContextEnvT ()
 executePodman rm ctx image = do
   re <- ask
-  case (ctx ^. namespace, ctx ^. network) of
-    (Just ns, True) | ns /= mempty -> ensureInfraNet ns
+  case ctx ^. ctxNetwork of
+    Just (Shared ns) -> ensureInfraNet ns
     _ -> pure ()
 
-  status <- getPodmanPodStatus (ctx ^. ctxName)
-  debug $ "Podman status of " <> cname <> ": " <> show status
-  let cfail err = liftIO . mayFail . Left $ cname <> ": " <> err
-  args <-
-    case status of
-      NotFound -> pure $ podmanRunArgs re rm ctx image
-      Running -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
-      Unknown _ -> recreateContainer re
-  let cmd = podman args
-  debug $ show cmd
-  P.runProcess_ cmd
-  where
-    cname = unName $ ctx ^. ctxName
-    -- Delete a non-kept container and return the run args
-    recreateContainer re = do
-      deletePodmanPod (ctx ^. ctxName)
-      pure $ podmanRunArgs re rm ctx image
+  argsM <- case ctx ^. ctxName of
+    Just name -> do
+      status <- getPodmanPodStatus name
+      debug $ "Podman status of " <> unName name <> ": " <> show status
+      let cfail err = liftIO . mayFail . Left $ unName name <> ": " <> err
+      case status of
+        NotFound -> pure $ Just $ podmanRunArgs re rm ctx image
+        Running -> case rm of
+          Foreground -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
+          Background -> pure Nothing
+        Unknown _ -> do
+          deletePodmanPod name
+          pure $ Just $ podmanRunArgs re rm ctx image
+    Nothing -> pure $ Just $ podmanRunArgs re rm ctx image
+  case argsM of
+    Just args -> do
+      let cmd = podman args
+      debug $ show cmd
+      case rm of
+        Foreground -> P.runProcess_ cmd
+        Background -> do
+          name <- executeBackgroundPodman args
+          let waitForRunning count
+                | count == 0 = error "Container failed to start"
+                | otherwise = do
+                  debug $ "Getting status of " <> unName name
+                  liftIO $ threadDelay 50_000
+                  status <- getPodmanPodStatus name
+                  case status of
+                    Running -> pure ()
+                    _ -> waitForRunning (count - 1)
+          waitForRunning (3 :: Int)
+    Nothing -> pure ()
+
+executeBackgroundPodman :: MonadIO m => [String] -> m Name
+executeBackgroundPodman args = do
+  (Text.dropWhileEnd (== '\n') . decodeUtf8 -> out, _) <- P.readProcess_ $ P.proc "podman" args
+  case Text.length out of
+    64 -> pure $ Name out
+    _ -> error $ "Unknown name: " <> out

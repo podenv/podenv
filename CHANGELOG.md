@@ -2,6 +2,9 @@
 
 ## 0.3.0 (next)
 
+- application name is now optional: when unset, multiple instance can run in parallel.
+- the `--network` argument now takes an argument: private, host or a shared name.
+
 ## 0.2.0 (2022-07-26)
 
 - restrict ssh capability to the agent socket.

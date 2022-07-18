@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 -- | Podenv version
 module Podenv.Version (version) where
