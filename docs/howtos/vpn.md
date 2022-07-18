@@ -72,13 +72,13 @@ container to keep the namespace alive. This can be activated by using the
 Restart the `openvpn` container using:
 
 ```console
-$ podenv --volume ~/.config/openvpn:~/ --namespace ovpn openvpn ovpn.conf
+$ podenv --volume ~/.config/openvpn:~/ --network ovpn openvpn ovpn.conf
 ```
 
 Then other application can join the namespace, for example:
 
 ```console
-$ podenv --namespace ovpn firefox
+$ podenv --network ovpn firefox
 ```
 
 Using podenv namespace, the openvpn container can be restarted when needed, and
@@ -93,18 +93,21 @@ To simplify podenv usage, it is recommended to create a static configuration.
 Write this configuration file in *~/.config/podenv/local.d/corp.dhall*:
 
 ```dhall
--- | Load the podenv/hub configuration
-let Hub = (env:PODENV).Hub
+let Podenv = env:PODENV
 
--- | An application setting for the namespace
-let ns = { namespace = Some "corp-vpn" }
+let ns =
+      \(name : Text) ->
+      \(application : Podenv.Application.Type) ->
+        Podenv.ApplicationResource::{
+        , application
+        , volumes = [ "~/.config/${name}:~/" ]
+        , network = Podenv.Network.Shared "corp-vpn"
+        }
 
--- | The resulting applications tree
-in {
-  vpn = Hub.openvpn         // { volumes = [ "~/.config/openvpn:~/" ] }    // ns,
-  web = Hub.firefox.default // { volumes = [ "~/.config/firefox-vpn:~" ] } // ns,
-  bridge = Hub.ssh.client "user@internal-host"                             // ns
-}
+in  { vpn = (ns "openvpn" Podenv.Hub.openvpn) with metadata.name = Some "vpn"
+    , web = ns "firefox-vpn" Podenv.Hub.firefox.default
+    , bridge = ns "bridge" (Podenv.Hub.ssh.client "user@internal-host")
+    }
 ```
 
 Three new applications are now configured to share the namespace:

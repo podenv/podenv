@@ -1,0 +1,395 @@
+["ardour","audacity","blender","blender.fedora","brave","centos","chromium","chroot","corp.bridge","corp.vpn","corp.web","debian","electrum","fbrnch","fedora.34","fedora","fedora.rawhide","feh","ffmpeg","firefox","firefox.minimal","flutter","gimp","google-chrome","gscan2pdf","gworldclock","hydrogen","inkscape","kigo","legacy.vpn","legacy.web","librecad","libreoffice","linphone","lmms","maim.capture","maim","mplayer","mumble","mupdf","muse","musescore","network.http-server","nix","nix.setup","nixify","obs","openvpn","polyglot","pwsafe.copy","pwsafe","qjackctl","qtractor","reaper","rosegarden","seq24","shell","ssh.client","steam","streamtuner","supercollider","tor.browser","ubi","vcv","virt-viewer","vlc","vmpk","vnc-viewer","vscode","xeyes","youtube-dl","zeal"]
+==== ["legacy.vpn"]
+Raw command: podman run -i
+  --detach-keys "" -t
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 0
+  --hostname legacy.vpn
+  --network container:infra-corp-vpn
+  --cap-add CAP_SETGID
+  --cap-add CAP_SETUID
+  --cap-add CAP_NET_ADMIN
+  --cap-add CAP_SYS_RESOURCE
+  --device /dev/net/tun
+  --workdir /root
+  --env HOME=/root
+  --env TERM=xterm-256color
+  --volume /home/user/.config/openvpn:/root
+  --label podenv.selector=legacy.vpn localhost/67a6f86f1d644889651adee48ed87c043781b759f41555ec3ba95f6b8378a162 openvpn
+
+==== ["legacy.web"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 1000
+  --userns keep-id
+  --hostname legacy.web
+  --network container:infra-corp-vpn
+  --device /dev/dri
+  --workdir /home/fedora
+  --env GDK_BACKEND=wayland
+  --env HOME=/home/fedora
+  --env PULSE_SERVER=/run/user/1000/pulse/native
+  --env QT_QPA_PLATFORM=wayland
+  --env WAYLAND_DISPLAY=wayland-0
+  --env XDG_RUNTIME_DIR=/run/user/1000
+  --env XDG_SESSION_TYPE=wayland
+  --mount type=tmpfs,destination=/dev/shm
+  --volume /etc/machine-id:/etc/machine-id
+  --volume /home/user/.config/firefox-vpn:/home/fedora
+  --mount type=tmpfs,destination=/run/user
+  --volume /run/user/1000/pulse:/run/user/1000/pulse
+  --volume /run/user/1000/wayland-0:/run/user/1000/wayland-0
+  --label podenv.selector=legacy.web localhost/54905fe9b09589c90fe2a37e04684bf771b01c62fbb52b83d18f57886aaa0c39 firefox
+  --no-remote
+
+==== ["corp.vpn"]
+Raw command: podman run -i
+  --detach-keys "" -t
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 0
+  --hostname corp.vpn
+  --network container:infra-corp-vpn
+  --cap-add CAP_SETGID
+  --cap-add CAP_SETUID
+  --cap-add CAP_NET_ADMIN
+  --cap-add CAP_SYS_RESOURCE
+  --device /dev/net/tun
+  --workdir /root
+  --env HOME=/root
+  --env TERM=xterm-256color
+  --volume /home/user/.config/openvpn:/root
+  --name vpn
+  --label podenv.selector=corp.vpn localhost/67a6f86f1d644889651adee48ed87c043781b759f41555ec3ba95f6b8378a162 openvpn
+
+==== ["corp.bridge"]
+Raw command: podman run -i
+  --detach-keys "" -t
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 1000
+  --userns keep-id
+  --hostname corp.bridge
+  --network container:infra-corp-vpn
+  --workdir /home/fedora
+  --env HOME=/home/fedora
+  --env TERM=xterm-256color
+  --volume /home/user/.config/bridge:/home/fedora
+  --label podenv.selector=corp.bridge localhost/5bdd41722e337b482be3458fa013dbee6c221e3fefcb00c7ad2b56c88786114c ssh user@internal-host
+
+==== ["--root","--name","ubi","ubi"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --user 0
+  --hostname ubi
+  --network none
+  --workdir /root
+  --env HOME=/root
+  --volume /volumes/ubi-home:/root
+  --name ubi
+  --label podenv.selector=ubi ubi8
+
+==== ["--root","--name","ubi","--namespace","testns","ubi"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --user 0
+  --hostname ubi
+  --network none
+  --workdir /root
+  --env HOME=/root
+  --volume /volumes/testns-ubi-home:/root
+  --name testns-ubi
+  --label podenv.selector=ubi ubi8
+
+==== ["--headless","./test/headless.dhall","firefox"]
+Display Raw command: podman run
+  --detach
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 1000
+  --userns keep-id
+  --hostname default
+  --network none
+  --workdir /home/fedora
+  --env DISPLAY=:0
+  --env GDK_BACKEND=wayland
+  --env HOME=/home/fedora
+  --env QT_QPA_PLATFORM=wayland
+  --env WAYLAND_DISPLAY=wayland-1
+  --env WLR_BACKENDS=headless
+  --env WLR_LIBINPUT_NO_DEVICES=1
+  --env WLR_RENDERER=pixman
+  --env XDG_RUNTIME_DIR=/run/user/1000
+  --env XDG_SESSION_TYPE=wayland
+  --mount type=tmpfs,destination=/dev/shm
+  --volume /etc/machine-id:/etc/machine-id
+  --volume /volumes/headless-display-home:/home/fedora
+  --mount type=tmpfs,destination=/run/user
+  --volume /volumes/headless-xdg:/run/user/1000
+  --volume /volumes/headless-x11:/tmp/.X11-unix
+  --name headless-display
+  --label podenv.selector=default localhost/8f40f040233c929e773a1826e90527ff7e2a73b9f4ab82d96007be62315ffb65 sway
+
+Vnc Raw command: podman run
+  --detach
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 1000
+  --userns keep-id
+  --hostname vnc
+  --network none
+  --workdir /home/fedora
+  --env DISPLAY=:0
+  --env GDK_BACKEND=wayland
+  --env HOME=/home/fedora
+  --env QT_QPA_PLATFORM=wayland
+  --env WAYLAND_DISPLAY=wayland-1
+  --env XDG_RUNTIME_DIR=/run/user/1000
+  --env XDG_SESSION_TYPE=wayland
+  --mount type=tmpfs,destination=/dev/shm
+  --volume /etc/machine-id:/etc/machine-id
+  --volume /volumes/headless-vnc-home:/home/fedora
+  --mount type=tmpfs,destination=/run/user
+  --volume /volumes/headless-xdg:/run/user/1000
+  --volume /volumes/headless-x11:/tmp/.X11-unix
+  --name headless-vnc
+  --label podenv.selector=vnc localhost/8f40f040233c929e773a1826e90527ff7e2a73b9f4ab82d96007be62315ffb65 wayvnc
+
+Raw command: podman run
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 1000
+  --userns keep-id
+  --hostname firefox
+  --device /dev/dri
+  --workdir /home/fedora
+  --env GDK_BACKEND=wayland
+  --env HOME=/home/fedora
+  --env PULSE_SERVER=/run/user/1000/pulse/native
+  --env QT_QPA_PLATFORM=wayland
+  --env WAYLAND_DISPLAY=wayland-1
+  --env XDG_RUNTIME_DIR=/run/user/1000
+  --env XDG_SESSION_TYPE=wayland
+  --mount type=tmpfs,destination=/dev/shm
+  --volume /etc/machine-id:/etc/machine-id
+  --volume /volumes/firefox-home:/home/fedora
+  --mount type=tmpfs,destination=/run/user
+  --volume /volumes/headless-xdg:/run/user/1000
+  --volume /volumes/headless-pulse:/run/user/1000/pulse
+  --label podenv.selector=firefox localhost/54905fe9b09589c90fe2a37e04684bf771b01c62fbb52b83d18f57886aaa0c39 firefox
+  --no-remote
+
+==== ["--network","container:sway.vnc","vnc-viewer","localhost"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --user 1000
+  --userns keep-id
+  --hostname vnc-viewer
+  --network container:sway.vnc
+  --workdir /home/fedora
+  --env DISPLAY=:0
+  --env HOME=/home/fedora
+  --mount type=tmpfs,destination=/dev/shm
+  --volume /volumes/vnc-viewer-home:/home/fedora
+  --volume /tmp/.X11-unix:/tmp/.X11-unix
+  --label podenv.selector=vnc-viewer localhost/b0eaa0f45a04e22e18c0abbb8b224208ce953960e455017bba63706c278a79b8 vncviewer localhost
+
+
+==== ["--config","{env = {runtime.image = \"ubi8\" }}","env","id"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --hostname env
+  --network none
+  --label podenv.selector=env ubi8 id
+
+==== ["--config","{env = {runtime.image = \"ubi8\" }}","id"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --hostname env
+  --network none
+  --label podenv.selector=env ubi8 id
+
+==== ["image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --hostname image.ubi8
+  --network none
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["nix:test"]
+Raw command: bwrap
+  --die-with-parent
+  --unshare-pid
+  --unshare-ipc
+  --unshare-uts
+  --unshare-net
+  --ro-bind /usr /usr
+  --ro-bind /lib /lib
+  --ro-bind /lib64 /lib64
+  --ro-bind /bin /bin
+  --ro-bind /sbin /sbin
+  --ro-bind /etc /etc
+  --proc /proc
+  --dev /dev
+  --perms 01777
+  --tmpfs /tmp
+  --bind /volumes/nix:test-home /home/user
+  --bind /volumes/nix-cache /home/user/.cache/nix
+  --bind /volumes/nix-config /home/user/.config/nix
+  --bind /volumes/nix-store /nix
+  --clearenv
+  --setenv HOME /home/user
+  --setenv LC_ALL C.UTF-8
+  --setenv NIX_SSL_CERT_FILE /etc/ca
+  --setenv PATH /nix/var/nix/profiles/nix-install/bin:/bin
+  --setenv TERM xterm-256color
+  --new-session
+  --chdir /home/user /nix/var/nix/profiles/nix-install/bin/nix
+  --extra-experimental-features "nix-command flakes" run test
+
+==== ["--name","test","image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --hostname image.ubi8
+  --network none
+  --name test
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["--config","{ runtime.image = \"ubi8\", capabilities.network = True }"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --label podenv.selector=unknown ubi8
+
+==== ["--no-network","--config","{ runtime.image = \"ubi8\", capabilities.network = True }"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --network none
+  --label podenv.selector=unknown ubi8
+
+==== ["--network","private","image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --hostname image.ubi8
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["--network","host","image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --network host
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["--network","vpn","image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --hostname image.ubi8
+  --network container:infra-vpn
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["--wayland","image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --hostname image.ubi8
+  --network none
+  --env GDK_BACKEND=wayland
+  --env QT_QPA_PLATFORM=wayland
+  --env WAYLAND_DISPLAY=wayland-0
+  --env XDG_RUNTIME_DIR=/run/user/1000
+  --env XDG_SESSION_TYPE=wayland
+  --mount type=tmpfs,destination=/dev/shm
+  --volume /etc/machine-id:/etc/machine-id
+  --mount type=tmpfs,destination=/run/user
+  --volume /run/user/1000/wayland-0:/run/user/1000/wayland-0
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["--hostfile","image:ubi8","cat","/etc/hosts","/proc/cmdline"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --hostname image.ubi8
+  --network none
+  --volume /proc/cmdline:/data/cmdline
+  --volume /etc/hosts:/data/hosts
+  --label podenv.selector=image:ubi8 ubi8 cat /data/hosts /data/cmdline
+
+==== ["--shell","--hostfile","--terminal","image:ubi8","vi","/etc/hosts"]
+Raw command: podman run -i
+  --detach-keys "" -t
+  --rm
+  --read-only=true
+  --hostname image.ubi8
+  --network none
+  --env TERM=xterm-256color
+  --label podenv.selector=image:ubi8 ubi8 /bin/sh
+
+==== ["--hostfile","--terminal","image:ubi8","vi","/etc/hosts"]
+Raw command: podman run -i
+  --detach-keys "" -t
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --hostname image.ubi8
+  --network none
+  --env TERM=xterm-256color
+  --volume /etc/hosts:/data/hosts
+  --label podenv.selector=image:ubi8 ubi8 vi /data/hosts
+
+==== ["--volume","/home/data:/tmp/data","--volume","/tmp","--volume","/old:/tmp/data","image:ubi8"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --security-opt label=disable
+  --hostname image.ubi8
+  --network none
+  --volume /tmp:/tmp
+  --volume /home/data:/tmp/data
+  --label podenv.selector=image:ubi8 ubi8
+
+==== ["--name","tmp","--config","{ name = \"firefox\", runtime.image = \"localhost/firefox\" }"]
+Raw command: podman run
+  --rm
+  --read-only=true
+  --network none
+  --name tmp
+  --label podenv.selector=unknown localhost/firefox
+
+==== ["--shell","rootfs:/srv"]
+Raw command: bwrap
+  --die-with-parent
+  --unshare-pid
+  --unshare-ipc
+  --unshare-uts
+  --unshare-net
+  --ro-bind /srv /
+  --proc /proc
+  --dev /dev
+  --perms 01777
+  --tmpfs /tmp
+  --clearenv
+  --setenv TERM xterm-256color /bin/sh
+
+

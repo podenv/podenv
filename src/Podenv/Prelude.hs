@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -53,12 +54,15 @@ module Podenv.Prelude
     (?~),
     (%~),
     setWhenNothing,
+    askL,
+    lensName,
   )
 where
 
-import qualified Control.Exception
+import Control.Exception qualified
 import Control.Monad (foldM)
-import qualified Data.Text.IO
+import Data.Char (toUpper)
+import Data.Text.IO qualified
 import Lens.Family (ASetter, set, (%~), (.~), (^.))
 import Relude
 import Relude.Extra.Lens (Lens')
@@ -66,7 +70,7 @@ import System.Directory
 import System.Environment
 import System.FilePath.Posix (hasTrailingPathSeparator, takeDirectory, takeFileName, (</>))
 import System.IO (hPutStrLn)
-import qualified System.Posix.Files
+import System.Posix.Files qualified
 import System.Posix.Types (UserID)
 import System.Posix.User (getRealUserID)
 
@@ -83,6 +87,11 @@ l ?~ b = set l (Just b)
 
 setWhenNothing :: ASetter s t (Maybe b) (Maybe b) -> b -> s -> t
 l `setWhenNothing` b = l %~ maybe (Just b) Just
+
+askL :: MonadReader s m => Lens' s a -> m a
+askL l = do
+  e <- ask
+  pure $ e ^. l
 
 getCacheDir :: IO FilePath
 getCacheDir = getXdgDirectory XdgCache "podenv"
@@ -106,3 +115,12 @@ doesSymlinkExist fp =
   where
     checkFp :: IO (Either Control.Exception.SomeException FilePath)
     checkFp = Control.Exception.try $ System.Posix.Files.readSymbolicLink fp
+
+-- | Create a lens name
+lensName :: String -> String -> Maybe String
+lensName prefix field
+  | field `Prelude.elem` manualFields = Nothing
+  | otherwise = Just $ prefix <> [toUpper $ Prelude.head field] <> Prelude.tail field
+  where
+    -- these fields have conflicts and their lens need to be implemented manually
+    manualFields = ["name", "namespace", "volumes", "network", "labels"]

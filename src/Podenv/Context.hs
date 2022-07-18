@@ -21,9 +21,8 @@ module Podenv.Context
     Name (..),
     VolumeType (..),
     Volume (..),
-    Port (..),
     RunAs (..),
-    Context (..),
+    Context,
 
     -- * Helpers
     defaultContext,
@@ -37,29 +36,31 @@ module Podenv.Context
 
     -- * Lenses
     ctxName,
-    uid,
-    namespace,
-    workdir,
-    runAs,
-    command,
-    mounts,
-    devices,
-    selinux,
-    syscaps,
-    interactive,
-    network,
-    ro,
-    privileged,
-    terminal,
-    ports,
-    anyUid,
-    hostname,
+    ctxLabels,
+    ctxHostname,
+    ctxNamespace,
+    ctxWorkdir,
+    ctxRunAs,
+    ctxCommand,
+    ctxMounts,
+    ctxDevices,
+    ctxSELinux,
+    ctxSyscaps,
+    ctxInteractive,
+    ctxNetwork,
+    ctxRO,
+    ctxPrivileged,
+    ctxTerminal,
+    ctxEnviron,
+    ctxAnyUid,
+    ctxRuntime,
   )
 where
 
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Lens.Family.TH (makeLenses)
+import Podenv.Dhall (Network, Runtime)
 import Podenv.Prelude
 import System.Linux.Capabilities (Capability)
 
@@ -72,10 +73,7 @@ data VolumeType = HostPath FilePath | TmpFS | Volume Text
 data Volume = MkVolume DirMode VolumeType
   deriving (Show, Eq)
 
-data RunAs = RunAsRoot | RunAsHostUID | RunAsAnyUID
-  deriving (Show, Eq)
-
-data Port = PortTcp Natural | PortUdp Natural
+data RunAs = RunAsRoot | RunAsUID UserID | RunAsAnyUID
   deriving (Show, Eq)
 
 newtype Name = Name {unName :: Text}
@@ -83,65 +81,59 @@ newtype Name = Name {unName :: Text}
 
 -- | The application context to be executed by podman or kubectl
 data Context = Context
-  { -- | identifier
-    _name :: Name,
-    _namespace :: Maybe Text,
+  { _ctxName :: Maybe Name,
+    _ctxNamespace :: Maybe Text,
+    _ctxLabels :: Map Text Text,
     -- | network namespace name
-    _network :: Bool,
-    _ports :: [Port],
-    _runAs :: Maybe RunAs,
-    _selinux :: Bool,
+    _ctxHostname :: Maybe Text,
+    _ctxNetwork :: Maybe Network,
+    _ctxRunAs :: Maybe RunAs,
+    _ctxSELinux :: Bool,
     -- | the unique uid for this container
-    _anyUid :: UserID,
-    -- | host uid
-    _uid :: UserID,
+    _ctxAnyUid :: UserID,
     -- | container command
-    _command :: [Text],
-    _workdir :: Maybe FilePath,
+    _ctxCommand :: [Text],
+    _ctxWorkdir :: Maybe FilePath,
     -- | container env
-    _environ :: Map Text Text,
+    _ctxEnviron :: Map Text Text,
     -- | container volumes
-    _mounts :: Map FilePath Volume,
-    _syscaps :: Set.Set Capability,
-    _ro :: Bool,
+    _ctxMounts :: Map FilePath Volume,
+    _ctxSyscaps :: Set Capability,
+    _ctxRO :: Bool,
     -- | container devices
-    _devices :: Set FilePath,
-    _hostname :: Maybe Text,
-    _interactive :: Bool,
-    _terminal :: Bool,
-    _privileged :: Bool
+    _ctxDevices :: Set FilePath,
+    _ctxInteractive :: Bool,
+    _ctxTerminal :: Bool,
+    _ctxPrivileged :: Bool,
+    _ctxRuntime :: Runtime
   }
   deriving (Show, Eq)
 
 $(makeLenses ''Context)
 
-ctxName :: Lens' Context Name
-ctxName = name
-
-defaultContext :: Name -> Context
-defaultContext _name =
+defaultContext :: Runtime -> Context
+defaultContext _ctxRuntime =
   Context
-    { _name,
-      _command = [],
-      _uid = 0,
-      _namespace = Nothing,
+    { _ctxName = Nothing,
+      _ctxCommand = [],
+      _ctxNamespace = Nothing,
+      _ctxLabels = mempty,
       -- todo keep track of fresh uid
-      _anyUid = 4242,
-      _selinux = True,
-      _network = False,
-      _ports = mempty,
-      _runAs = Nothing,
-      _environ = mempty,
-      _mounts = mempty,
-      _devices = mempty,
-      _syscaps = mempty,
-      -- TODO: make ro work for podman
-      _ro = True,
-      _workdir = Nothing,
-      _hostname = Nothing,
-      _interactive = False,
-      _terminal = False,
-      _privileged = False
+      _ctxAnyUid = 4242,
+      _ctxSELinux = True,
+      _ctxHostname = Nothing,
+      _ctxNetwork = Nothing,
+      _ctxRunAs = Nothing,
+      _ctxEnviron = mempty,
+      _ctxMounts = mempty,
+      _ctxDevices = mempty,
+      _ctxSyscaps = mempty,
+      _ctxRO = True,
+      _ctxWorkdir = Nothing,
+      _ctxInteractive = False,
+      _ctxTerminal = False,
+      _ctxPrivileged = False,
+      _ctxRuntime
     }
 
 rwHostPath :: FilePath -> Volume
@@ -155,13 +147,13 @@ tmpfs = MkVolume RW TmpFS
 
 -- Env and mounts head value takes priority
 addEnv :: Text -> Text -> Context -> Context
-addEnv k v = environ %~ Map.insertWith (\_n o -> o) k v
+addEnv k v = ctxEnviron %~ Map.insertWith (\_n o -> o) k v
 
 addMount :: FilePath -> Volume -> Context -> Context
-addMount containerPath hostPath = mounts %~ Map.insertWith (\_n o -> o) containerPath hostPath
+addMount containerPath hostPath = ctxMounts %~ Map.insertWith (\_n o -> o) containerPath hostPath
 
 directMount :: FilePath -> Context -> Context
 directMount fp = addMount fp (rwHostPath fp)
 
 addDevice :: FilePath -> Context -> Context
-addDevice dev = devices %~ Set.insert dev
+addDevice dev = ctxDevices %~ Set.insert dev

@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -15,6 +14,7 @@ module Podenv.Capability
   ( prepare,
     capsAll,
     Cap (..),
+    AppMode (..),
     setNix,
   )
 where
@@ -28,35 +28,42 @@ import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
 
--- | Converts an Application into a Context
-prepare :: AppMode -> Application -> Ctx.Name -> AppEnvT Ctx.Context
-prepare mode app name = do
-  hostUID <- asks _hostUid
-  let ctx =
-        Ctx.defaultContext name
-          & (Ctx.uid .~ hostUID)
-            . (Ctx.namespace .~ app ^. appNamespace)
+data AppMode = Regular [Text] | Shell deriving (Show, Eq)
 
-  setVolumes <- addVolumes (app ^. appVolumes)
+-- | Converts an Application into a Context
+prepare :: AppMode -> ApplicationResource -> AppEnvT Context
+prepare mode ar = do
+  let ctx =
+        defaultContext (app ^. appRuntime)
+          & (ctxNamespace .~ (ar ^. arMetadata . metaNamespace))
+            . (ctxName .~ (Name . mappend nsPrefix <$> ar ^. arMetadata . metaName))
+            . (ctxLabels .~ labels)
+            . setNetwork
+            . setHostname
+            . addSysCaps
+            . addEnvs
+
+  setVolumes <- addVolumes (ar ^. arVolumes <> app ^. appVolumes)
 
   setCaps <- addCaps (app ^. appCapabilities)
 
   setHome <- do
-    appHome <- asks _appHomeDir
+    appHome <- askL envAppHomeDir
+    hostUID <- askL envHostUid
     let ensureHome = case appHome of
           Just fp ->
-            let volumeName = fromMaybe (Ctx.unName name) (app ^. appNamespace)
-             in Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ volumeName <> "-home"))
+            let volumeName = fromMaybe "podenv" (meta ^. metaName <|> selector)
+             in Ctx.addMount (toString fp) (Ctx.MkVolume Ctx.RW (Ctx.Volume $ nsPrefix <> volumeName <> "-home"))
           Nothing -> id
         ensureWorkdir ctx' = case appHome of
-          (Just x) | isMounted (toString x) ctx' -> ctx' & Ctx.workdir `setWhenNothing` toString x
+          (Just x) | isMounted (toString x) ctx' -> ctx' & ctxWorkdir `setWhenNothing` toString x
           _ -> ctx'
         setHome = case appHome of
           Just x -> Ctx.addEnv "HOME" (toText x)
           _ -> id
         setRunAs = case appHome of
           -- To keep it simple, when the app home is in `/home`, assume we share the host uid.
-          Just h | "/home" `Text.isPrefixOf` toText h -> Ctx.runAs `setWhenNothing` Ctx.RunAsHostUID
+          Just h | "/home" `Text.isPrefixOf` toText h -> ctxRunAs `setWhenNothing` Ctx.RunAsUID hostUID
           _ -> id
 
     pure $ setHome . ensureWorkdir . ensureHome . setRunAs
@@ -65,7 +72,7 @@ prepare mode app name = do
     Nix _ -> setNix
     _ -> pure id
 
-  let mkCommand = \extraArgs -> case app ^. appRuntime of
+  let mkCommand extraArgs = case app ^. appRuntime of
         Nix flakes ->
           [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
             [] ->
@@ -78,40 +85,63 @@ prepare mode app name = do
   setCommand <- case mode of
     Regular extraArgs
       | app ^. appCapabilities . capHostfile -> resolveFileArgs (mkCommand extraArgs)
-      | otherwise -> pure $ Ctx.command .~ mkCommand extraArgs
-    Shell -> pure $ Ctx.command .~ ["/bin/sh"]
+      | otherwise -> pure $ ctxCommand .~ mkCommand extraArgs
+    Shell -> pure $ ctxCommand .~ ["/bin/sh"]
 
-  pure (disableSelinux . setHome . setCommand . modifiers . setCaps . setVolumes . setNixEnv $ ctx)
+  pure (disableSelinux . setHome . setCommand . setCaps . setVolumes . setNixEnv $ ctx)
   where
-    modifiers :: Ctx.Context -> Ctx.Context
-    modifiers = addSysCaps . addEnvs
+    meta = ar ^. arMetadata
+    app = ar ^. arApplication
+    appNameM = case app ^. appName of
+      "" -> Nothing
+      x -> Just x
+
+    nsPrefix = case meta ^. metaNamespace of
+      Just ns -> ns <> "-"
+      Nothing -> ""
+    baseLabels = ar ^. arMetadata . metaLabels
+    selector = Data.Map.lookup "podenv.selector" baseLabels
+    labels = case selector of
+      Nothing -> Data.Map.insert "podenv.selector" "unknown" baseLabels
+      Just _ -> baseLabels
 
     -- Check if path is part of a mount point
     isMounted :: FilePath -> Ctx.Context -> Bool
     isMounted fp ctx = any isPrefix mountPaths
       where
-        mountPaths = Data.Map.keys $ ctx ^. Ctx.mounts
+        mountPaths = Data.Map.keys $ ctx ^. ctxMounts
         isPrefix x = fp `isPrefixOf` x
 
     -- Some capabilities do not work with selinux
     noSelinuxCaps = [capWayland, capX11]
     hasPrivCap = any (\l -> app ^. appCapabilities . l) noSelinuxCaps
     -- When using host device, selinux also needs to be disabled
-    hasDevice ctx = ctx ^. Ctx.devices /= mempty
+    hasDevice ctx = ctx ^. ctxDevices /= mempty
     -- When using direct host path, its simpler to disable selinux too. That can be improved though
     isHostPath = \case
       Ctx.MkVolume _ (Ctx.HostPath _) -> True
       _anyOtherVolume -> False
-    hasHostPath ctx = any isHostPath (toList $ ctx ^. Ctx.mounts)
+    hasHostPath ctx = any isHostPath (toList $ ctx ^. ctxMounts)
     disableSelinux ctx
-      | hasPrivCap || hasDevice ctx || hasHostPath ctx = ctx & Ctx.selinux .~ False
+      | hasPrivCap || hasDevice ctx || hasHostPath ctx = ctx & ctxSELinux .~ False
       | otherwise = ctx
+
+    setNetwork = ctxNetwork .~ netName
+      where
+        netName
+          | app ^. appCapabilities . capNetwork = Just (ar ^. arNetwork)
+          | otherwise = Nothing
+    setHostname
+      | (ar ^. arNetwork) /= Host = ctxHostname .~ hostname
+      | otherwise = id
+      where
+        hostname = Text.replace ":" "." <$> (appNameM <|> selector)
 
     addSysCaps ctx = foldr addSysCap ctx (app ^. appSyscaps)
     addSysCap :: Text -> Ctx.Context -> Ctx.Context
     addSysCap syscap = case readMaybe (toString $ "CAP_" <> syscap) of
       Nothing -> error $ "Can't read syscap: " <> show syscap
-      Just c -> Ctx.syscaps %~ Set.insert c
+      Just c -> ctxSyscaps %~ Set.insert c
 
     addEnvs ctx = foldr setEnv ctx (app ^. appEnviron)
     setEnv :: Text -> Ctx.Context -> Ctx.Context
@@ -135,7 +165,7 @@ setNix = do
   setNixVolumes <- addVolumes ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
   let setEnv =
         Ctx.addEnv "NIX_SSL_CERT_FILE" certs
-          . Ctx.addEnv "TERM" "xterm"
+          . Ctx.addEnv "TERM" "xterm-256color"
           . Ctx.addEnv "LC_ALL" "C.UTF-8"
           . Ctx.addEnv "PATH" "/nix/var/nix/profiles/nix-install/bin:/bin"
 
@@ -145,9 +175,9 @@ setNix = do
 capsAll, capsToggle :: [Cap]
 capsAll = capsToggle
 capsToggle =
-  [ Cap "root" "run as root" capRoot (contextSet Ctx.runAs (Just Ctx.RunAsRoot)),
+  [ Cap "root" "run as root" capRoot (contextSet ctxRunAs (Just Ctx.RunAsRoot)),
     Cap "terminal" "allocate a tty" capTerminal setTerminal,
-    Cap "interactive" "interactive mode" capInteractive (contextSet Ctx.interactive True),
+    Cap "interactive" "interactive mode" capInteractive (contextSet ctxInteractive True),
     Cap "dbus" "share session dbus socket" capDbus setDbus,
     Cap "wayland" "share wayland socket" capWayland setWayland,
     Cap "pipewire" "share pipewire socket" capPipewire setPipewire,
@@ -161,22 +191,20 @@ capsToggle =
     Cap "gpg" "share gpg agent and keys" capGpg setGpg,
     Cap "x11" "share x11 socket" capX11 setX11,
     Cap "cwd" "mount cwd" capCwd setCwd,
-    Cap "network" "enable network" capNetwork (contextSet Ctx.network True),
+    Cap "network" "enable network" capNetwork (pure id),
     Cap "hostfile" "mount command file arg" capHostfile (pure id),
-    Cap "rw" "mount rootfs rw" capRw (contextSet Ctx.ro False),
-    Cap "privileged" "run with extra privileges" capPrivileged (contextSet Ctx.privileged True)
+    Cap "rw" "mount rootfs rw" capRw (contextSet ctxRO False),
+    Cap "privileged" "run with extra privileges" capPrivileged (contextSet ctxPrivileged True)
   ]
 
 setTerminal :: AppEnvT (Ctx.Context -> Ctx.Context)
 setTerminal =
-  pure $ (Ctx.interactive .~ True) . (Ctx.terminal .~ True) . Ctx.addEnv "TERM" "xterm-256color"
+  pure $ (ctxInteractive .~ True) . (ctxTerminal .~ True) . Ctx.addEnv "TERM" "xterm-256color"
 
 setWayland :: AppEnvT (Ctx.Context -> Ctx.Context)
 setWayland = do
-  sktM <- asks _hostWaylandSocket
-  case sktM of
-    Nothing -> setX11
-    Just skt -> setWayland' skt
+  sktM <- askL envHostWaylandSocket
+  maybe setX11 setWayland' sktM
 
 setWayland' :: SocketName -> AppEnvT (Ctx.Context -> Ctx.Context)
 setWayland' (SocketName skt) = do
@@ -223,7 +251,7 @@ setDri = do
 setPulseaudio :: AppEnvT (Ctx.Context -> Ctx.Context)
 setPulseaudio = do
   shareSkt <- addXdgRun "pulse"
-  huid <- asks _hostUid
+  huid <- askL envHostUid
   let pulseServer = "/run/user/" <> show huid <> "/pulse/native"
   pure $
     Ctx.directMount "/etc/machine-id"
@@ -232,8 +260,8 @@ setPulseaudio = do
 
 getHomes :: Text -> AppEnvT (FilePath, FilePath)
 getHomes help = do
-  hostDir <- fromMaybe (error $ "Need HOME for " <> help) <$> asks _hostHomeDir
-  appDir <- fromMaybe (error $ "Application need home for " <> help) <$> asks _appHomeDir
+  hostDir <- fromMaybe (error $ "Need HOME for " <> help) <$> askL envHostHomeDir
+  appDir <- fromMaybe (error $ "Application need home for " <> help) <$> askL envAppHomeDir
   pure (hostDir, appDir)
 
 mountHomeConfig :: Text -> FilePath -> AppEnvT (Ctx.Context -> Ctx.Context)
@@ -248,7 +276,7 @@ setAgent var value = do
     Just path -> Ctx.addEnv (toText var) (toText path) . Ctx.directMount (takeDirectory path)
 
 setSsh :: AppEnvT (Ctx.Context -> Ctx.Context)
-setSsh = setAgent "SSH_AUTH_SOCK" =<< asks _hostSSHAgent
+setSsh = setAgent "SSH_AUTH_SOCK" =<< askL envHostSSHAgent
 
 setGpg :: AppEnvT (Ctx.Context -> Ctx.Context)
 setGpg = do
@@ -258,14 +286,14 @@ setGpg = do
 
 setX11 :: AppEnvT (Ctx.Context -> Ctx.Context)
 setX11 = do
-  display <- asks _hostDisplay
+  display <- askL envHostDisplay
   pure $
     Ctx.directMount "/tmp/.X11-unix" . Ctx.addEnv "DISPLAY" (toText display) . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
 setCwd :: AppEnvT (Ctx.Context -> Ctx.Context)
 setCwd = do
-  cwd <- asks _hostCwd
-  pure $ Ctx.addMount "/data" (Ctx.rwHostPath cwd) . (Ctx.workdir ?~ "/data")
+  cwd <- askL envHostCwd
+  pure $ Ctx.addMount "/data" (Ctx.rwHostPath cwd) . (ctxWorkdir ?~ "/data")
 
 addVolumes :: [Text] -> AppEnvT (Ctx.Context -> Ctx.Context)
 addVolumes volumes = do
@@ -298,7 +326,7 @@ resolveFileArgs args = do
   pure $ foldr ((.) . addFileArg) id fps
   where
     addCommand :: Text -> Ctx.Context -> Ctx.Context
-    addCommand arg = Ctx.command %~ (arg :)
+    addCommand arg = ctxCommand %~ (arg :)
     checkExist :: Text -> AppEnvT (Either Text FilePath)
     checkExist arg = do
       fpM <- resolveHostPath arg
@@ -316,7 +344,7 @@ resolveFileArgs args = do
 
 -- | Helper functions to manipulate paths
 getXdgRuntimeDir :: AppEnvT FilePath
-getXdgRuntimeDir = fromMaybe (error "Need XDG_RUNTIME_DIR") <$> asks _hostXdgRunDir
+getXdgRuntimeDir = fromMaybe (error "Need XDG_RUNTIME_DIR") <$> askL envHostXdgRunDir
 
 fixPath :: Text -> FilePath
 fixPath = toString . Text.drop 1 . Text.dropWhile (/= '/')
@@ -324,7 +352,7 @@ fixPath = toString . Text.drop 1 . Text.dropWhile (/= '/')
 resolveContainerPath :: Text -> AppEnvT FilePath
 resolveContainerPath path
   | path == "~" || "~/" `Text.isPrefixOf` path = do
-    appHome' <- fromMaybe (error "Need app home") <$> asks _appHomeDir
+    appHome' <- fromMaybe (error "Need app home") <$> askL envAppHomeDir
     pure $ appHome' </> fixPath path
   | "/" `Text.isPrefixOf` path = pure $ toString path
   | otherwise = error $ "Invalid container path: " <> path
@@ -332,10 +360,10 @@ resolveContainerPath path
 resolveHostPath :: Text -> AppEnvT (Maybe FilePath)
 resolveHostPath path
   | "~/" `Text.isPrefixOf` path = do
-    envHome' <- fromMaybe (error "Need HOME") <$> asks _hostHomeDir
+    envHome' <- fromMaybe (error "Need HOME") <$> askL envHostHomeDir
     pure $ Just (envHome' </> fixPath path)
   | "./" `Text.isPrefixOf` path = do
-    curDir' <- asks _hostCwd
+    curDir' <- askL envHostCwd
     pure $ Just (curDir' </> fixPath path)
   | "/" `Text.isPrefixOf` path = pure $ Just (toString path)
   | otherwise = pure Nothing
@@ -363,7 +391,7 @@ addXdgRun fp = snd <$> addXdgRun' fp
 addXdgRun' :: FilePath -> AppEnvT (FilePath, Ctx.Context -> Ctx.Context)
 addXdgRun' fp = do
   hostXdg <- getXdgRuntimeDir
-  huid <- asks _hostUid
+  huid <- askL envHostUid
   let containerPath = runDir </> fp
       hostPath = hostXdg </> fp
       runBaseDir = "/run/user"

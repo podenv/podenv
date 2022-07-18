@@ -15,7 +15,7 @@ where
 
 import Data.Digest.Pure.SHA qualified as SHA
 import Data.Text qualified as Text
-import Podenv.Dhall hiding (name)
+import Podenv.Dhall
 import Podenv.Prelude
 
 newtype ImageName = ImageName {unImageName :: Text}

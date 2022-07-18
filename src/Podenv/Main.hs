@@ -26,16 +26,18 @@ module Podenv.Main
   )
 where
 
-import Data.Text qualified
+import Data.Map qualified as Map
+import Data.Text qualified as Text
 import Data.Version (showVersion)
 import Options.Applicative hiding (command)
 import Paths_podenv (version)
+import Podenv.Capability (AppMode (..))
 import Podenv.Capability qualified
-import Podenv.Config qualified
+import Podenv.Config
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Prelude
-import Podenv.Runtime (GlobalEnv (..), Name (..), RunMode (..), runtimeBackend)
+import Podenv.Runtime (ExecMode (Foreground), GlobalEnv (..), Name (..), RunEnv)
 import Podenv.Runtime qualified
 import Podenv.Version qualified (version)
 
@@ -48,17 +50,15 @@ main = do
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
 
-  (app, mode, ctxName, re) <- cliConfigLoad cli
-  env <- createLocalhostEnv (app ^. appRuntime)
-  let run = Podenv.Runtime.createLocalhostRunEnv env app ctxName
-  ctx <- Podenv.Runtime.appToContext run mode
+  (ar, mode, gl, run) <- cliLoad cli
+  ctx <- Podenv.Runtime.appToContext run mode ar
 
-  if showApplication
-    then putTextLn $ showApp app (Podenv.Runtime.showRuntimeCmd re runMode ctx (runtimeBackend run))
-    else flip runReaderT re do
-      Podenv.Runtime.buildRuntime run
-      when update $ Podenv.Runtime.updateRuntime run
-      Podenv.Runtime.execute run runMode ctx
+  flip runReaderT gl $
+    if showApplication
+      then putTextLn . showApp ar run =<< Podenv.Runtime.showCmd run Foreground ctx
+      else do
+        when update $ Podenv.Runtime.updateRuntime run (ar ^. arApplication . appRuntime)
+        Podenv.Runtime.execute run Foreground ctx
 
 usage :: [String] -> IO CLI
 usage args = do
@@ -95,15 +95,16 @@ data CLI = CLI
     showDhallEnv :: Bool,
     showApplication :: Bool,
     configExpr :: Maybe Text,
+    headlessExpr :: Maybe Text,
     -- runtime env:
     update :: Bool,
     verbose :: Bool,
-    runMode :: RunMode,
     -- app modifiers:
     capsOverride :: [Capabilities -> Capabilities],
+    cliNetwork :: Maybe (Maybe Text),
     shell :: Bool,
     namespace :: Maybe Text,
-    name :: Maybe Text,
+    cliName :: Maybe Name,
     cliEnv :: [Text],
     volumes :: [Text],
     -- app selector and arguments:
@@ -111,7 +112,9 @@ data CLI = CLI
     cliExtraArgs :: [Text]
   }
 
--- WARNING: when adding strOption, update the 'strOptions' list
+-- WARNING: when adding strOption, update the 'strOptions' list.
+-- This is necessary because the argument are pre-processed to detect application arguments.
+-- See the 'usage' function where `--` is made optional.
 cliParser :: Parser CLI
 cliParser =
   CLI
@@ -122,28 +125,32 @@ cliParser =
     <*> switch (long "dhall-env" <> hidden)
     <*> switch (long "show" <> help "Show the environment without running it")
     <*> optional (strOption (long "config" <> help "A config expression"))
+    <*> optional (strOption (long "headless" <> hidden))
     -- runtime env:
     <*> switch (long "update" <> help "Update the runtime")
     <*> switch (long "verbose" <> help "Increase verbosity")
-    <*> (bool Foreground Background <$> switch (long "detach" <> help "Run application in the background" <> hidden))
     -- app modifiers:
     <*> capsParser
+    <*> ( (bool Nothing (Just Nothing) <$> switch (long "no-network" <> hidden))
+            <|> optional (Just <$> strOption (long "network" <> help "Network name"))
+        )
     <*> switch (long "shell" <> help "Start a shell instead of the application command")
-    <*> optional (strOption (long "namespace" <> help "Share a network ns"))
-    <*> optional (strOption (long "name" <> metavar "NAME" <> help "Container name"))
+    <*> optional (strOption (long "namespace" <> help "The application namespace"))
+    <*> (fmap Name <$> optional (strOption (long "name" <> metavar "NAME" <> help "The application name")))
     <*> many (strOption (long "env" <> metavar "ENV" <> help "Extra env 'KEY=VALUE'"))
     <*> many (strOption (long "volume" <> short 'v' <> metavar "VOLUME" <> help "Extra volumes 'volume|hostPath[:containerPath]'"))
-    <*> optional (strArgument (metavar "APP" <> help "Application config name or image:name or nix:expr"))
+    <*> optional (strArgument (metavar "APP" <> help "Application config name or default selector, e.g. image:name"))
     <*> many (strArgument (metavar "ARGS" <> help "Application args"))
 
 -- | List of strOption that accept an argument (that is not the selector)
 strOptions :: [String]
-strOptions = ["--config", "--namespace", "--name", "--env", "--volume", "-v"]
+strOptions = ["--config", "--headless", "--namespace", "--name", "--env", "--volume", "-v", "--network"]
 
 -- | Parse all capabilities toggles
 capsParser :: Parser [Capabilities -> Capabilities]
-capsParser = catMaybes <$> traverse mkCapParser Podenv.Capability.capsAll
+capsParser = catMaybes <$> traverse mkCapParser (filter notNetwork Podenv.Capability.capsAll)
   where
+    notNetwork Podenv.Capability.Cap {..} = capName /= "network"
     mkCapParser :: Podenv.Capability.Cap -> Parser (Maybe (Capabilities -> Capabilities))
     mkCapParser cap =
       toggleCapParser cap True <|> toggleCapParser cap False
@@ -174,62 +181,102 @@ cliInfo =
         (concat [showVersion version, " ", Podenv.Version.version])
         (long "version" <> help "Show version")
 
--- | Load the config
-cliConfigLoad :: CLI -> IO (Application, AppMode, Name, GlobalEnv)
-cliConfigLoad cli@CLI {..} = do
-  -- The volumes dir may be provided by the system config, otherwise default to ~/.local/share/podenv/volumes
+cliLoad :: CLI -> IO (ApplicationResource, AppMode, GlobalEnv, RunEnv)
+cliLoad cli = do
   volumesDir <- getDataDir >>= \fp -> pure $ fp </> "volumes"
+  env <- Podenv.Env.createEnv
+  config <- Podenv.Config.loadConfig (configExpr cli)
+  cliConfigLoad volumesDir env config cli
 
-  config <- Podenv.Config.load selector configExpr
-  (extraArgs, baseApp) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
-  let app = cliPrepare cli baseApp
-      name' = Name $ fromMaybe (app ^. appName) name
+-- | Load the config
+cliConfigLoad :: FilePath -> AppEnv 'UnknownState -> Config -> CLI -> IO (ApplicationResource, AppMode, GlobalEnv, RunEnv)
+cliConfigLoad volumesDir env config cli@CLI {..} = do
+  (extraArgs, baseApp) <-
+    case selector >>= Podenv.Config.defaultSelector of
+      Just (sel, app) -> pure (cliExtraArgs, defaultAppRes app & setSelector sel)
+      Nothing -> do
+        (extraArgs, app) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
+        pure (extraArgs, app)
+
+  run <- case headlessExpr of
+    Just expr -> do
+      ecfg <- Podenv.Config.loadConfig (Just expr)
+      pure $ Podenv.Runtime.createHeadlessRunEnv ecfg env
+    Nothing -> pure $ Podenv.Runtime.createLocalhostRunEnv env
+
+  let app = baseApp & cliPrepare cli
       re = GlobalEnv {verbose, volumesDir, config = Just config}
       mode = if shell then Shell else Regular extraArgs
-  pure (app, mode, name', re)
+
+  pure (app, mode, re, run)
 
 -- | Apply the CLI argument to the application
-cliPrepare :: CLI -> Application -> Application
-cliPrepare CLI {..} = setShell . setEnvs . setVolumes . setCaps . setNS
+cliPrepare :: CLI -> ApplicationResource -> ApplicationResource
+cliPrepare CLI {..} = setMeta . setApp . setNetwork . setVolumes
   where
-    setNS = maybe id (appNamespace ?~) namespace
+    setNetCap = arApplication . appCapabilities . capNetwork
+    setNetwork = case cliNetwork of
+      Nothing -> id
+      Just Nothing -> setNetCap .~ False
+      Just (Just netName) ->
+        (setNetCap .~ True)
+          . ( arNetwork .~ case netName of
+                "host" -> Host
+                "private" -> Private
+                _
+                  | "-" `Text.isPrefixOf` netName -> error "Invalid network name"
+                  | otherwise -> Shared netName
+            )
+    setName = maybe id ((metaName ?~) . unName) cliName
+    setNS = maybe id (metaNamespace ?~) namespace
+    setMeta = arMetadata %~ (setName . setNS)
+
+    setVolumes app' = foldr (\v -> arVolumes %~ (v :)) app' volumes
 
     setShell = bool id setShellCap shell
     setShellCap = appCapabilities %~ (capTerminal .~ True) . (capInteractive .~ True)
-
     setEnvs app' = foldr (\v -> appEnviron %~ (v :)) app' cliEnv
-
-    setVolumes app' = foldr (\v -> appVolumes %~ (v :)) app' volumes
-
     setCaps app' = foldr (appCapabilities %~) app' capsOverride
+    setApp = arApplication %~ setShell . setEnvs . setCaps
 
-showApp :: Application -> Text -> Text
-showApp Application {..} cmd = unlines infos
+showApp :: ApplicationResource -> RunEnv -> Text -> Text
+showApp ar run cmd = unlines infos
   where
+    app = ar ^. arApplication
+    rt = Podenv.Runtime.showBuildInfo run (app ^. appRuntime)
     infos =
-      ["[+] Capabilities", unwords appCaps, ""]
+      [ "[+] runtime: " <> rt,
+        "[+] Capabilities",
+        unwords (sort appCaps),
+        ""
+      ]
         <> ["[+] Command", cmd]
-    appCaps = concatMap showCap Podenv.Capability.capsAll
+    appCaps = concatMap showCap (Podenv.Capability.capsAll <> [netCap])
+    netCap = Podenv.Capability.Cap "network" "" capNetwork (pure id)
     showCap Podenv.Capability.Cap {..} =
-      [capName | capabilities ^. capLens]
+      [capName | app ^. appCapabilities . capLens]
 
 printCaps :: IO ()
 printCaps = do
   putText $ unlines $ sort $ map showCap Podenv.Capability.capsAll
   where
     showCap Podenv.Capability.Cap {..} =
-      let sep = if Data.Text.length capName < 8 then "\t\t" else "\t"
+      let sep
+            | Text.length capName < 4 = "\t\t\t"
+            | Text.length capName < 8 = "\t\t"
+            | otherwise = "\t"
        in capName <> sep <> capDescription
 
 printApps :: Maybe Text -> IO ()
 printApps configTxt = do
-  atoms <- configToAtoms <$> Podenv.Config.load Nothing configTxt
+  atoms <- configToAtoms <$> Podenv.Config.loadConfig configTxt
   let showApp' (Podenv.Config.ApplicationRecord app) =
         "Application" <> maybe "" (\desc -> " (" <> desc <> ")") (app ^. appDescription)
       showFunc args app = "λ " <> args <> " → " <> showApp' app
       showArg a = "<" <> show a <> ">"
       showConfig = \case
-        Podenv.Config.Lit app -> showApp' app
+        Podenv.Config.LitAppRes ar -> "Deployment: " <> showApp' (Podenv.Config.ApplicationRecord $ ar ^. arApplication)
+        Podenv.Config.LitApp app -> showApp' app
         Podenv.Config.LamArg name f -> showFunc (show name) (f (showArg name))
         Podenv.Config.LamArg2 n1 n2 f -> showFunc (show n1 <> " " <> show n2) (f (showArg n1) (showArg n2))
         Podenv.Config.LamApp _ -> "λ app → app"
@@ -237,27 +284,28 @@ printApps configTxt = do
   traverse_ (putTextLn . showAtom) atoms
 
 configToAtoms :: Podenv.Config.Config -> [(Text, Podenv.Config.Atom)]
-configToAtoms = \case
-  Podenv.Config.ConfigDefault ar -> [("default", Podenv.Config.Lit ar)]
-  Podenv.Config.ConfigApplication atom -> [("default", atom)]
-  Podenv.Config.ConfigApplications xs -> sortOn fst xs
+configToAtoms = sortOn fst . unConfig
 
 printManifest :: Maybe Text -> IO ()
 printManifest configTxt = do
-  atoms <- configToAtoms <$> Podenv.Config.load Nothing configTxt
-  let re = Podenv.Runtime.defaultGlobalEnv "/volume"
-      addNL = Data.Text.replace "--" "\\\n  --"
-      doPrint name app = do
-        putTextLn name
-        env <- createLocalhostEnv (app ^. appRuntime)
-        let run = Podenv.Runtime.createLocalhostRunEnv env app (Name name)
-        ctx <- Podenv.Runtime.appToContext run (Regular [])
-        putTextLn . addNL $ showApp app (Podenv.Runtime.showRuntimeCmd re Foreground ctx (runtimeBackend run))
+  atoms <- configToAtoms <$> Podenv.Config.loadConfig configTxt
+  env <- Podenv.Env.createEnv
+  let run = Podenv.Runtime.createLocalhostRunEnv env
+      gl = Podenv.Runtime.defaultGlobalEnv "/volume"
+      addNL = Text.replace "--" "\\\n  --"
+      doPrint name ar = do
+        ctx <- Podenv.Runtime.appToContext run (Regular []) $ ar & (arMetadata . metaLabels) %~ Map.insert "podenv.selector" name
+        flip runReaderT gl $ do
+          putTextLn . addNL . showApp ar run =<< Podenv.Runtime.showCmd run Foreground ctx
 
       printAppContext :: (Text, Podenv.Config.Atom) -> IO ()
-      printAppContext (name, atom) = case atom of
-        Podenv.Config.Lit app -> doPrint name (Podenv.Config.unRecord app)
-        Podenv.Config.LamArg _ f -> doPrint name (Podenv.Config.unRecord $ f "a")
-        Podenv.Config.LamArg2 _ _ f -> doPrint name (Podenv.Config.unRecord $ f "a" "b")
-        Podenv.Config.LamApp _ -> putTextLn $ name <> ": lamapp"
-  traverse_ (printAppContext) atoms
+      printAppContext (name, atom) = do
+        putTextLn name
+        let mkAR = Podenv.Config.defaultAppRes . Podenv.Config.unRecord
+        case atom of
+          Podenv.Config.LitAppRes ar -> doPrint name ar
+          Podenv.Config.LitApp app -> doPrint name (mkAR app)
+          Podenv.Config.LamArg _ f -> doPrint name (mkAR $ f "a")
+          Podenv.Config.LamArg2 _ _ f -> doPrint name (mkAR $ f "a" "b")
+          Podenv.Config.LamApp _ -> putTextLn "lamapp"
+  traverse_ printAppContext atoms

@@ -5,21 +5,24 @@
 
 -- | This module contains the logic to load the dhall configuration
 module Podenv.Config
-  ( load,
+  ( loadConfig,
+    defaultSelector,
     decodeExpr,
     select,
+    setSelector,
     Config (..),
     Atom (..),
     ApplicationRecord (..),
     defaultConfigPath,
+    defaultAppRes,
     defaultApp,
     podenvImportTxt,
   )
 where
 
 import Control.Exception (bracket_)
-import Data.Digest.Pure.SHA qualified as SHA
 import Data.Either.Validation
+import Data.Map qualified as Map
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text (readFile)
 import Dhall qualified
@@ -29,23 +32,18 @@ import Dhall.Map qualified as DM
 import Dhall.Marshal.Decode (DhallErrors (..), extractError)
 import Dhall.Parser qualified
 import Dhall.Src qualified
-import Podenv.Dhall hiding (name)
+import Podenv.Dhall
 import Podenv.Prelude
 import System.Environment (setEnv, unsetEnv)
 import System.FilePath.Posix (dropExtension, isExtensionOf, splitPath)
 import Text.Show qualified
 
-data Config
-  = -- | A standalone application, e.g. defaultSelector
-    ConfigDefault ApplicationRecord
-  | -- | A single application
-    ConfigApplication Atom
-  | -- | A collection of applications
-    ConfigApplications [(Text, Atom)]
+newtype Config = Config {unConfig :: [(Text, Atom)]}
 
 data Atom
   = -- | A literal application
-    Lit ApplicationRecord
+    LitApp ApplicationRecord
+  | LitAppRes ApplicationResource
   | -- | A paremeterized application
     LamArg ArgName (Text -> ApplicationRecord)
   | LamArg2 ArgName ArgName (Text -> Text -> ApplicationRecord)
@@ -65,12 +63,10 @@ instance Text.Show.Show ArgName where
   show (ArgName n) = toString n
 
 -- | Config load entrypoint
-load :: Maybe Text -> Maybe Text -> IO Config
-load selectorM configTxt = case selectorM >>= defaultSelector of
-  Just c -> pure $ ConfigDefault (ApplicationRecord c)
-  Nothing -> decodeExpr . Dhall.normalize <$> loadExpr configTxt
+loadConfig :: Maybe Text -> IO Config
+loadConfig configTxt = Config . decodeExpr . Dhall.normalize <$> loadExpr configTxt
 
-defaultSelector :: Text -> Maybe Application
+defaultSelector :: Text -> Maybe (Text, Application)
 defaultSelector s
   | "image:" `Text.isPrefixOf` s = imageApp s
   | "nix:" `Text.isPrefixOf` s = nixApp s
@@ -78,12 +74,11 @@ defaultSelector s
   | "rootfs:" `Text.isPrefixOf` s = rootfsApp s
   | otherwise = Nothing
   where
-    imageApp x = mkApp ("image-" <> mkName x) (Image $ Text.drop (Text.length "image:") x)
-    nixApp' x = mkApp ("nix-" <> mkName x) (Nix $ Flakes [x] Nothing)
-    nixApp x = nixApp' $ Text.drop (Text.length "nix:") x
-    rootfsApp x = mkApp ("rootfs-" <> mkName x) (Rootfs $ Text.drop (Text.length "rootfs:") x)
-    mkApp name runtime' = Just $ defaultApp & (appName .~ name) . (appRuntime .~ runtime')
-    mkName = Text.take 6 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8
+    imageApp x = mkApp (Image $ Text.drop (Text.length "image:") x)
+    nixApp x = nixApp' (Text.drop (Text.length "nix:") x)
+    rootfsApp x = mkApp (Rootfs $ Text.drop (Text.length "rootfs:") x)
+    nixApp' x = mkApp (Nix $ Flakes [x] Nothing)
+    mkApp r = Just (s, defaultApp r)
 
 -- | Inject the package.dhall into the environ so that config can use `env:PODENV`
 loadWithEnv :: FilePath -> Dhall.Expr Dhall.Src.Src Dhall.Import -> IO DhallExpr
@@ -160,30 +155,25 @@ podenvImportTxt :: Text
 podenvImportTxt = Text.replace "\n " "" $ Dhall.pretty podenvImport
 
 -- | Pure config load
-decodeExpr :: DhallExpr -> Config
-decodeExpr expr = case loadConfig "" expr of
-  Success [(selector, Lit app)] -> ConfigApplication $ Lit (ensureName selector app)
-  Success [(_, x)] -> ConfigApplication x
+decodeExpr :: DhallExpr -> [(Text, Atom)]
+decodeExpr expr = case decodeExprAtom "" expr of
   Success [] -> error "No application found"
-  Success xs -> ConfigApplications xs
+  Success xs -> xs
   Failure (DhallErrors (x :| _)) -> error $ show x
-
--- | When an application doesn't have a name, set it to the selector path
-ensureName :: Text -> ApplicationRecord -> ApplicationRecord
-ensureName x app = case unRecord app ^. appName of
-  "" -> ApplicationRecord $ unRecord app & appName .~ x
-  _ -> app
 
 -- | The main config load function. It recursively descend the
 -- tree by extending the selector name.
-loadConfig :: Text -> DhallExpr -> DhallParser [(Text, Atom)]
-loadConfig baseSelector expr = case expr of
+decodeExprAtom :: Text -> DhallExpr -> DhallParser [(Text, Atom)]
+decodeExprAtom baseSelector expr = case expr of
   -- When the node is a function, assume it is an app.
   Dhall.Lam {} -> (\app -> [(baseSelector, app)]) <$> loadApp expr
   Dhall.RecordLit kv
     | -- When the node has a "runtime" attribute, assume it is an app.
       DM.member "runtime" kv ->
       (\app -> [(baseSelector, app)]) <$> loadApp expr
+    | -- When the node has a "kind" and "apiVersion" attribute, assume it is an appRes.
+      DM.member "kind" kv && DM.member "apiVersion" kv ->
+      (\ar -> [(baseSelector, LitAppRes ar)]) <$> Dhall.extract Dhall.auto expr
     | -- Otherwise, traverse each attributes
       otherwise ->
       concat <$> traverse (uncurry loadCollection) (DM.toList kv)
@@ -192,7 +182,7 @@ loadConfig baseSelector expr = case expr of
         -- Skip leaf starting with `use`, otherwise they can be used and likely fail with:
         -- FromDhall: You cannot decode a function if it does not have the correct type
         | "use" `Text.isPrefixOf` n = pure []
-        | otherwise = loadConfig (mkSelector n) (Dhall.recordFieldValue e)
+        | otherwise = decodeExprAtom (mkSelector n) (Dhall.recordFieldValue e)
       mkSelector name
         | baseSelector == mempty = name
         | name == "default" = baseSelector
@@ -200,27 +190,66 @@ loadConfig baseSelector expr = case expr of
   _ -> extractError $ baseSelector <> ": expected a record literal, but got: " <> Text.take 256 (show expr)
 
 -- | Select the application, returning the unused cli args.
-select :: Config -> [Text] -> Either Text ([Text], Application)
-select config args = fmap unRecord <$> select' config args
+select :: Config -> [Text] -> Either Text ([Text], ApplicationResource)
+select (Config config) args = case nonEmpty args of
+  Just args' -> fmap (uncurry setSelector) <$> select' config args'
+  -- When no argument are provided, if the config only has one application, then automatically select it
+  Nothing -> case config of
+    [(sel, atom)] ->
+      fmap (setSelector sel) <$> case atom of
+        LitApp app -> Right ([], defaultAppRes (unRecord app))
+        LitAppRes ar -> Right ([], ar)
+        _ -> Left "Can't select a non literal app without args"
+    _ -> Left "Multiple apps configured, provides a selector"
 
-select' :: Config -> [Text] -> Either Text ([Text], ApplicationRecord)
-select' config args = case config of
-  -- config default is always selected, drop the first args
-  ConfigDefault app -> pure (tail (fromList args), app)
-  -- config has only one application, don't touch the args
-  ConfigApplication atom -> selectApp [] args atom
-  -- config has some applications, the first arg is a selector
-  ConfigApplications atoms -> case args of
-    (selector : xs) -> do
-      atom <- lookup selector atoms `orDie` (selector <> ": not found")
-      (args', app) <- selectApp atoms xs atom
-      let name' = Text.intercalate "-" $ take (length args - length args') args
-      pure (args', ensureName name' app)
-    [] -> Left "Multiple apps configured, provides a selector"
+setSelector :: Text -> ApplicationResource -> ApplicationResource
+setSelector n
+  | n == "" = id
+  | otherwise = (arMetadata . metaLabels) %~ Map.insert "podenv.selector" n
+
+select' :: [(Text, Atom)] -> NonEmpty Text -> Either Text ([Text], (Text, ApplicationResource))
+select' atoms baseArgs@(baseSelector :| baseRemainingArgs) = do
+  (selector, args, atom) <- lookupAtom
+  case atom of
+    LitAppRes ar -> case deprecatedFields (ar ^. arApplication) of
+      [] -> pure (args, (selector, ar))
+      xs -> Left $ "ApplicationResource uses deprecated fields: " <> show xs
+    _ -> do
+      (args', app) <- selectApp args atom
+      let selectorName
+            | -- If the selection didn't touch the args, then keep the selector name
+              args == args' =
+              selector
+            | -- Otherwise, pick the last element used
+              otherwise = case drop (length args - length args') args of
+              x : _ -> x
+              _ -> ""
+      pure (args', (selectorName, defaultAppRes (unRecord app)))
   where
-    selectApp atoms args' atom = case atom of
+    deprecatedFields app = n <> ns
+      where
+        n = case app ^. appName of
+          "" -> []
+          _ -> ["move name to metadata.name" :: Text]
+        ns = maybe [] (const ["move namespace to resources.network"]) (app ^. appNamespace)
+
+    lookupAtom :: Either Text (Text, [Text], Atom)
+    lookupAtom = case lookup baseSelector atoms of
+      Just a -> Right (baseSelector, baseRemainingArgs, a)
+      Nothing -> case atoms of
+        [(sel, a)] ->
+          let remainingArgs
+                -- If the selector match the atom name, then drop it from the args
+                | sel == baseSelector = baseRemainingArgs
+                | otherwise = toList baseArgs
+           in Right (sel, remainingArgs, a)
+        _ -> Left $ baseSelector <> ": not found"
+
+    selectApp :: [Text] -> Atom -> Either Text ([Text], ApplicationRecord)
+    selectApp args' atom = case atom of
+      LitAppRes _ -> Left "Can't select ApplicationResource"
       -- App is not a function, don't touch the arg
-      Lit app -> pure (args', app)
+      LitApp app -> pure (args', app)
       -- App needs an argument, the tail is the arg
       LamArg arg f -> case args' of
         (x : xs) -> pure (xs, f x)
@@ -231,23 +260,17 @@ select' config args = case config of
         _ -> Left ("Missing arguments: " <> show arg1 <> " " <> show arg2)
       LamApp f -> case args' of
         (x : xs) -> case defaultSelector x of
-          Just app -> pure (xs, f app)
+          Just (_, app) -> pure (xs, f app)
           Nothing -> do
             -- Recursively select the app to eval arg `mod app arg` as `mod (app arg)`
             -- e.g. LamApp should be applied at the end.
             atom' <- lookup x atoms `orDie` (x <> ": unknown lam arg")
-            (rest, app) <- selectApp atoms xs atom'
+            (rest, app) <- selectApp xs atom'
             pure (rest, f (unRecord app))
         [] -> Left "Missing app argument"
 
 defaultConfigPath :: Text
 defaultConfigPath = "~/.config/podenv/config.dhall"
-
--- | The default app
-defaultApp :: Application
-defaultApp = case Dhall.extract Dhall.auto (Dhall.renote appDefault) of
-  Success app -> app
-  Failure v -> error $ "Invalid default application: " <> show v
 
 -- | A type synonym to simplify function annotation.
 type DhallParser a = Dhall.Extractor Dhall.Src.Src Void a
@@ -295,8 +318,8 @@ appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
             [ ("installables", Dhall.ListLit Nothing $ fromList [v]),
               ("nixpkgs", Dhall.App Dhall.None Dhall.Text)
             ]
-        mkRuntime field v =
-          Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing)) v
+        mkRuntime field =
+          Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing))
 
     extract' :: DM.Map Text (Dhall.RecordField s Void) -> Dhall.Expr Void Void -> DhallExtractor Application
     extract' kv runtimeExpr =
@@ -324,6 +347,6 @@ loadApp expr = case expr of
     | Dhall.denote (Dhall.functionBindingAnnotation fb) == appType ->
       LamApp <$> Dhall.extract Dhall.auto expr
     | otherwise -> LamArg (getArgName fb) <$> Dhall.extract Dhall.auto expr
-  _ -> Lit <$> Dhall.extract Dhall.auto expr
+  _ -> LitApp <$> Dhall.extract Dhall.auto expr
   where
     getArgName = ArgName . Dhall.functionBindingVariable
