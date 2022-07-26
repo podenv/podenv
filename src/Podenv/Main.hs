@@ -43,6 +43,7 @@ import Podenv.Version qualified (version)
 main :: IO ()
 main = do
   cli@CLI {..} <- usage =<< getArgs
+  when showManifest (printManifest configExpr >> exitSuccess)
   when showDhallEnv (putTextLn Podenv.Config.podenvImportTxt >> exitSuccess)
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
@@ -95,6 +96,7 @@ data CLI = CLI
   { -- action modes:
     listApps :: Bool,
     listCaps :: Bool,
+    showManifest :: Bool,
     showDhallEnv :: Bool,
     showApplication :: Bool,
     configExpr :: Maybe Text,
@@ -121,13 +123,14 @@ cliParser =
     -- action modes:
     <$> switch (long "list" <> help "List available applications")
     <*> switch (long "list-caps" <> help "List available capabilities")
+    <*> switch (long "manifest" <> hidden)
     <*> switch (long "dhall-env" <> hidden)
     <*> switch (long "show" <> help "Show the environment without running it")
     <*> optional (strOption (long "config" <> help "A config expression"))
     -- runtime env:
     <*> switch (long "update" <> help "Update the runtime")
     <*> switch (long "verbose" <> help "Increase verbosity")
-    <*> switch (long "detach" <> help "Increase verbosity" <> hidden)
+    <*> switch (long "detach" <> hidden)
     -- app modifiers:
     <*> capsParser
     <*> switch (long "shell" <> help "Start a shell instead of the application command")
@@ -213,7 +216,7 @@ showApp Application {..} ctx be re = unlines infos
   where
     infos =
       ["[+] runtime: " <> Podenv.Build.beInfos be, ""]
-        <> ["[+] Capabilities", unwords appCaps, ""]
+        <> ["[+] Capabilities", unwords (sort appCaps), ""]
         <> ["[+] Command", cmd]
     cmd = Podenv.Runtime.showRuntimeCmd re ctx
     appCaps = concatMap showCap Podenv.Application.capsAll
@@ -230,12 +233,8 @@ printCaps = do
 
 printApps :: Maybe Text -> IO ()
 printApps configTxt = do
-  config <- Podenv.Config.load Nothing configTxt
-  let atoms = sortOn fst $ case config of
-        Podenv.Config.ConfigDefault app -> [("default", Podenv.Config.Lit app)]
-        Podenv.Config.ConfigApplication atom -> [("default", atom)]
-        Podenv.Config.ConfigApplications xs -> xs
-      showApp' (Podenv.Config.ApplicationRecord app) =
+  atoms <- configToAtoms <$> Podenv.Config.load Nothing configTxt
+  let showApp' (Podenv.Config.ApplicationRecord app) =
         "Application" <> maybe "" (\desc -> " (" <> desc <> ")") (app ^. appDescription)
       showFunc args app = "λ " <> args <> " → " <> showApp' app
       showArg a = "<" <> show a <> ">"
@@ -246,3 +245,28 @@ printApps configTxt = do
         Podenv.Config.LamApp _ -> "λ app → app"
       showAtom (name, app) = name <> ": " <> showConfig app
   traverse_ (putTextLn . showAtom) atoms
+
+configToAtoms :: Podenv.Config.Config -> [(Text, Podenv.Config.Atom)]
+configToAtoms = \case
+  Podenv.Config.ConfigDefault ar -> [("default", Podenv.Config.Lit ar)]
+  Podenv.Config.ConfigApplication atom -> [("default", atom)]
+  Podenv.Config.ConfigApplications xs -> sortOn fst xs
+
+printManifest :: Maybe Text -> IO ()
+printManifest configTxt = do
+  atoms <- configToAtoms <$> Podenv.Config.load Nothing configTxt
+  let re = Podenv.Runtime.defaultRuntimeEnv "/volume"
+      addNL = Data.Text.replace "--" "\\\n  --"
+      doPrint name ar = do
+        putTextLn name
+        (be, app) <- Podenv.Build.prepare re ar
+        ctx <- Podenv.Application.prepare (Podenv.Application.Regular) app (Name name)
+        putTextLn . addNL $ showApp app ctx be re
+
+      printAppContext :: (Text, Podenv.Config.Atom) -> IO ()
+      printAppContext (name, atom) = case atom of
+        Podenv.Config.Lit app -> doPrint name (Podenv.Config.unRecord app)
+        Podenv.Config.LamArg _ f -> doPrint name (Podenv.Config.unRecord $ f "a")
+        Podenv.Config.LamArg2 _ _ f -> doPrint name (Podenv.Config.unRecord $ f "a" "b")
+        Podenv.Config.LamApp _ -> putTextLn $ name <> ": lamapp"
+  traverse_ (printAppContext) atoms
