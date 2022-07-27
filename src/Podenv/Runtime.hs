@@ -18,6 +18,7 @@ module Podenv.Runtime
     createHeadlessRunEnv,
     getPodmanPodStatus,
     deletePodmanPod,
+    listRunningApps,
 
     -- * Podman helpers
     podman,
@@ -610,3 +611,35 @@ executeBackgroundPodman args = do
   case Text.length out of
     64 -> pure $ Name out
     _ -> error $ "Unknown name: " <> out
+
+data PodmanProc = PodmanProc
+  { ppId :: Text,
+    ppStatus :: Text,
+    ppImage :: Text,
+    ppLabels :: Map Text Text
+  }
+  deriving (Show, Eq, Generic)
+
+instance Aeson.FromJSON PodmanProc where
+  parseJSON = Aeson.genericParseJSON $ Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 2}
+
+getPodmanProcs :: IO [PodmanProc]
+getPodmanProcs = do
+  (out, _) <- P.readProcess_ cmd
+  case Aeson.eitherDecode out of
+    Left e -> error $ "Can't read " <> show cmd <> " output: " <> show e
+    Right x -> pure x
+  where
+    cmd = "podman ps --filter label=podenv.selector --format json"
+
+getAppName :: Map Text Text -> Text
+getAppName = fromMaybe "unknown" . Map.lookup "podenv.selector"
+
+formatPodmanProc :: PodmanProc -> Text
+formatPodmanProc PodmanProc {..} =
+  Text.unwords
+    [ppId, ppImage, ppStatus, getAppName ppLabels]
+
+-- | List podman container started by podenv. TODO: add bwrap process
+listRunningApps :: IO [Text]
+listRunningApps = fmap formatPodmanProc <$> getPodmanProcs
