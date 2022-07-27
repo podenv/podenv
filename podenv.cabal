@@ -81,6 +81,7 @@ library
   import:           common
   build-depends:    base < 5
                   , SHA
+                  , aeson
                   , containers
                   , dhall >= 1.39
                   , directory

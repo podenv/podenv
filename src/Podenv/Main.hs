@@ -49,6 +49,7 @@ main = do
   when showDhallEnv (putTextLn Podenv.Config.podenvImportTxt >> exitSuccess)
   when listCaps (printCaps >> exitSuccess)
   when listApps (printApps configExpr >> exitSuccess)
+  when listProcs (Podenv.Runtime.listRunningApps >>= traverse_ putTextLn >> exitSuccess)
 
   (ar, mode, gl, run) <- cliLoad cli
   ctx <- Podenv.Runtime.appToContext run mode ar
@@ -91,6 +92,7 @@ data CLI = CLI
   { -- action modes:
     listApps :: Bool,
     listCaps :: Bool,
+    listProcs :: Bool,
     showManifest :: Bool,
     showDhallEnv :: Bool,
     showApplication :: Bool,
@@ -121,6 +123,7 @@ cliParser =
     -- action modes:
     <$> switch (long "list" <> help "List available applications")
     <*> switch (long "list-caps" <> help "List available capabilities")
+    <*> switch (long "ps" <> help "List running application")
     <*> switch (long "manifest" <> hidden)
     <*> switch (long "dhall-env" <> hidden)
     <*> switch (long "show" <> help "Show the environment without running it")
