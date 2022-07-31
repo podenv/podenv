@@ -47,14 +47,20 @@ $ cabal test --test-option=--match --test-option="/unit tests/$name/"
 
 ## Nix shell
 
+Run ci test:
+
+```ShellSession
+$ nix develop .#ci -c run
+```
+
 Run local hoogle service:
 
 ```ShellSession
-$ nix-shell --arg withHoogle true --command "hoogle server -p 8080 --local --haskell"
+$ nix develop .#hoogle -c run
 ```
 
 Auto run the tests with ghcid:
 
 ```ShellSession
-$ nix-shell --command "ghcid --command='cabal v2-repl test:tests' --test 'Main.main'"
+$ nix develop --command ghcid-test
 ```

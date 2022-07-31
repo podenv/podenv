@@ -117,10 +117,13 @@ doesSymlinkExist fp =
     checkFp = Control.Exception.try $ System.Posix.Files.readSymbolicLink fp
 
 -- | Create a lens name
+--
+-- >>> lensName "name" "name"
+-- Nothing
 lensName :: String -> String -> Maybe String
 lensName prefix field
   | field `Prelude.elem` manualFields = Nothing
   | otherwise = Just $ prefix <> [toUpper $ Prelude.head field] <> Prelude.tail field
   where
     -- these fields have conflicts and their lens need to be implemented manually
-    manualFields = ["name", "namespace", "volumes", "network", "labels"]
+    manualFields = ["name", "namespace", "volumes", "network", "labels", "apiVersion", "kind"]

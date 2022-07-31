@@ -13,7 +13,6 @@ module Podenv.Config
     Config (..),
     Atom (..),
     ApplicationRecord (..),
-    defaultConfigPath,
     defaultAppRes,
     defaultApp,
     podenvImportTxt,
@@ -268,9 +267,6 @@ select' atoms baseArgs@(baseSelector :| baseRemainingArgs) = do
             (rest, app) <- selectApp xs atom'
             pure (rest, f (unRecord app))
         [] -> Left "Missing app argument"
-
-defaultConfigPath :: Text
-defaultConfigPath = "~/.config/podenv/config.dhall"
 
 -- | A type synonym to simplify function annotation.
 type DhallParser a = Dhall.Extractor Dhall.Src.Src Void a

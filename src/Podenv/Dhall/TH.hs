@@ -33,13 +33,12 @@ hubCommit = $(Dhall.TH.staticDhallExpression "env:HUB_COMMIT as Text ? ./.git/mo
 podenvPackage :: Expr Void Void
 podenvPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")
 
-appType, appDefault, runtimeType, containerBuildDefault, capsDefault, appResDefault :: Expr Void Void
+appType, appDefault, runtimeType, containerBuildDefault, capsDefault :: Expr Void Void
 appType = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Application.dhall).Type")
 runtimeType = $(Dhall.TH.staticDhallExpression "./hub/schemas/Runtime.dhall")
 containerBuildDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/ContainerBuild.dhall).default")
 appDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Application.dhall).default")
 capsDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Capabilities.dhall).default")
-appResDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/ApplicationResource.dhall).default")
 
 -- | Generate Haskell Types from Dhall Types.
 -- See: https://hackage.haskell.org/package/dhall-1.40.0/docs/Dhall-TH.html

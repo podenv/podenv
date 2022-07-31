@@ -1,1 +1,3 @@
-/tests/config/podenv
+/dist-newstyle/
+/result
+/stack.yaml.lock
