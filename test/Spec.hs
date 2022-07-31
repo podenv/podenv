@@ -14,7 +14,7 @@ import Podenv.Context
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Image
-import Podenv.Main
+import Podenv.Main hiding (main)
 import Podenv.Prelude
 import Podenv.Runtime (ExecMode (..))
 import Podenv.Runtime qualified
@@ -63,13 +63,16 @@ spec (config, goldenConfig) = describe "unit tests" $ do
           content2 <- Text.unlines <$> traverse (mkGoldenConfig Nothing) ys
           current <- Text.readFile "test/golden.txt"
           let new =
-                Text.unlines
-                  [ show $ map fst (unConfig goldenConfig),
-                    content,
-                    content2
-                  ]
+                -- work around typed-process display bug
+                Text.replace "--detach-keys  -t" "--detach-keys \"\" -t"
+                  . Text.unlines
+                  $ [ show $ map fst (unConfig goldenConfig),
+                      content,
+                      content2
+                    ]
           when (current /= new) $ do
             Text.writeFile "test/golden.txt" new
+            putTextLn "Checkout `git diff`"
             exitFailure
 
     it "update golden.txt" $ do

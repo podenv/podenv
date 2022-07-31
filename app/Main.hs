@@ -1,6 +1,3 @@
-module Main where
+module Main (main) where
 
-import qualified Podenv.Main
-
-main :: IO ()
-main = Podenv.Main.main
+import Podenv.Main (main)
