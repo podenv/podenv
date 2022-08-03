@@ -1,4 +1,4 @@
-["ardour","audacity","blender","blender.fedora","brave","centos","chromium","chroot","corp.bridge","corp.vpn","corp.web","debian","electrum","fbrnch","fedora.34","fedora","fedora.rawhide","feh","ffmpeg","firefox","firefox.minimal","flutter","gimp","google-chrome","gscan2pdf","gworldclock","hydrogen","inkscape","kigo","legacy.vpn","legacy.web","librecad","libreoffice","linphone","lmms","maim.capture","maim","mplayer","mumble","mupdf","muse","musescore","network.http-server","nix","nix.setup","nixify","obs","openvpn","polyglot","pwsafe.copy","pwsafe","qjackctl","qtractor","reaper","rosegarden","seq24","shell","ssh.client","steam","streamtuner","supercollider","tor.browser","ubi","vcv","virt-viewer","vlc","vmpk","vnc-viewer","vscode","xeyes","youtube-dl","zeal"]
+["ardour","audacity","blender","blender.fedora","brave","centos","chromium","chroot","corp.bridge","corp.vpn","corp.web","debian","electrum","fbrnch","fedora.34","fedora","fedora.rawhide","feh","ffmpeg","firefox","firefox.minimal","flutter","gimp","google-chrome","gscan2pdf","gworldclock","hydrogen","inkscape","kigo","legacy.vpn","legacy.web","librecad","libreoffice","linphone","lmms","maim.capture","maim","mplayer","mumble","mupdf","muse","musescore","network.http-server","nix","nix.setup","nixify","obs","openvpn","podenv","polyglot","pwsafe.copy","pwsafe","qjackctl","qtractor","reaper","rosegarden","seq24","shell","ssh.client","steam","streamtuner","supercollider","tor.browser","ubi","vcv","virt-viewer","vlc","vmpk","vnc-viewer","vscode","xeyes","youtube-dl","zeal"]
 ==== ["legacy.vpn"]
 Raw command: podman run -i
   --detach-keys "" -t
@@ -206,6 +206,39 @@ Raw command: podman run
   --volume /volumes/vnc-viewer-home:/home/fedora
   --volume /tmp/.X11-unix:/tmp/.X11-unix
   --label podenv.selector=vnc-viewer localhost/b0eaa0f45a04e22e18c0abbb8b224208ce953960e455017bba63706c278a79b8 vncviewer localhost
+
+==== ["podenv"]
+Raw command: bwrap
+  --die-with-parent
+  --unshare-pid
+  --unshare-ipc
+  --unshare-uts
+  --unshare-net
+  --ro-bind /usr /usr
+  --ro-bind /lib /lib
+  --ro-bind /lib64 /lib64
+  --ro-bind /bin /bin
+  --ro-bind /sbin /sbin
+  --ro-bind /etc /etc
+  --proc /proc
+  --dev /dev
+  --perms 01777
+  --tmpfs /tmp
+  --bind /volumes/podenv-home /home/user
+  --bind /volumes/nix-cache /home/user/.cache/nix
+  --bind /volumes/nix-config /home/user/.config/nix
+  --bind /volumes/nix-store /nix
+  --clearenv
+  --setenv HOME /home/user
+  --setenv LC_ALL C.UTF-8
+  --setenv NIX_SSL_CERT_FILE /etc/ca
+  --setenv PATH /nix/var/nix/profiles/nix-install/bin:/bin
+  --setenv TERM xterm-256color
+  --new-session
+  --chdir /home/user /nix/var/nix/profiles/nix-install/bin/nix
+  --extra-experimental-features "nix-command flakes" run
+  --option binary-caches "https://cache.nixos.org https://podenv.cachix.org"
+  --option trusted-public-keys "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= podenv.cachix.org-1:FA80Dv5XSHxzMYOg1wEANhDN7h43nN8twBJiYNzcDGY=" github:podenv/podenv
 
 
 ==== ["--config","{env = {runtime.image = \"ubi8\" }}","env","id"]

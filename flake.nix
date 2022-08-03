@@ -10,7 +10,8 @@
 
   outputs = { self, nixpkgs }:
     let
-      hubCommit = "c9329f6144da3c156138b2b86c8bde36a348a86c";
+      hubCommit = "4c496f98e9c300d378ec6ca993de43a69261f95e";
+      hubHash = "sha256-KJUMTZ0aWFoslzFEVXz2ftkKl33HVZnryZkzx9T2TgQ=";
       base_pkgs = import nixpkgs { system = "x86_64-linux"; };
       rev = if self ? rev then
         self.rev
@@ -64,7 +65,7 @@
             owner = "podenv";
             repo = "hub";
             rev = hubCommit;
-            sha256 = "sha256-DlyzoWpMyJjt8qyuCN8CsqM6/DvyAc0bfp64jcqqIOE=";
+            sha256 = hubHash;
           };
           podenvSrc = pkgs.runCommand "make-podenv-src" { } ''
             mkdir $out

@@ -29,4 +29,14 @@ let corp =
           , bridge = ns "bridge" (Podenv.Hub.ssh.client "user@internal-host")
           }
 
-in  Podenv.Hub // { legacy, corp, ubi.runtime.image = "ubi8" }
+let podenv =
+      { runtime =
+          Podenv.Nix
+            Podenv.Flakes::{
+            , installables = [ "github:podenv/podenv" ]
+            , cache = Some
+                "podenv.cachix.org-1:FA80Dv5XSHxzMYOg1wEANhDN7h43nN8twBJiYNzcDGY="
+            }
+      }
+
+in  Podenv.Hub // { legacy, corp, ubi.runtime.image = "ubi8", podenv }

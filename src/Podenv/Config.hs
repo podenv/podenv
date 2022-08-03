@@ -76,7 +76,7 @@ defaultSelector s
     imageApp x = mkApp (Image $ Text.drop (Text.length "image:") x)
     nixApp x = nixApp' (Text.drop (Text.length "nix:") x)
     rootfsApp x = mkApp (Rootfs $ Text.drop (Text.length "rootfs:") x)
-    nixApp' x = mkApp (Nix $ Flakes [x] Nothing)
+    nixApp' x = mkApp (Nix $ Flakes Nothing [x] Nothing)
     mkApp r = Just (s, defaultApp r)
 
 -- | Inject the package.dhall into the environ so that config can use `env:PODENV`
@@ -312,7 +312,8 @@ appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
         mkNixRecord v =
           mkRecord
             [ ("installables", Dhall.ListLit Nothing $ fromList [v]),
-              ("nixpkgs", Dhall.App Dhall.None Dhall.Text)
+              ("nixpkgs", Dhall.App Dhall.None Dhall.Text),
+              ("cache", Dhall.App Dhall.None Dhall.Text)
             ]
         mkRuntime field =
           Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing))
