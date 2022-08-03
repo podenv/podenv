@@ -84,7 +84,8 @@ spec (config, goldenConfig) = describe "unit tests" $ do
           ["--root", "--name", "ubi", "ubi"],
           ["--root", "--name", "ubi", "--namespace", "testns", "ubi"],
           ["--headless", "./test/headless.dhall", "firefox"],
-          ["--network", "container:sway.vnc", "vnc-viewer", "localhost"]
+          ["--network", "container:sway.vnc", "vnc-viewer", "localhost"],
+          ["podenv"]
         ]
         [ -- selector is removed from arg because it match the single app selector
           ["--config", "{env = {runtime.image = \"ubi8\" }}", "env", "id"],
@@ -132,7 +133,7 @@ spec (config, goldenConfig) = describe "unit tests" $ do
       Text.take 34 (Podenv.Runtime.showBuildInfo be (baseApp ^. arApplication . appRuntime)) `shouldBe` "# Containerfile localhost/3c922bca"
     it "override nixpkgs when necessary" $ do
       let mkApp installables' pin =
-            Podenv.Config.defaultApp (Podenv.Dhall.Nix (Podenv.Dhall.Flakes installables' pin))
+            Podenv.Config.defaultApp (Podenv.Dhall.Nix (Podenv.Dhall.Flakes Nothing installables' pin))
               & (appName .~ "test")
 
           checkCommand test app expected = do
