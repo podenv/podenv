@@ -101,6 +101,7 @@ library
                   , Podenv.Env
                   , Podenv.Image
                   , Podenv.Main
+                  , Podenv.Notifications
                   , Podenv.Prelude
                   , Podenv.Runtime
                   , Podenv.Version

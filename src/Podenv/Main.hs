@@ -36,6 +36,7 @@ import Podenv.Capability qualified
 import Podenv.Config
 import Podenv.Dhall
 import Podenv.Env
+import Podenv.Notifications qualified
 import Podenv.Prelude
 import Podenv.Runtime (ExecMode (Foreground), GlobalEnv (..), Name (..), RunEnv)
 import Podenv.Runtime qualified
@@ -208,7 +209,15 @@ cliConfigLoad volumesDir env config cli@CLI {..} = do
     Nothing -> pure $ Podenv.Runtime.createLocalhostRunEnv env
 
   let app = baseApp & cliPrepare cli
-      re = GlobalEnv {verbose, volumesDir, config = Just config}
+      caps = app ^. arApplication . appCapabilities
+
+  notifier <-
+    Podenv.Notifications.pickNotifier $
+      if caps ^. capWayland || caps ^. capX11
+        then Podenv.Notifications.Display
+        else Podenv.Notifications.Console
+
+  let re = GlobalEnv {verbose, volumesDir, config = Just config, notifier}
       mode = if shell then Shell else Regular extraArgs
 
   pure (app, mode, re, run)
