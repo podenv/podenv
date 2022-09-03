@@ -335,6 +335,7 @@ checkImageExist imageName = do
 withCacheFile :: MonadIO m => FilePath -> Text -> m () -> m ()
 withCacheFile fileName expected action = do
   cacheDir <- liftIO getCacheDir
+  liftIO $ createDirectoryIfMissing True cacheDir
   let cachePath = cacheDir </> fileName
   current <- liftIO $ readFileM cachePath
   unless (current == expected) $ do
