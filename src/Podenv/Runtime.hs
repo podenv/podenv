@@ -77,12 +77,12 @@ ensureResolvConf :: FilePath -> IO (Context -> Context)
 ensureResolvConf fp
   -- When using host rootfs, then we need to mount /etc/resolv.conf target when it is a symlink
   | fp == "/" = do
-    symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
-    if symlink
-      then do
-        realResolvConf <- getSymlinkPath
-        pure $ addMount realResolvConf (roHostPath realResolvConf)
-      else pure id
+      symlink <- System.Posix.Files.isSymbolicLink <$> System.Posix.Files.getSymbolicLinkStatus "/etc/resolv.conf"
+      if symlink
+        then do
+          realResolvConf <- getSymlinkPath
+          pure $ addMount realResolvConf (roHostPath realResolvConf)
+        else pure id
   -- Otherwise we can just mount it directly
   | otherwise = pure $ addMount "/etc/resolv.conf" (roHostPath "/etc/resolv.conf")
   where
@@ -596,12 +596,12 @@ executePodman rm ctx image = do
           let waitForRunning count
                 | count == 0 = error "Container failed to start"
                 | otherwise = do
-                  debug $ "Getting status of " <> unName name
-                  liftIO $ threadDelay 50_000
-                  status <- getPodmanPodStatus name
-                  case status of
-                    Running -> pure ()
-                    _ -> waitForRunning (count - 1)
+                    debug $ "Getting status of " <> unName name
+                    liftIO $ threadDelay 50_000
+                    status <- getPodmanPodStatus name
+                    case status of
+                      Running -> pure ()
+                      _ -> waitForRunning (count - 1)
           waitForRunning (3 :: Int)
     Nothing -> pure ()
 

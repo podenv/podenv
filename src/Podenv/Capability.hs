@@ -339,8 +339,8 @@ resolveFileArgs args = do
     addFileArg (Right fp)
       | hasTrailingPathSeparator fp = error "Directory filearg are not supported"
       | otherwise =
-        let cfp = "/data" </> takeFileName fp
-         in addCommand (toText cfp) . Ctx.addMount cfp (Ctx.rwHostPath fp)
+          let cfp = "/data" </> takeFileName fp
+           in addCommand (toText cfp) . Ctx.addMount cfp (Ctx.rwHostPath fp)
 
 -- | Helper functions to manipulate paths
 getXdgRuntimeDir :: AppEnvT FilePath
@@ -352,19 +352,19 @@ fixPath = toString . Text.drop 1 . Text.dropWhile (/= '/')
 resolveContainerPath :: Text -> AppEnvT FilePath
 resolveContainerPath path
   | path == "~" || "~/" `Text.isPrefixOf` path = do
-    appHome' <- fromMaybe (error "Need app home") <$> askL envAppHomeDir
-    pure $ appHome' </> fixPath path
+      appHome' <- fromMaybe (error "Need app home") <$> askL envAppHomeDir
+      pure $ appHome' </> fixPath path
   | "/" `Text.isPrefixOf` path = pure $ toString path
   | otherwise = error $ "Invalid container path: " <> path
 
 resolveHostPath :: Text -> AppEnvT (Maybe FilePath)
 resolveHostPath path
   | "~/" `Text.isPrefixOf` path = do
-    envHome' <- fromMaybe (error "Need HOME") <$> askL envHostHomeDir
-    pure $ Just (envHome' </> fixPath path)
+      envHome' <- fromMaybe (error "Need HOME") <$> askL envHostHomeDir
+      pure $ Just (envHome' </> fixPath path)
   | "./" `Text.isPrefixOf` path = do
-    curDir' <- askL envHostCwd
-    pure $ Just (curDir' </> fixPath path)
+      curDir' <- askL envHostCwd
+      pure $ Just (curDir' </> fixPath path)
   | "/" `Text.isPrefixOf` path = pure $ Just (toString path)
   | otherwise = pure Nothing
 

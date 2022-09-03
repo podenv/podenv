@@ -169,13 +169,13 @@ decodeExprAtom baseSelector expr = case expr of
   Dhall.RecordLit kv
     | -- When the node has a "runtime" attribute, assume it is an app.
       DM.member "runtime" kv ->
-      (\app -> [(baseSelector, app)]) <$> loadApp expr
+        (\app -> [(baseSelector, app)]) <$> loadApp expr
     | -- When the node has a "kind" and "apiVersion" attribute, assume it is an appRes.
       DM.member "kind" kv && DM.member "apiVersion" kv ->
-      (\ar -> [(baseSelector, LitAppRes ar)]) <$> Dhall.extract Dhall.auto expr
+        (\ar -> [(baseSelector, LitAppRes ar)]) <$> Dhall.extract Dhall.auto expr
     | -- Otherwise, traverse each attributes
       otherwise ->
-      concat <$> traverse (uncurry loadCollection) (DM.toList kv)
+        concat <$> traverse (uncurry loadCollection) (DM.toList kv)
     where
       loadCollection n e
         -- Skip leaf starting with `use`, otherwise they can be used and likely fail with:
@@ -218,11 +218,11 @@ select' atoms baseArgs@(baseSelector :| baseRemainingArgs) = do
       let selectorName
             | -- If the selection didn't touch the args, then keep the selector name
               args == args' =
-              selector
+                selector
             | -- Otherwise, pick the last element used
               otherwise = case drop (length args - length args') args of
-              x : _ -> x
-              _ -> ""
+                x : _ -> x
+                _ -> ""
       pure (args', (selectorName, defaultAppRes (unRecord app)))
   where
     deprecatedFields app = n <> ns
@@ -342,7 +342,7 @@ loadApp expr = case expr of
   Dhall.Lam _ fb1 (Dhall.Lam _ fb2 _) -> LamArg2 (getArgName fb1) (getArgName fb2) <$> Dhall.extract Dhall.auto expr
   Dhall.Lam _ fb _
     | Dhall.denote (Dhall.functionBindingAnnotation fb) == appType ->
-      LamApp <$> Dhall.extract Dhall.auto expr
+        LamApp <$> Dhall.extract Dhall.auto expr
     | otherwise -> LamArg (getArgName fb) <$> Dhall.extract Dhall.auto expr
   _ -> LitApp <$> Dhall.extract Dhall.auto expr
   where
