@@ -6,6 +6,7 @@
 - the `--network` argument now takes an argument: private, host or a shared name.
 - add `--ps` argument to list running app.
 - add support for nix flake binary cache.
+- use zenity to log non-interactive message.
 
 ## 0.2.0 (2022-07-26)
 

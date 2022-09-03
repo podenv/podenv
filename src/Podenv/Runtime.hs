@@ -33,6 +33,7 @@ module Podenv.Runtime
     ExecMode (..),
     module Podenv.Context,
     GlobalEnv (..),
+    Second (..),
     defaultGlobalEnv,
   )
 where
@@ -52,9 +53,10 @@ import Podenv.Context
 import Podenv.Dhall
 import Podenv.Env
 import Podenv.Image
+import Podenv.Notifications
 import Podenv.Prelude
 import System.Directory (doesDirectoryExist, renameFile)
-import System.Exit (ExitCode (ExitSuccess))
+import System.Exit (ExitCode (..))
 import System.Posix.Files qualified
 import System.Process.Typed qualified as P
 
@@ -160,11 +162,11 @@ createLocalhostRunEnv appEnv = RunEnv {..}
           imageReady <- liftIO $ checkImageExist imageName
           unless imageReady $ do
             debug $ "Building image: " <> imageName
-            liftIO $ buildImage imageName fileName fileContent (cb ^. cbImage_volumes)
+            buildImage imageName fileName fileContent (cb ^. cbImage_volumes)
 
         updateContainer = case cb ^. cbImage_update of
           Nothing -> error "The container is missing the `image_update` attribute"
-          Just cmd -> liftIO do
+          Just cmd ->
             buildImage
               imageName
               (fileName <> "-update")
@@ -296,16 +298,16 @@ createHeadlessRunEnv cfg appEnv =
       execute localRun em ctx
 
 -- | Build a container image
-buildImage :: Text -> FilePath -> Text -> [Text] -> IO ()
+buildImage :: Text -> FilePath -> Text -> [Text] -> ContextEnvT ()
 buildImage imageName fileName containerfile volumes = do
-  hostUid <- getRealUserID
-  cacheDir <- getCacheDir
-  createDirectoryIfMissing True cacheDir
+  hostUid <- liftIO getRealUserID
+  cacheDir <- liftIO getCacheDir
+  liftIO $ createDirectoryIfMissing True cacheDir
   let want = fileName <> ".want"
       wantfp = cacheDir </> want
-  Text.writeFile wantfp containerfile
+  liftIO $ Text.writeFile wantfp containerfile
   -- podman build does not support regular volume, lets ensure absolute path
-  volumesArgs <- traverse (mkVolumeArg cacheDir) volumes
+  volumesArgs <- traverse (liftIO . mkVolumeArg cacheDir) volumes
   let buildArgs =
         ["build"]
           <> ["-t", toString imageName]
@@ -314,9 +316,9 @@ buildImage imageName fileName containerfile volumes = do
           <> ["-f", want, cacheDir]
       cmd = Podenv.Runtime.podman buildArgs
   -- putTextLn $ "Building " <> imageName <> " with " <> toText want <> ": " <> show cmd
-  P.runProcess_ cmd
+  runProcess cmd
   -- save that the build succeeded
-  renameFile wantfp (cacheDir </> fileName)
+  liftIO $ renameFile wantfp (cacheDir </> fileName)
   where
     mkVolumeArg :: FilePath -> Text -> IO Text
     mkVolumeArg cacheDir volume = do
@@ -364,7 +366,7 @@ executeBubblewrap ctx fp = do
   let args = bwrapRunArgs re ctx fp
   let cmd = bwrap args
   debug $ show cmd
-  P.runProcess_ cmd
+  runProcess cmd
 
 bwrap :: [String] -> P.ProcessConfig () () ()
 bwrap = P.setDelegateCtlc True . P.proc "bwrap"
@@ -438,19 +440,34 @@ bwrapRunArgs GlobalEnv {..} ctx fp = toString <$> args
 data GlobalEnv = GlobalEnv
   { verbose :: Bool,
     config :: Maybe Config,
+    notifier :: Notifier,
     -- | The host location of the volumes directory, default to ~/.local/share/podenv/volumes
     volumesDir :: FilePath
   }
 
+runProcess :: P.ProcessConfig a b c -> ContextEnvT ()
+runProcess p = do
+  res <- liftIO $ P.runProcess p
+  case res of
+    ExitSuccess -> pure ()
+    ExitFailure code -> do
+      logMessage Error $ "Command failed (" <> show code <> ") :" <> show p
+      fail "process error"
+
 defaultGlobalEnv :: FilePath -> GlobalEnv
-defaultGlobalEnv = GlobalEnv True Nothing
+defaultGlobalEnv = GlobalEnv True Nothing defaultNotifier
 
 type ContextEnvT a = ReaderT GlobalEnv IO a
+
+logMessage :: Severity -> Text -> ContextEnvT ()
+logMessage sev msg = do
+  notifier <- asks notifier
+  liftIO $ sendMessage notifier sev msg
 
 debug :: Text -> ContextEnvT ()
 debug msg = do
   isVerbose <- asks verbose
-  when isVerbose $ liftIO $ hPutStrLn stderr ("[+] " <> toString msg)
+  when isVerbose $ logMessage Info msg
 
 cond :: Bool -> [a] -> [a]
 cond b xs = if b then xs else []
@@ -539,9 +556,9 @@ getPodmanPodStatus (Name cname) = do
     "running\n" -> Running
     other -> Unknown (Text.dropWhileEnd (== '\n') $ decodeUtf8 other)
 
-deletePodmanPod :: MonadIO m => Name -> m ()
+deletePodmanPod :: Name -> ContextEnvT ()
 deletePodmanPod (Name cname) =
-  P.runProcess_ (podman ["rm", toString cname])
+  runProcess (podman ["rm", toString cname])
 
 ensureInfraNet :: Text -> ContextEnvT ()
 ensureInfraNet ns = do
@@ -591,7 +608,7 @@ executePodman rm ctx image = do
       let cmd = podman args
       debug $ show cmd
       case rm of
-        Foreground -> P.runProcess_ cmd
+        Foreground -> runProcess cmd
         Background -> do
           name <- executeBackgroundPodman args
           let waitForRunning count
@@ -606,12 +623,14 @@ executePodman rm ctx image = do
           waitForRunning (3 :: Int)
     Nothing -> pure ()
 
-executeBackgroundPodman :: MonadIO m => [String] -> m Name
+executeBackgroundPodman :: [String] -> ContextEnvT Name
 executeBackgroundPodman args = do
   (Text.dropWhileEnd (== '\n') . decodeUtf8 -> out, _) <- P.readProcess_ $ P.proc "podman" args
   case Text.length out of
     64 -> pure $ Name out
-    _ -> error $ "Unknown name: " <> out
+    _ -> do
+      logMessage Error $ "Unknown name: " <> out
+      fail "process error"
 
 data PodmanProc = PodmanProc
   { ppId :: Text,
