@@ -4,145 +4,74 @@
   nixConfig.bash-prompt = "[nix(podenv)] ";
 
   inputs = {
-    nixpkgs.url =
-      "github:NixOS/nixpkgs/d46be5b0e8baad998f8277e04370f0fd30dde11b";
+    hspkgs.url =
+      "github:podenv/hspkgs/305ae498c614e81e7b9b52c9001b3bffa44334aa";
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, hspkgs }:
     let
+      pkgs = hspkgs.pkgs;
       hubCommit = "4c496f98e9c300d378ec6ca993de43a69261f95e";
       hubHash = "sha256-KJUMTZ0aWFoslzFEVXz2ftkKl33HVZnryZkzx9T2TgQ=";
-      base_pkgs = import nixpkgs { system = "x86_64-linux"; };
       rev = if self ? rev then
         self.rev
       else
         throw "Refusing to build from a dirty Git tree!";
 
-      getPodenv = static:
-        let
-          pkgs = if static then base_pkgs.pkgsMusl else base_pkgs;
+      preludeSrc = pkgs.fetchFromGitHub {
+        owner = "dhall-lang";
+        repo = "dhall-lang";
+        rev = "v17.0.0";
+        sha256 = "0jnqw50q26ksxkzs85a2svyhwd2cy858xhncq945bmirpqrhklwf";
+      };
 
-          preludeSrc = pkgs.fetchFromGitHub {
-            owner = "dhall-lang";
-            repo = "dhall-lang";
-            rev = "v17.0.0";
-            sha256 = "0jnqw50q26ksxkzs85a2svyhwd2cy858xhncq945bmirpqrhklwf";
-          };
+      # final build
+      hubSrc = pkgs.fetchFromGitHub {
+        owner = "podenv";
+        repo = "hub";
+        rev = hubCommit;
+        sha256 = hubHash;
+      };
+      podenvSrc = pkgs.runCommand "make-podenv-src" { } ''
+        mkdir $out
+        ${pkgs.rsync}/bin/rsync --exclude hub -r ${self}/ $out/
+        echo "Building $out"
+        ln -sf ${hubSrc} $out/hub
+      '';
 
-          haskellOverrides = {
-            overrides = hpFinal: hpPrev: {
-              relude = pkgs.haskell.lib.dontCheck
-                (pkgs.haskell.lib.overrideCabal hpPrev.relude {
-                  version = "1.1.0.0";
-                  sha256 =
-                    "sha256-tR3wipPvEzHdVjieFY5nrHtoxizBVhwokNNXLHZKtgk=";
-                });
+      podenvPkg = hspkgs: commit:
+        (hspkgs.callCabal2nix "podenv" podenvSrc { }).overrideAttrs (_: {
+          # Set build environment variable to avoid warnings
+          LANG = "en_US.UTF-8";
+          XDG_CACHE_HOME = "/tmp";
+          # Provide a local dhall prelude because build can't access network
+          DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
+          HUB_COMMIT = hubCommit;
+          PODENV_COMMIT = commit;
+        });
 
-              linux-capabilities =
-                pkgs.haskell.lib.overrideCabal hpPrev.linux-capabilities {
-                  version = "0.1.1.0";
-                  sha256 =
-                    "sha256-xrLOxd8K8p+vnXJ8cmqHdgY4ZE5DNYEWnHWNp1sjuEg=";
-                };
+      basePkg = podenvPkg pkgs.hspkgs;
+      exe = pkgs.haskell.lib.justStaticExecutables (basePkg rev);
+      static-exe = hspkgs.mk-static-haskell (podenvPkg pkgs.hspkgsMusl rev);
+      pkg = basePkg "";
 
-              podenv = hpPrev.callCabal2nix "podenv" self { };
+      release = pkgs.runCommand "podenv-release" { } ''
+        echo Creating release tarball with ${static-exe}
+        cd ${static-exe};
+        tar -cf - bin/ | ${pkgs.bzip2}/bin/bzip2 -9 > $out
+        echo cp $out podenv-x86_64-linux.tar.bz2
+      '';
 
-              # pull ghc-9.2 support for weeder (https://github.com/ocharles/weeder/pull/94)
-              weeder = pkgs.haskell.lib.justStaticExecutables
-                (hpPrev.callCabal2nix "weeder" (builtins.fetchGit {
-                  url = "https://github.com/ocharles/weeder";
-                  ref = "master";
-                  rev = "c58ed2a8c66dcf0b469f8343efb6b6f61c7c40f3";
-                }) { });
-            };
-          };
-
-          haskellPackages =
-            pkgs.haskell.packages.ghc923.override haskellOverrides;
-
-          # final build
-          hubSrc = pkgs.fetchFromGitHub {
-            owner = "podenv";
-            repo = "hub";
-            rev = hubCommit;
-            sha256 = hubHash;
-          };
-          podenvSrc = pkgs.runCommand "make-podenv-src" { } ''
-            mkdir $out
-            ${pkgs.rsync}/bin/rsync --exclude hub -r ${self}/ $out/
-            echo "Building $out"
-            ln -sf ${hubSrc} $out/hub
-          '';
-
-          # Borrowed from https://github.com/dhall-lang/dhall-haskell/blob/master/nix/shared.nix
-          statify = drv:
-            pkgs.haskell.lib.appendConfigureFlags
-            (pkgs.haskell.lib.disableLibraryProfiling
-              (pkgs.haskell.lib.disableSharedExecutables
-                (pkgs.haskell.lib.justStaticExecutables
-                  (pkgs.haskell.lib.dontCheck drv)))) [
-                    "--enable-executable-static"
-                    "--extra-lib-dirs=${
-                      pkgs.ncurses.override { enableStatic = true; }
-                    }/lib"
-                    "--extra-lib-dirs=${
-                      pkgs.gmp6.override { withStatic = true; }
-                    }/lib"
-                    "--extra-lib-dirs=${pkgs.zlib.static}/lib"
-                    "--extra-lib-dirs=${
-                      pkgs.pkgsMusl.libsodium.overrideAttrs
-                      (old: { dontDisableStatic = true; })
-                    }/lib"
-                    "--extra-lib-dirs=${
-                      pkgs.libffi.overrideAttrs
-                      (old: { dontDisableStatic = true; })
-                    }/lib"
-                  ];
-
-          podenvPkg =
-            (haskellPackages.callCabal2nix "podenv" podenvSrc { }).overrideAttrs
-            (_: {
-              # Set build environment variable to avoid warnings
-              LANG = "en_US.UTF-8";
-              XDG_CACHE_HOME = "/tmp";
-              # Provide a local dhall prelude because build can't access network
-              DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
-              HUB_COMMIT = hubCommit;
-              PODENV_COMMIT = rev;
-            });
-
-          podenvExe = if static then
-            statify podenvPkg
-          else
-            pkgs.haskell.lib.justStaticExecutables podenvPkg;
-
-        in {
-          haskellPackages = haskellPackages;
-          exe = podenvExe;
-          pkgs = pkgs;
-          release = pkgs.runCommand "podenv-release" { } ''
-            echo Creating release tarball with ${podenvExe}
-            cd ${podenvExe};
-            tar -cf - bin/ | ${pkgs.bzip2}/bin/bzip2 -9 > $out
-            echo cp $out podenv-x86_64-linux.tar.bz2
-          '';
-          weeder_wrapper = pkgs.writeScriptBin "weeder" ''
-            #!/bin/sh
-            exec ${haskellPackages.weeder}/bin/weeder --require-hs-files --config ./.weeder.dhall
-          '';
-        };
-
-      podenv-dynamic = getPodenv false;
-      podenv-static = getPodenv true;
-      pkgs = podenv-dynamic.pkgs;
-      haskellPackages = podenv-dynamic.haskellPackages;
-      pkg = haskellPackages.podenv;
+      weeder_wrapper = pkgs.writeScriptBin "weeder" ''
+        #!/bin/sh
+        exec ${pkgs.weeder}/bin/weeder --require-hs-files --config ./.weeder.dhall
+      '';
 
     in {
-      packages."x86_64-linux".default = podenv-dynamic.exe;
-      packages."x86_64-linux".static = podenv-static.exe;
-      packages."x86_64-linux".release = podenv-static.release;
-      devShells."x86_64-linux".hoogle = haskellPackages.shellFor {
+      packages."x86_64-linux".default = exe;
+      packages."x86_64-linux".static = static-exe;
+      packages."x86_64-linux".release = release;
+      devShells."x86_64-linux".hoogle = pkgs.hspkgs.shellFor {
         packages = p: [ pkg ];
         buildInputs = [
           (pkgs.writeScriptBin "run" ''
@@ -153,14 +82,14 @@
         withHoogle = true;
       };
 
-      devShells."x86_64-linux".ci = haskellPackages.shellFor {
+      devShells."x86_64-linux".ci = pkgs.hspkgs.shellFor {
         packages = p: [ pkg ];
         buildInputs = [
           pkgs.cabal-install
           pkgs.hlint
           pkgs.ormolu
-          haskellPackages.doctest_0_20_0
-          podenv-dynamic.weeder_wrapper
+          pkgs.hspkgs.doctest
+          weeder_wrapper
           (pkgs.writeScriptBin "run" ''
             set -e
             function log { echo -e "\n\x1b[1;33m[+] $*\x1b[0m"; }
@@ -196,9 +125,9 @@
           '')
         ];
       };
-      devShell."x86_64-linux" = haskellPackages.shellFor {
-        packages = p: [ p.podenv ];
-        buildInputs = with haskellPackages; [
+      devShell."x86_64-linux" = pkgs.hspkgs.shellFor {
+        packages = p: [ pkg ];
+        buildInputs = [
           (pkgs.writeScriptBin "ghcid" ''
             #!/bin/sh
             exec ${pkgs.ghcid}/bin/ghcid --command='cabal v2-repl $*'
@@ -207,10 +136,10 @@
             #!/bin/sh
             exec ${pkgs.ghcid}/bin/ghcid --command='cabal v2-repl test:tests' -W --test Main.main
           '')
-          cabal-install
-          hlint
-          podenv-dynamic.weeder_wrapper
+          pkgs.cabal-install
+          pkgs.hlint
           pkgs.haskell-language-server
+          weeder_wrapper
         ];
       };
     };
