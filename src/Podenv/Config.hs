@@ -16,6 +16,7 @@ module Podenv.Config
     defaultAppRes,
     defaultApp,
     podenvImportTxt,
+    getAppName,
   )
 where
 
@@ -205,6 +206,11 @@ setSelector :: Text -> ApplicationResource -> ApplicationResource
 setSelector n
   | n == "" = id
   | otherwise = (arMetadata . metaLabels) %~ Map.insert "podenv.selector" n
+
+getAppName :: ApplicationResource -> Maybe Text
+getAppName ar = selector <|> ar ^. arMetadata . metaName
+  where
+    selector = Map.lookup "podenv.selector" (ar ^. arMetadata . metaLabels)
 
 select' :: [(Text, Atom)] -> NonEmpty Text -> Either Text ([Text], (Text, ApplicationResource))
 select' atoms baseArgs@(baseSelector :| baseRemainingArgs) = do

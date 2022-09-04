@@ -59,8 +59,27 @@ main = do
     if showApplication
       then putTextLn . showApp ar run =<< Podenv.Runtime.showCmd run Foreground ctx
       else do
-        when update $ Podenv.Runtime.updateRuntime run (ar ^. arApplication . appRuntime)
+        let doUpdate = Podenv.Runtime.updateRuntime run (ar ^. arApplication . appRuntime)
+        when update doUpdate
         Podenv.Runtime.execute run Foreground ctx
+        maybeUpdate ar run gl doUpdate
+
+maybeUpdate :: ApplicationResource -> RunEnv -> GlobalEnv -> ReaderT GlobalEnv IO () -> ReaderT GlobalEnv IO ()
+maybeUpdate ar run gl doUpdate = do
+  let hasNet = ar ^. arApplication . appCapabilities . capNetwork
+  when hasNet $ do
+    ageM <- Podenv.Runtime.getRuntimeAge run (ar ^. arApplication . appRuntime)
+    case ageM of
+      Just age | age > 3600 * 24 * 7 -> do
+        needUpdate <- liftIO $ Podenv.Notifications.askConfirm (notifier gl) (msg age)
+        when needUpdate doUpdate
+      _ -> pure ()
+  where
+    envName = fromMaybe "unknown" (getAppName ar)
+    msg (Podenv.Runtime.Second age) =
+      "The " <> envName <> "'s runtime is " <> show ageDay <> " day old, would you like to update it"
+      where
+        ageDay = age `div` (3600 * 24)
 
 usage :: [String] -> IO CLI
 usage args = do
