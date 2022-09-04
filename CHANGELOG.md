@@ -7,6 +7,7 @@
 - add `--ps` argument to list running app.
 - add support for nix flake binary cache.
 - use zenity to log non-interactive message.
+- after use, podenv may propose to update the runtime when the build is old.
 
 ## 0.2.0 (2022-07-26)
 

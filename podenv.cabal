@@ -89,6 +89,7 @@ library
                   , linux-capabilities >= 0.1.1.0
                   , optparse-applicative
                   , relude >= 0.7
+                  , time
                   , text
                   , th-env
                   , typed-process

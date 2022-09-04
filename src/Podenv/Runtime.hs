@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -46,6 +47,7 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import Data.Time.Clock qualified as Clock
 import Podenv.Capability (AppMode (..))
 import Podenv.Capability qualified
 import Podenv.Config (Config, select)
@@ -55,16 +57,24 @@ import Podenv.Env
 import Podenv.Image
 import Podenv.Notifications
 import Podenv.Prelude
-import System.Directory (doesDirectoryExist, renameFile)
+import System.Directory (doesDirectoryExist, getModificationTime, renameFile)
 import System.Exit (ExitCode (..))
 import System.Posix.Files qualified
 import System.Process.Typed qualified as P
+
+newtype Second = Second Natural deriving newtype (Ord, Eq, Num, Show)
+
+timeDiff :: Clock.UTCTime -> Clock.UTCTime -> Second
+timeDiff now old = Second (truncate pico)
+  where
+    pico = Clock.nominalDiffTimeToSeconds (Clock.diffUTCTime now old)
 
 data RunEnv = RunEnv
   { showBuildInfo :: Runtime -> Text,
     showCmd :: ExecMode -> Context -> ContextEnvT Text,
     buildRuntime :: Runtime -> ContextEnvT (),
     updateRuntime :: Runtime -> ContextEnvT (),
+    getRuntimeAge :: Runtime -> ContextEnvT (Maybe Second),
     appToContext :: AppMode -> ApplicationResource -> IO Context,
     execute :: ExecMode -> Context -> ContextEnvT ()
   }
@@ -95,6 +105,13 @@ ensureResolvConf fp
           then drop 2 realResolvConf
           else realResolvConf
 
+data ContainerBuildRuntime = CBR
+  { cbrInfo :: Text,
+    cbrBuild :: ContextEnvT (),
+    cbrUpdate :: ContextEnvT (),
+    cbrAge :: ContextEnvT (Maybe Second)
+  }
+
 createLocalhostRunEnv :: AppEnv 'UnknownState -> RunEnv
 createLocalhostRunEnv appEnv = RunEnv {..}
   where
@@ -109,6 +126,10 @@ createLocalhostRunEnv appEnv = RunEnv {..}
       ctx <- runAppEnv appEnv ar $ Podenv.Capability.prepare amode
       pure $ ctx & setResolv . ensureCommand
 
+    getRuntimeAge = \case
+      Container cb | isJust (cb ^. cbImage_update) -> cbrAge $ manageContainer cb
+      _ -> pure Nothing
+
     getRuntimeBackend = \case
       Image x -> Podman $ ImageName x
       Rootfs root -> Bubblewrap $ toString root
@@ -118,20 +139,20 @@ createLocalhostRunEnv appEnv = RunEnv {..}
     showBuildInfo = \case
       Image iname -> "image:" <> iname
       Rootfs fp -> "rootfs:" <> fp
-      Container cb -> fst $ manageContainer cb
+      Container cb -> cbrInfo $ manageContainer cb
       Nix expr -> "nix:" <> show expr
 
     buildRuntime = \case
-      Container cb -> fst . snd $ manageContainer cb
+      Container cb -> cbrBuild $ manageContainer cb
       Nix flakes -> prepareNix flakes
       _ -> pure ()
 
     updateRuntime = \case
       Image iname -> error $ "todo: podman pull " <> show iname
       Container cb -> do
-        let buildUpdate = snd $ manageContainer cb
-        fst buildUpdate
-        snd buildUpdate
+        -- ensure the image exist
+        cbrBuild $ manageContainer cb
+        cbrUpdate $ manageContainer cb
       Nix _expr -> error "Nix update is not implemented"
       Rootfs _ -> pure ()
 
@@ -155,16 +176,37 @@ createLocalhostRunEnv appEnv = RunEnv {..}
           Foreground -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
           Background -> error "NotImplemented"
 
-    manageContainer :: ContainerBuild -> (Text, (ContextEnvT (), ContextEnvT ()))
-    manageContainer cb = ("# Containerfile " <> imageName <> "\n" <> fileContent <> "\n", (buildContainer, updateContainer))
+    manageContainer :: ContainerBuild -> ContainerBuildRuntime
+    manageContainer cb = CBR {..}
       where
-        buildContainer = do
+        cbrInfo = "# Containerfile " <> imageName <> "\n" <> fileContent <> "\n"
+        cbrBuild = do
           imageReady <- liftIO $ checkImageExist imageName
           unless imageReady $ do
             debug $ "Building image: " <> imageName
             buildImage imageName fileName fileContent (cb ^. cbImage_volumes)
 
-        updateContainer = case cb ^. cbImage_update of
+        cbrAge
+          | isJust (cb ^. cbImage_update) = liftIO do
+              cacheDir <- getCacheDir
+              let localContainerFile = cacheDir </> fileName
+              exist <- doesPathExist localContainerFile
+              if not exist
+                then pure Nothing
+                else do
+                  now <- Clock.getCurrentTime
+                  age <- getModificationTime localContainerFile
+                  -- check update file too
+                  let localContainerUpdateFile = cacheDir </> (fileName <> "-update")
+                  existUpdate <- doesPathExist localContainerUpdateFile
+                  ageUpdate <-
+                    if existUpdate
+                      then getModificationTime localContainerUpdateFile
+                      else pure age
+                  pure $ Just $ timeDiff now (max age ageUpdate)
+          | otherwise = pure Nothing
+
+        cbrUpdate = case cb ^. cbImage_update of
           Nothing -> error "The container is missing the `image_update` attribute"
           Just cmd ->
             buildImage
