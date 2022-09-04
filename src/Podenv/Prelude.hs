@@ -21,6 +21,7 @@ module Podenv.Prelude
 #if !MIN_VERSION_relude(1,0,0)
     getArgs,
     lookupEnv,
+    hFlush,
 #endif
     getExecutablePath,
 
@@ -69,7 +70,7 @@ import Relude.Extra.Lens (Lens')
 import System.Directory
 import System.Environment
 import System.FilePath.Posix (hasTrailingPathSeparator, takeDirectory, takeFileName, (</>))
-import System.IO (hPutStrLn)
+import System.IO
 import System.Posix.Files qualified
 import System.Posix.Types (UserID)
 import System.Posix.User (getRealUserID)
