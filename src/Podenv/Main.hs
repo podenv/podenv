@@ -129,6 +129,7 @@ data CLI = CLI
     cliName :: Maybe Name,
     cliEnv :: [Text],
     volumes :: [Text],
+    cliSysCaps :: [Text],
     -- app selector and arguments:
     selector :: Maybe Text,
     cliExtraArgs :: [Text]
@@ -162,12 +163,13 @@ cliParser =
     <*> (fmap Name <$> optional (strOption (long "name" <> metavar "NAME" <> help "The application name")))
     <*> many (strOption (long "env" <> metavar "ENV" <> help "Extra env 'KEY=VALUE'"))
     <*> many (strOption (long "volume" <> short 'v' <> metavar "VOLUME" <> help "Extra volumes 'volume|hostPath[:containerPath]'"))
+    <*> many (strOption (long "syscap" <> metavar "CAP_NAME" <> help "Extra capabilities(7)"))
     <*> optional (strArgument (metavar "APP" <> help "Application config name or default selector, e.g. image:name"))
     <*> many (strArgument (metavar "ARGS" <> help "Application args"))
 
 -- | List of strOption that accept an argument (that is not the selector)
 strOptions :: [String]
-strOptions = ["--config", "--headless", "--namespace", "--name", "--env", "--volume", "-v", "--network"]
+strOptions = ["--config", "--headless", "--namespace", "--name", "--env", "--volume", "-v", "--network", "--syscap"]
 
 -- | Parse all capabilities toggles
 capsParser :: Parser [Capabilities -> Capabilities]
@@ -268,7 +270,8 @@ cliPrepare CLI {..} = setMeta . setApp . setNetwork . setVolumes
     setShellCap = appCapabilities %~ (capTerminal .~ True) . (capInteractive .~ True)
     setEnvs app' = foldr (\v -> appEnviron %~ (v :)) app' cliEnv
     setCaps app' = foldr (appCapabilities %~) app' capsOverride
-    setApp = arApplication %~ setShell . setEnvs . setCaps
+    setSysCaps app' = foldr (\v -> appSyscaps %~ (v :)) app' cliSysCaps
+    setApp = arApplication %~ setShell . setEnvs . setCaps . setSysCaps
 
 showApp :: ApplicationResource -> RunEnv -> Text -> Text
 showApp ar run cmd = unlines infos
