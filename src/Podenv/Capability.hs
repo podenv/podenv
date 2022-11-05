@@ -139,9 +139,13 @@ prepare mode ar = do
 
     addSysCaps ctx = foldr addSysCap ctx (app ^. appSyscaps)
     addSysCap :: Text -> Ctx.Context -> Ctx.Context
-    addSysCap syscap = case readMaybe (toString $ "CAP_" <> syscap) of
+    addSysCap syscap = case readMaybe (toString sysCapName) of
       Nothing -> error $ "Can't read syscap: " <> show syscap
       Just c -> ctxSyscaps %~ Set.insert c
+      where
+        sysCapName
+          | "CAP_" `Text.isPrefixOf` syscap = syscap
+          | otherwise = "CAP_" <> syscap
 
     addEnvs ctx = foldr setEnv ctx (app ^. appEnviron)
     setEnv :: Text -> Ctx.Context -> Ctx.Context

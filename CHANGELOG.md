@@ -5,6 +5,7 @@
 - application name is now optional: when unset, multiple instance can run in parallel.
 - the `--network` argument now takes an argument: private, host or a shared name.
 - add `--ps` argument to list running app.
+- add `--syscap` argument to add capabilities(7).
 - add support for nix flake binary cache.
 - use zenity to log non-interactive message.
 - after use, podenv may propose to update the runtime when the build is old.
