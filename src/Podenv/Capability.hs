@@ -72,6 +72,10 @@ prepare mode ar = do
     Nix _ -> setNix
     _ -> pure id
 
+  let shareEgl
+        | app ^. appCapabilities . capWayland && app ^. appCapabilities . capDri = Ctx.directMount "/usr/share/egl"
+        | otherwise = id
+
   let mkCommand extraArgs = case app ^. appRuntime of
         Nix flakes ->
           [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
@@ -88,7 +92,7 @@ prepare mode ar = do
       | otherwise -> pure $ ctxCommand .~ mkCommand extraArgs
     Shell -> pure $ ctxCommand .~ ["/bin/sh"]
 
-  pure (disableSelinux . setHome . setCommand . setCaps . setVolumes . setNixEnv $ ctx)
+  pure (disableSelinux . setHome . setCommand . shareEgl . setCaps . setVolumes . setNixEnv $ ctx)
   where
     meta = ar ^. arMetadata
     app = ar ^. arApplication
@@ -246,11 +250,12 @@ setVideo = do
 
 setDri :: AppEnvT (Ctx.Context -> Ctx.Context)
 setDri = do
+  let base = Ctx.addDevice "/dev/dri"
   nvidia <- isNVIDIAEnabled
   pure $
     if nvidia
-      then Ctx.addDevice "/dev/nvidiactl" . Ctx.addDevice "/dev/nvidia0" . Ctx.addDevice "/dev/nvidia-modeset"
-      else Ctx.addDevice "/dev/dri"
+      then Ctx.addDevice "/dev/nvidiactl" . Ctx.addDevice "/dev/nvidia0" . Ctx.addDevice "/dev/nvidia-modeset" . base
+      else base
 
 setPulseaudio :: AppEnvT (Ctx.Context -> Ctx.Context)
 setPulseaudio = do

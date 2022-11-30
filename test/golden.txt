@@ -43,6 +43,7 @@ Raw command: podman run
   --mount type=tmpfs,destination=/run/user
   --volume /run/user/1000/pulse:/run/user/1000/pulse
   --volume /run/user/1000/wayland-0:/run/user/1000/wayland-0
+  --volume /usr/share/egl:/usr/share/egl
   --label podenv.selector=legacy.web localhost/54905fe9b09589c90fe2a37e04684bf771b01c62fbb52b83d18f57886aaa0c39 firefox
   --no-remote
 
@@ -187,6 +188,7 @@ Raw command: podman run
   --mount type=tmpfs,destination=/run/user
   --volume /volumes/headless-xdg:/run/user/1000
   --volume /volumes/headless-pulse:/run/user/1000/pulse
+  --volume /usr/share/egl:/usr/share/egl
   --label podenv.selector=firefox localhost/54905fe9b09589c90fe2a37e04684bf771b01c62fbb52b83d18f57886aaa0c39 firefox
   --no-remote
 
