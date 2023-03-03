@@ -5,7 +5,8 @@
 
   inputs = {
     hspkgs.url =
-      "github:podenv/hspkgs/305ae498c614e81e7b9b52c9001b3bffa44334aa";
+      "github:podenv/hspkgs/0062866e8a9c427964d69b3d38721f6b42d10534";
+      # "path:///srv/github.com/podenv/hspkgs";
   };
 
   outputs = { self, hspkgs }:
