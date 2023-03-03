@@ -254,8 +254,10 @@ setDri = do
   nvidia <- isNVIDIAEnabled
   pure $
     if nvidia
-      then Ctx.addDevice "/dev/nvidiactl" . Ctx.addDevice "/dev/nvidia0" . Ctx.addDevice "/dev/nvidia-modeset" . base
+      then foldr ((.) . Ctx.addDevice) base nvidiaDevs
       else base
+  where
+    nvidiaDevs = mappend "/dev/" <$> ["nvidiactl", "nvidia0", "nvidia-modeset", "nvidia-uvm", "nvidia-uvm-tools"]
 
 setPulseaudio :: AppEnvT (Ctx.Context -> Ctx.Context)
 setPulseaudio = do
