@@ -115,7 +115,7 @@ executable podenv
   import:           common
   hs-source-dirs:   app
   main-is:          Main.hs
-  build-depends:    base, podenv
+  build-depends:    base, podenv, with-utf8
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
 
 test-suite tests
