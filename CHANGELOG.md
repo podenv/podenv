@@ -10,6 +10,7 @@
 - use zenity to log non-interactive message.
 - after use, podenv may propose to update the runtime when the build is old.
 - fix --dri and --wayland with nvidia.
+- support latest podman.
 
 ## 0.2.0 (2022-07-26)
 
