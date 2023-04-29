@@ -285,8 +285,7 @@ showApp ar run cmd = unlines infos
         , ""
         ]
             <> ["[+] Command", cmd]
-    appCaps = concatMap showCap (Podenv.Capability.capsAll <> [netCap])
-    netCap = Podenv.Capability.Cap "network" "" capNetwork (pure id)
+    appCaps = concatMap showCap Podenv.Capability.capsAll
     showCap Podenv.Capability.Cap{..} =
         [capName | app ^. appCapabilities . capLens]
 
