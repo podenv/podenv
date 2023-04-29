@@ -571,7 +571,7 @@ podmanRunArgs gl rmode ctx image = toString <$> args
             <> concatMap (\d -> ["--device", toText d]) (ctx ^. ctxDevices)
             <> maybe [] (\wd -> ["--workdir", toText wd]) (ctx ^. ctxWorkdir)
             <> concatMap (\(k, v) -> ["--env", toText $ k <> "=" <> v]) (Map.toAscList (ctx ^. ctxEnviron))
-            <> concatMap volumeArg (Map.toAscList (ctx ^. ctxMounts))
+            <> concatMap volumeArg (("/tmp", MkVolume RW TmpFS) : Map.toAscList (ctx ^. ctxMounts))
             <> maybe [] (\name -> ["--name", unName name]) (ctx ^. ctxName)
             <> labelArg
             <> [unImageName image]

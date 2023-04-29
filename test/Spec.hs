@@ -189,31 +189,31 @@ spec (config, goldenConfig) = describe "unit tests" $ do
                 ar <- loadOne (addCap code "network = True, rw = True")
                 ctx <- runPrepare (Regular []) testEnv ar
                 Podenv.Runtime.podmanRunArgs defRe fg ctx (getImg ar) `shouldBe` expected
-        it "run simple" $ podmanTest "env" (defRun [])
+        it "run simple" $ podmanTest "env" (defRun ["--mount", "type=tmpfs,destination=/tmp"])
         it "run simple root" $
             podmanTest
                 "env // { capabilities.root = True }"
-                (defRun ["--user", "0", "--workdir", "/root", "--env", "HOME=/root", "--volume", "/data/podenv-home:/root"])
+                (defRun ["--user", "0", "--workdir", "/root", "--env", "HOME=/root", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/data/podenv-home:/root"])
         it "run syscaps" $
             podmanTest
                 "env // { syscaps = [\"NET_ADMIN\"] }"
-                (defRun ["--cap-add", "CAP_NET_ADMIN"])
+                (defRun ["--cap-add", "CAP_NET_ADMIN", "--mount", "type=tmpfs,destination=/tmp"])
         it "run hostdir" $
             podmanTest
                 "env // { volumes = [\"/tmp/test\"]}"
-                (defRun ["--security-opt", "label=disable", "--volume", "/tmp/test:/tmp/test"])
+                (defRun ["--security-opt", "label=disable", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/tmp/test:/tmp/test"])
         it "run volumes" $
             podmanTest
                 "env // { volumes = [\"nix-store:/nix\"]}"
-                (defRun ["--volume", "/data/nix-store:/nix"])
+                (defRun ["--mount", "type=tmpfs,destination=/tmp", "--volume", "/data/nix-store:/nix"])
         it "run home volumes" $
             podmanTest
                 "env // { volumes = [\"~/src:/data\"]}"
-                (defRun ["--security-opt", "label=disable", "--volume", "/home/user/src:/data"])
+                (defRun ["--security-opt", "label=disable", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/home/user/src:/data"])
         it "run many volumes" $
             podmanTest
                 "env // { volumes = [\"/home/data:/tmp/data\", \"/tmp\", \"/home/old-data:/tmp/data\"]}"
-                (defRun ["--security-opt", "label=disable", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
+                (defRun ["--security-opt", "label=disable", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
   where
     defImg = "ubi8"
     defRe = Podenv.Runtime.defaultGlobalEnv "/data"
