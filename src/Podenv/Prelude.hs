@@ -1,11 +1,11 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Common functions
-module Podenv.Prelude
-  ( module Relude,
+module Podenv.Prelude (
+    module Relude,
     foldM,
     lookup,
     getEnv,
@@ -17,12 +17,6 @@ module Podenv.Prelude
     hPutStrLn,
 
     -- * base env
-
-#if !MIN_VERSION_relude(1,0,0)
-    getArgs,
-    lookupEnv,
-    hFlush,
-#endif
     getExecutablePath,
 
     -- * xdg
@@ -57,8 +51,7 @@ module Podenv.Prelude
     setWhenNothing,
     askL,
     lensName,
-  )
-where
+) where
 
 import Control.Exception qualified
 import Control.Monad (foldM)
@@ -91,8 +84,8 @@ l `setWhenNothing` b = l %~ maybe (Just b) Just
 
 askL :: MonadReader s m => Lens' s a -> m a
 askL l = do
-  e <- ask
-  pure $ e ^. l
+    e <- ask
+    pure $ e ^. l
 
 getCacheDir :: IO FilePath
 getCacheDir = getXdgDirectory XdgCache "podenv"
@@ -105,26 +98,27 @@ getConfigDir = getXdgDirectory XdgConfig "podenv"
 
 readFileM :: FilePath -> IO Text
 readFileM fp' = do
-  exist <- liftIO $ doesFileExist fp'
-  if exist
-    then liftIO $ Data.Text.IO.readFile fp'
-    else pure ""
+    exist <- liftIO $ doesFileExist fp'
+    if exist
+        then liftIO $ Data.Text.IO.readFile fp'
+        else pure ""
 
 doesSymlinkExist :: FilePath -> IO Bool
 doesSymlinkExist fp =
-  either (const False) (const True) <$> checkFp
+    either (const False) (const True) <$> checkFp
   where
     checkFp :: IO (Either Control.Exception.SomeException FilePath)
     checkFp = Control.Exception.try $ System.Posix.Files.readSymbolicLink fp
 
--- | Create a lens name
---
--- >>> lensName "name" "name"
--- Nothing
+{- | Create a lens name
+
+ >>> lensName "name" "name"
+ Nothing
+-}
 lensName :: String -> String -> Maybe String
 lensName prefix field
-  | field `Prelude.elem` manualFields = Nothing
-  | otherwise = Just $ prefix <> [toUpper $ Prelude.head field] <> Prelude.tail field
+    | field `Prelude.elem` manualFields = Nothing
+    | otherwise = Just $ prefix <> [toUpper $ Prelude.head field] <> Prelude.tail field
   where
     -- these fields have conflicts and their lens need to be implemented manually
     manualFields = ["name", "namespace", "volumes", "network", "labels", "apiVersion", "kind"]

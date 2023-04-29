@@ -40,23 +40,24 @@ containerBuildDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Contain
 appDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Application.dhall).default")
 capsDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Capabilities.dhall).default")
 
--- | Generate Haskell Types from Dhall Types.
--- See: https://hackage.haskell.org/package/dhall-1.40.0/docs/Dhall-TH.html
+{- | Generate Haskell Types from Dhall Types.
+See: https://hackage.haskell.org/package/dhall-1.40.0/docs/Dhall-TH.html
+-}
 Dhall.TH.makeHaskellTypes
-  ( let mainPath name = "(./hub/schemas/" <> name <> ".dhall).Type"
-        main' cname name = Dhall.TH.SingleConstructor cname cname $ mainPath name
-        main name = main' name name
-     in [ main "Capabilities",
-          main "Application",
-          main "ApplicationResource",
-          main "ContainerBuild",
-          main "Flakes",
-          Dhall.TH.SingleConstructor "LabelKV" "LabelKV" "{mapKey : Text, mapValue : Text}",
-          main "Metadata",
-          Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall",
-          Dhall.TH.MultipleConstructors "Network" "./hub/schemas/Network.dhall"
-        ]
-  )
+    ( let mainPath name = "(./hub/schemas/" <> name <> ".dhall).Type"
+          main' cname name = Dhall.TH.SingleConstructor cname cname $ mainPath name
+          main name = main' name name
+       in [ main "Capabilities"
+          , main "Application"
+          , main "ApplicationResource"
+          , main "ContainerBuild"
+          , main "Flakes"
+          , Dhall.TH.SingleConstructor "LabelKV" "LabelKV" "{mapKey : Text, mapValue : Text}"
+          , main "Metadata"
+          , Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall"
+          , Dhall.TH.MultipleConstructors "Network" "./hub/schemas/Network.dhall"
+          ]
+    )
 
 $(makeLensesBy (lensName "cap") ''Capabilities)
 
@@ -106,5 +107,5 @@ deriving instance Eq Network
 
 extractDhallDefault :: (HasCallStack, Dhall.FromDhall a) => Expr Void Void -> a
 extractDhallDefault def = case Dhall.extract Dhall.auto (Dhall.renote def) of
-  Success app -> app
-  Failure v -> error $ "Invalid defaults: " <> show v
+    Success app -> app
+    Failure v -> error $ "Invalid defaults: " <> show v
