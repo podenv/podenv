@@ -5,7 +5,7 @@
 
   inputs = {
     hspkgs.url =
-      "github:podenv/hspkgs/0062866e8a9c427964d69b3d38721f6b42d10534";
+      "github:podenv/hspkgs/90eadd304c6375f926a0970f87b470e765e7f176";
       # "path:///srv/github.com/podenv/hspkgs";
   };
 
@@ -88,7 +88,7 @@
         buildInputs = [
           pkgs.cabal-install
           pkgs.hlint
-          pkgs.ormolu
+          pkgs.fourmolu
           pkgs.hspkgs.doctest
           weeder_wrapper
           (pkgs.writeScriptBin "run" ''
@@ -103,7 +103,7 @@
             cabal check
 
             log "Formatting"
-            ormolu -o -XPatternSynonyms -o -XTypeApplications -o -XImportQualifiedPost -o -XQuasiQuotes --mode inplace $(find src/ app/ test/ -name "*.hs" | grep -v Prelude)
+            fourmolu -i src/ app/ test/
 
             log "Linting"
             hlint -XQuasiQuotes src/ app/ test/

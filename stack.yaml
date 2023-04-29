@@ -1,3 +1,1 @@
-resolver: lts-18.13
-extra-deps:
-- linux-capabilities-0.1.1.0@sha256:a3ad5671a68ee75ab110e79bf903f2764e532bc428f74b2e4bfed0ec5eb88865,1727
+resolver: lts-20.19
