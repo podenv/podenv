@@ -175,6 +175,7 @@ setNix = do
             Ctx.addEnv "NIX_SSL_CERT_FILE" certs
                 . Ctx.addEnv "TERM" "xterm-256color"
                 . Ctx.addEnv "LC_ALL" "C.UTF-8"
+                . Ctx.addEnv "NIXPKGS_ALLOW_UNFREE" "1"
                 . Ctx.addEnv "PATH" "/nix/var/nix/profiles/nix-install/bin:/bin"
 
     pure $ setEnv . setNixVolumes

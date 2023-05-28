@@ -243,6 +243,7 @@ Raw command: bwrap
   --clearenv
   --setenv HOME /home/user
   --setenv LC_ALL C.UTF-8
+  --setenv NIXPKGS_ALLOW_UNFREE 1
   --setenv NIX_SSL_CERT_FILE /etc/ca
   --setenv PATH /nix/var/nix/profiles/nix-install/bin:/bin
   --setenv TERM xterm-256color
@@ -304,6 +305,7 @@ Raw command: bwrap
   --clearenv
   --setenv HOME /home/user
   --setenv LC_ALL C.UTF-8
+  --setenv NIXPKGS_ALLOW_UNFREE 1
   --setenv NIX_SSL_CERT_FILE /etc/ca
   --setenv PATH /nix/var/nix/profiles/nix-install/bin:/bin
   --setenv TERM xterm-256color
