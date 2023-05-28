@@ -55,8 +55,11 @@ cacheUrlFromKey cacheKey = case rest of
     (cacheUrlPrefix, rest) = Text.breakOn ".cachix.org-1:" cacheKey
 
 nixArgs :: Flakes -> [Text]
-nixArgs flakes = nixExtraArgs <> nixCacheArgs <> installables flakes
+nixArgs flakes = impureArgs <> nixExtraArgs <> nixCacheArgs <> installables flakes
   where
+    impureArgs
+        | any (Text.isInfixOf "guibou/nixGL") (installables flakes) = ["--impure"]
+        | otherwise = []
     nixCacheArgs = case cache flakes of
         Just cacheKey ->
             [ "--option"
