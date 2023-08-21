@@ -70,6 +70,10 @@
 
     in {
       packages."x86_64-linux".default = exe;
+      apps."x86_64-linux".default = {
+        type = "app";
+        program = "${exe}/bin/podenv";
+      };
       packages."x86_64-linux".static = static-exe;
       packages."x86_64-linux".release = release;
       devShells."x86_64-linux".hoogle = pkgs.hspkgs.shellFor {
