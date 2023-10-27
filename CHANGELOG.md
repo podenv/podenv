@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (next)
+## 0.3.0 (2023-10-27)
 
 - application name is now optional: when unset, multiple instance can run in parallel.
 - the `--network` argument now takes an argument: private, host or a shared name.

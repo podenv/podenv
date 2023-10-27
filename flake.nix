@@ -12,8 +12,8 @@
   outputs = { self, hspkgs }:
     let
       pkgs = hspkgs.pkgs;
-      hubCommit = "93bf24c83dda17f843f8ef8dc0ab984b1250f6a3";
-      hubHash = "sha256-wKrjOwxyP0NgLSA5PtgQHAbqIkIGBVHQSdRtjN5JJ34=";
+      hubCommit = "144fbabc0f538b006f4a3ab52a4d05dcc1cd1e91";
+      hubHash = "sha256-FzM/3sfvaQoLxsV1onQ5GfevcDgfTup21NXY6ExMtZc=";
       rev = if self ? rev then
         self.rev
       else
