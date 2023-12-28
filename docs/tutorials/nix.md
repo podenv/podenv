@@ -34,7 +34,7 @@ Display a flake content:
 $ podenv nix flake show github:podenv/modularix
 ```
 
-Run an existing application defined with nix, for example [vcv.dhall](https://github.com/podenv/hub/blob/main/Applications/vcv.dhall):
+Run an existing application defined with nix, for example [vcv.dhall](https://github.com/podenv/podenv/blob/main/hub/Applications/vcv.dhall):
 
 ```ShellSession
 $ podenv vcv
@@ -55,7 +55,7 @@ $ podenv nix.setup
 [Display the nix version]
 ```
 
-> You can check what the [nix.setup application](https://github.com/podenv/hub/blob/main/Builders/nix.dhall) does by running `podenv --show nix.setup`.
+> You can check what the [nix.setup application](https://github.com/podenv/podenv/blob/main/hub/Builders/nix.dhall) does by running `podenv --show nix.setup`.
 
 ## Setup the environment
 
@@ -65,7 +65,7 @@ Attach the Nix package manager to an existing application, for example a fedora 
 $ podenv nixify fedora
 ```
 
-> The [nixify](https://github.com/podenv/hub/blob/main/Applications/nixify.dhall) function adds the store volume and the nix command to the PATH.
+> The [nixify](https://github.com/podenv/podenv/blob/main/hub/Applications/nixify.dhall) function adds the store volume and the nix command to the PATH.
 
 Then run nix command inside the container:
 

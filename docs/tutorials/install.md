@@ -31,7 +31,7 @@ $ podenv --shell image:ubi8
 
 Podenv can use pre-configured applications.
 
-> On first run, podenv setup the one defined in the [podenv/hub](https://github.com/podenv/hub).
+> On first run, podenv setup the one defined in the [podenv/hub](https://github.com/podenv/podenv/tree/main/hub).
 
 ```ShellSession
 $ podenv --list
