@@ -9,8 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: "actions/checkout@v2.4.0"
-      with:
-        submodules: true
     - uses: "cachix/install-nix-action@v20"
       with:
         nix_path: nixpkgs=channel:nixos-unstable
@@ -29,8 +27,6 @@ jobs:
     name: Haskell GHC ${{ matrix.ghc }}
     steps:
     - uses: actions/checkout@v2
-      with:
-        submodules: true
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
@@ -54,8 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-      with:
-        submodules: true
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: "8.10"

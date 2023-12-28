@@ -1,3 +1,0 @@
-[submodule "hub"]
-	path = hub
-	url = https://github.com/podenv/hub

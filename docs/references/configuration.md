@@ -4,8 +4,8 @@ This document references the configuration file format.
 
 ## Application
 
-An application is defined with the [Application](https://github.com/podenv/hub/blob/main/schemas/Application.dhall) schema.
-This includes the [Runtime](https://github.com/podenv/hub/blob/main/schemas/Runtime.dhall) and the [Capabilities](https://github.com/podenv/hub/blob/main/schemas/Capabilities.dhall) schemas.
+An application is defined with the [Application](https://github.com/podenv/podenv/blob/main/hub/schemas/Application.dhall) schema.
+This includes the [Runtime](https://github.com/podenv/podenv/blob/main/hub/schemas/Runtime.dhall) and the [Capabilities](https://github.com/podenv/podenv/blob/main/hub/schemas/Capabilities.dhall) schemas.
 
 ## Configuration
 

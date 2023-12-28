@@ -4,7 +4,7 @@ This tutorial teachs you how to use an existing application.
 
 ## List available applications
 
-By default, podenv setup the applications defined in [podenv/hub](https://github.com/podenv/hub),
+By default, podenv setup the applications defined in [podenv/hub](https://github.com/podenv/podenv/tree/main/hub),
 and you can get the list by using the `--list` argument:
 
 ```console

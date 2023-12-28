@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 (next)
+
+- the podenv/hub submodule is now part of the podenv repository to simplify updates.
+
 ## 0.3.0 (2023-10-27)
 
 - application name is now optional: when unset, multiple instance can run in parallel.

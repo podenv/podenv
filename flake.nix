@@ -12,8 +12,6 @@
   outputs = { self, hspkgs }:
     let
       pkgs = hspkgs.pkgs;
-      hubCommit = "144fbabc0f538b006f4a3ab52a4d05dcc1cd1e91";
-      hubHash = "sha256-FzM/3sfvaQoLxsV1onQ5GfevcDgfTup21NXY6ExMtZc=";
       rev = if self ? rev then
         self.rev
       else
@@ -27,27 +25,13 @@
       };
 
       # final build
-      hubSrc = pkgs.fetchFromGitHub {
-        owner = "podenv";
-        repo = "hub";
-        rev = hubCommit;
-        sha256 = hubHash;
-      };
-      podenvSrc = pkgs.runCommand "make-podenv-src" { } ''
-        mkdir $out
-        ${pkgs.rsync}/bin/rsync --exclude hub -r ${self}/ $out/
-        echo "Building $out"
-        ln -sf ${hubSrc} $out/hub
-      '';
-
       podenvPkg = hspkgs: commit:
-        (hspkgs.callCabal2nix "podenv" podenvSrc { }).overrideAttrs (_: {
+        (hspkgs.callCabal2nix "podenv" self { }).overrideAttrs (_: {
           # Set build environment variable to avoid warnings
           LANG = "en_US.UTF-8";
           XDG_CACHE_HOME = "/tmp";
           # Provide a local dhall prelude because build can't access network
           DHALL_PRELUDE = "${preludeSrc}/Prelude/package.dhall";
-          HUB_COMMIT = hubCommit;
           PODENV_COMMIT = commit;
         });
 

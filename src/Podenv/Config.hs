@@ -33,6 +33,7 @@ import Dhall.Parser qualified
 import Dhall.Src qualified
 import Podenv.Dhall
 import Podenv.Prelude
+import Podenv.Version qualified
 import System.Environment (setEnv, unsetEnv)
 import System.FilePath.Posix (dropExtension, isExtensionOf, splitPath)
 import Text.Show qualified
@@ -140,10 +141,8 @@ podenvUrl :: Dhall.URL
 podenvUrl =
     Dhall.URL Dhall.HTTPS "raw.githubusercontent.com" path Nothing Nothing
   where
-    hubVersion = case Dhall.extract Dhall.auto (Dhall.renote hubCommit) of
-        Success x -> Text.dropEnd 1 x
-        Failure v -> error $ "Unknown hub commit: " <> show v
-    path = Dhall.File (Dhall.Directory [hubVersion, "hub", "podenv"]) "package.dhall"
+    podenvVersion = Text.pack Podenv.Version.version
+    path = Dhall.File (Dhall.Directory ["hub", podenvVersion, "podenv", "podenv"]) "package.dhall"
 
 podenvImport :: Dhall.Import
 podenvImport =

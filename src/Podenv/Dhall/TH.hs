@@ -25,10 +25,6 @@ import Dhall.TH qualified
 import Lens.Family.TH (makeLensesBy)
 import Podenv.Prelude
 
--- | The hub submodule commit, this is only used for the PODENV environment value
-hubCommit :: Expr Void Void
-hubCommit = $(Dhall.TH.staticDhallExpression "env:HUB_COMMIT as Text ? ./.git/modules/hub/HEAD as Text")
-
 -- | Embed static dhall code
 podenvPackage :: Expr Void Void
 podenvPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")

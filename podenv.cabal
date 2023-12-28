@@ -21,7 +21,6 @@ extra-source-files: test/*.dhall
                     test/*.txt
                     hub/*.dhall
                     hub/**/*.dhall
-                    .git/modules/hub/HEAD
 
 source-repository head
   type:             git

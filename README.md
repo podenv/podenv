@@ -33,7 +33,7 @@ Share resources with simple toggles:
 - `--wayland` graphical display.
 - `--pipewire` access audio and video streams.
 - `--dbus` share the dbus session.
-- See the full list in this configuration schema: [Capabilities.Type](https://github.com/podenv/hub/blob/main/schemas/Capabilities.dhall)
+- See the full list in this configuration schema: [Capabilities.Type](https://github.com/podenv/podenv/blob/main/hub/schemas/Capabilities.dhall)
 
 Mount directories with smart volumes:
 
@@ -107,7 +107,7 @@ Podenv support the [Nix installables syntax](https://nixos.org/manual/nix/stable
 
 #### Hub
 
-By default, podenv uses the [podenv/hub](https://github.com/podenv/hub) collection.
+By default, podenv uses the [hub](./hub) collection.
 Run `podenv --list` to see the available applications.
 
 

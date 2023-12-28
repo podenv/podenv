@@ -74,7 +74,6 @@ module Podenv.Dhall (
 
     -- * Embeded
     podenvPackage,
-    hubCommit,
     runtimeType,
     appType,
 ) where
