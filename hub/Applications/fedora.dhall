@@ -122,10 +122,11 @@ let base =
         , useGraphic = mkUse "latest" extraGraphic
         , useGraphicCodec = mkUse "latest" (extraGraphic ++ extraGraphicCodec)
         }
-      , `34` = useD "34"
+      , -- for xeyes ...
+        `34` = useD "34"
       , rawhide = useD "rawhide"
       , fusion =
-          let ver = "34"
+          let ver = fedora.latest
 
           let mkVariant =
                 \(variant : Text) ->
