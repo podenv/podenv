@@ -1,3 +1,5 @@
+let latest = "39"
+
 let Prelude = ../Prelude.dhall
 
 let Podenv = ../Podenv.dhall
@@ -29,4 +31,4 @@ let base-image =
 
 let image = \(ver : Text) -> base-image (image-ref (":" ++ ver)) ver
 
-in  { image-ref, mkVolumes, base-image, image }
+in  { image-ref, mkVolumes, base-image, image, latest }

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 (next)
+## 0.4.0 (2023-12-28)
 
 - the podenv/hub submodule is now part of the podenv repository to simplify updates.
 
