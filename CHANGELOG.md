@@ -1,5 +1,9 @@
 # Changelog
 
+## next
+
+- The `--ps` command can take a app name to return the pod id.
+
 ## 0.4.0 (2023-12-28)
 
 - the podenv/hub submodule is now part of the podenv repository to simplify updates.

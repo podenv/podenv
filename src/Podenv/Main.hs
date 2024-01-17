@@ -50,7 +50,11 @@ main = do
     when showDhallEnv (putTextLn Podenv.Config.podenvImportTxt >> exitSuccess)
     when listCaps (printCaps >> exitSuccess)
     when listApps (printApps configExpr >> exitSuccess)
-    when listProcs (Podenv.Runtime.listRunningApps >>= traverse_ putTextLn >> exitSuccess)
+    when listProcs do
+        case selector of
+            Just app -> Podenv.Runtime.getAppID app >>= putTextLn
+            Nothing -> Podenv.Runtime.listRunningApps >>= traverse_ putTextLn
+        exitSuccess
 
     (ar, mode, gl, run) <- cliLoad cli
     ctx <- Podenv.Runtime.appToContext run mode ar
