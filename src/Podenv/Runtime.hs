@@ -20,6 +20,7 @@ module Podenv.Runtime (
     getPodmanPodStatus,
     deletePodmanPod,
     listRunningApps,
+    getAppID,
 
     -- * Podman helpers
     podman,
@@ -704,3 +705,11 @@ formatPodmanProc PodmanProc{..} =
 -- | List podman container started by podenv. TODO: add bwrap process
 listRunningApps :: IO [Text]
 listRunningApps = fmap formatPodmanProc <$> getPodmanProcs
+
+getAppID :: Text -> IO Text
+getAppID name = go =<< getPodmanProcs
+  where
+    go [] = pure ""
+    go (p : rest)
+        | getAppName (ppLabels p) == name = pure (ppId p)
+        | otherwise = go rest
