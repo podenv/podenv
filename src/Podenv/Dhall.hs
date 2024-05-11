@@ -113,7 +113,7 @@ defaultAppRes application =
         { metadata =
             defaultMetadata
                 & (metaName .~ name)
-                    . (metaNamespace .~ (application ^. appNamespace))
+                . (metaNamespace .~ (application ^. appNamespace))
         , kind = "Application"
         , apiVersion = "podenv/0.2"
         , network = maybe Private netFromNamespace (application ^. appNamespace)
