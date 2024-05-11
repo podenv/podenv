@@ -2,7 +2,10 @@
 
 ## next
 
-- The `--ps` command can take a app name to return the pod id.
+## 0.5.0 (2024-05-11)
+
+- the `--ps` command can take a app name to return the pod id.
+- set the SDL_VIDEODRIVER env for wayland
 
 ## 0.4.0 (2023-12-28)
 
