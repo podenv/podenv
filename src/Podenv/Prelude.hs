@@ -82,7 +82,7 @@ l ?~ b = set l (Just b)
 setWhenNothing :: ASetter s t (Maybe b) (Maybe b) -> b -> s -> t
 l `setWhenNothing` b = l %~ maybe (Just b) Just
 
-askL :: (MonadReader s m) => Lens' s a -> m a
+askL :: MonadReader s m => Lens' s a -> m a
 askL l = do
     e <- ask
     pure $ e ^. l

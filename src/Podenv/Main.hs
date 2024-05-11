@@ -59,8 +59,8 @@ main = do
     (ar, mode, gl, run) <- cliLoad cli
     ctx <- Podenv.Runtime.appToContext run mode ar
 
-    flip runReaderT gl
-        $ if showApplication
+    flip runReaderT gl $
+        if showApplication
             then putTextLn . showApp ar run =<< Podenv.Runtime.showCmd run Foreground ctx
             else do
                 let doUpdate = Podenv.Runtime.updateRuntime run (ar ^. arApplication . appRuntime)
@@ -237,8 +237,8 @@ cliConfigLoad volumesDir env config cli@CLI{..} = do
         caps = app ^. arApplication . appCapabilities
 
     notifier <-
-        Podenv.Notifications.pickNotifier
-            $ if caps ^. capWayland || caps ^. capX11
+        Podenv.Notifications.pickNotifier $
+            if caps ^. capWayland || caps ^. capX11
                 then Podenv.Notifications.Display
                 else Podenv.Notifications.Console
 
