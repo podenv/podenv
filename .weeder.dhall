@@ -1,3 +1,0 @@
-{ roots = [ "Main.main", "Podenv.Prelude.lensName", "^Paths_.*" ]
-, type-class-roots = True
-}

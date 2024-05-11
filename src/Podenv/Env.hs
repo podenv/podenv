@@ -106,9 +106,10 @@ getRootfsHome :: UserID -> Maybe FilePath -> FilePath -> IO (Maybe FilePath)
 getRootfsHome _ (Just hostHome) "/" = pure $ Just hostHome
 getRootfsHome uid _ fp = do
     passwd <- readFileM (fp </> "etc/passwd")
-    pure $
-        toString . Data.List.NonEmpty.head
-            <$> Data.List.NonEmpty.nonEmpty (Data.Maybe.mapMaybe isUser $ Podenv.Prelude.lines passwd)
+    pure
+        $ toString
+        . Data.List.NonEmpty.head
+        <$> Data.List.NonEmpty.nonEmpty (Data.Maybe.mapMaybe isUser $ Podenv.Prelude.lines passwd)
   where
     isUser l = case Data.Text.splitOn ":" l of
         (_ : _ : uid' : _ : _ : home : _) | readMaybe (toString uid') == Just uid -> Just home

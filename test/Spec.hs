@@ -54,7 +54,8 @@ spec (config, goldenConfig) = describe "unit tests" $ do
                 cfg <- maybe (loadConfig (configExpr cli)) pure configM
                 (ar, mode, gl, run) <- cliConfigLoad "/volumes" testEnv cfg cli
                 ctx <- Podenv.Runtime.appToContext run mode ar
-                mappend ("==== " <> show args <> "\n") . Text.replace " --" "\n  --"
+                mappend ("==== " <> show args <> "\n")
+                    . Text.replace " --" "\n  --"
                     <$> runReaderT (Podenv.Runtime.showCmd run Foreground ctx) gl
             mkGolden = mkGoldenConfig (Just goldenConfig)
             writeGolden :: [[String]] -> [[String]] -> IO ()
@@ -164,21 +165,21 @@ spec (config, goldenConfig) = describe "unit tests" $ do
         it "unset cap" $ cliTest (addCap "env" "wayland = True") ["--no-wayland"] "env"
         it "set volume" $ cliTest "env" ["--volume", "/tmp/test"] "env // { volumes = [\"/tmp/test\"]}"
         it "one args" $ cliTest "\\(a : Text) -> env // { description = Some a }" ["a"] "env // { description = Some \"a\"}"
-        it "two args" $
-            cliTest
+        it "two args"
+            $ cliTest
                 "\\(a : Text) -> \\(b : Text) -> env // { description = Some (a ++ b) }"
                 ["a", "b"]
                 "env // { description = Some \"ab\"}"
 
     describe "nix test" $ do
         it "nix run without args" $ nixTest "{ runtime.nix = \"test\"}" [] ["run", "test"]
-        it "nix run with args" $
-            nixTest
+        it "nix run with args"
+            $ nixTest
                 "{env, test = { runtime.nix = \"test\"}}"
                 ["test", "--help"]
                 ["run", "test", "--", "--help"]
-        it "nix run with shell" $
-            nixTest
+        it "nix run with shell"
+            $ nixTest
                 "{env, test = { runtime.nix = \"test\", command = [\"cmd\"]}}"
                 ["test", "--help"]
                 ["shell", "test", "--command", "cmd", "--help"]
@@ -190,28 +191,28 @@ spec (config, goldenConfig) = describe "unit tests" $ do
                 ctx <- runPrepare (Regular []) testEnv ar
                 Podenv.Runtime.podmanRunArgs defRe fg ctx (getImg ar) `shouldBe` expected
         it "run simple" $ podmanTest "env" (defRun ["--mount", "type=tmpfs,destination=/tmp"])
-        it "run simple root" $
-            podmanTest
+        it "run simple root"
+            $ podmanTest
                 "env // { capabilities.root = True }"
                 (defRun ["--user", "0", "--workdir", "/root", "--env", "HOME=/root", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/data/podenv-home:/root"])
-        it "run syscaps" $
-            podmanTest
+        it "run syscaps"
+            $ podmanTest
                 "env // { syscaps = [\"NET_ADMIN\"] }"
                 (defRun ["--cap-add", "CAP_NET_ADMIN", "--mount", "type=tmpfs,destination=/tmp"])
-        it "run hostdir" $
-            podmanTest
+        it "run hostdir"
+            $ podmanTest
                 "env // { volumes = [\"/tmp/test\"]}"
                 (defRun ["--security-opt", "label=disable", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/tmp/test:/tmp/test"])
-        it "run volumes" $
-            podmanTest
+        it "run volumes"
+            $ podmanTest
                 "env // { volumes = [\"nix-store:/nix\"]}"
                 (defRun ["--mount", "type=tmpfs,destination=/tmp", "--volume", "/data/nix-store:/nix"])
-        it "run home volumes" $
-            podmanTest
+        it "run home volumes"
+            $ podmanTest
                 "env // { volumes = [\"~/src:/data\"]}"
                 (defRun ["--security-opt", "label=disable", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/home/user/src:/data"])
-        it "run many volumes" $
-            podmanTest
+        it "run many volumes"
+            $ podmanTest
                 "env // { volumes = [\"/home/data:/tmp/data\", \"/tmp\", \"/home/old-data:/tmp/data\"]}"
                 (defRun ["--security-opt", "label=disable", "--mount", "type=tmpfs,destination=/tmp", "--volume", "/tmp:/tmp", "--volume", "/home/data:/tmp/data"])
   where

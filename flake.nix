@@ -5,7 +5,7 @@
 
   inputs = {
     hspkgs.url =
-      "github:podenv/hspkgs/90eadd304c6375f926a0970f87b470e765e7f176";
+      "github:podenv/hspkgs/4750e01093a76c15eef7aa43bab8cd6e285c3fac";
       # "path:///srv/github.com/podenv/hspkgs";
   };
 
@@ -49,7 +49,7 @@
 
       weeder_wrapper = pkgs.writeScriptBin "weeder" ''
         #!/bin/sh
-        exec ${pkgs.weeder}/bin/weeder --require-hs-files --config ./.weeder.dhall
+        exec ${pkgs.weeder}/bin/weeder --require-hs-files --config ./.weeder.toml
       '';
 
     in {
