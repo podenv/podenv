@@ -100,8 +100,8 @@ ensureResolvConf fp
   where
     getSymlinkPath = do
         realResolvConf <- System.Posix.Files.readSymbolicLink "/etc/resolv.conf"
-        pure
-            $ if "../" `isPrefixOf` realResolvConf
+        pure $
+            if "../" `isPrefixOf` realResolvConf
                 then drop 2 realResolvConf
                 else realResolvConf
 
@@ -305,7 +305,7 @@ createHeadlessRunEnv cfg appEnv =
     headlessEnv =
         appEnv
             & (envHostDisplay .~ ":0")
-            . (envHostWaylandSocket ?~ SocketName "wayland-1")
+                . (envHostWaylandSocket ?~ SocketName "wayland-1")
 
     appToHeadlessContext amode ar = do
         headlessContext <$> appToContext headlessRun amode ar
@@ -329,8 +329,8 @@ createHeadlessRunEnv cfg appEnv =
         vncCtx <- getHeadlessApp (ctx ^. ctxNamespace) "vnc"
         clientApp <- getApp (ctx ^. ctxNamespace) "vnc-viewer"
         clientCtx <-
-            liftIO
-                $ appToContext
+            liftIO $
+                appToContext
                     localRun
                     (Regular ["localhost"])
                     (clientApp & arNetwork .~ Shared "container:vnc")
@@ -376,7 +376,7 @@ checkImageExist imageName = do
     res <- P.runProcess (Podenv.Runtime.podman ["image", "exists", Text.unpack imageName])
     pure $ res == ExitSuccess
 
-withCacheFile :: (MonadIO m) => FilePath -> Text -> m () -> m ()
+withCacheFile :: MonadIO m => FilePath -> Text -> m () -> m ()
 withCacheFile fileName expected action = do
     cacheDir <- liftIO getCacheDir
     liftIO $ createDirectoryIfMissing True cacheDir
@@ -477,8 +477,7 @@ bwrapRunArgs GlobalEnv{..} ctx fp = toString <$> args
             <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList (ctx ^. ctxEnviron))
             <> cond (not (ctx ^. ctxTerminal)) ["--new-session"]
             <> maybe [] (\wd -> ["--chdir", toText wd]) (ctx ^. ctxWorkdir)
-            <> ctx
-            ^. ctxCommand
+            <> ctx ^. ctxCommand
 
 data GlobalEnv = GlobalEnv
     { verbose :: Bool
@@ -591,7 +590,7 @@ data PodmanStatus
       Unknown Text
     deriving (Show, Eq)
 
-getPodmanPodStatus :: (MonadIO m) => Name -> m PodmanStatus
+getPodmanPodStatus :: MonadIO m => Name -> m PodmanStatus
 getPodmanPodStatus (Name cname) = do
     (_, stdout', _) <- P.readProcess (podman ["inspect", Text.unpack cname, "--format", "{{.State.Status}}"])
     pure $ case stdout' of
@@ -611,18 +610,17 @@ ensureInfraNet ns = do
     case infraStatus of
         Running -> pure ()
         _ -> do
-            when (infraStatus /= NotFound)
-                $
+            when (infraStatus /= NotFound) $
                 -- Try to delete any left-over infra container
                 deletePodmanPod infraPod
 
             let cmd =
-                    podman
-                        $ map toString
-                        $ ["run", "--rm", "--name", unName infraPod]
-                        <> ["--detach"]
-                        <> ["ubi8"]
-                        <> ["sleep", "infinity"]
+                    podman $
+                        map toString $
+                            ["run", "--rm", "--name", unName infraPod]
+                                <> ["--detach"]
+                                <> ["ubi8"]
+                                <> ["sleep", "infinity"]
             debug $ show cmd
             P.runProcess_ cmd
 

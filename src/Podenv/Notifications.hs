@@ -75,7 +75,7 @@ pickNotifier output = do
         then pure consoleNotifier
         else do
             zenity <- hasZenity
-            pure
-                $ if zenity
+            pure $
+                if zenity
                     then zenityNotifier
                     else consoleNotifier
