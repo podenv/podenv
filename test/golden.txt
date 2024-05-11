@@ -35,6 +35,7 @@ Raw command: podman run
   --env HOME=/home/fedora
   --env PULSE_SERVER=/run/user/1000/pulse/native
   --env QT_QPA_PLATFORM=wayland
+  --env SDL_VIDEODRIVER=wayland
   --env WAYLAND_DISPLAY=wayland-0
   --env XDG_RUNTIME_DIR=/run/user/1000
   --env XDG_SESSION_TYPE=wayland
@@ -131,6 +132,7 @@ Display Raw command: podman run
   --env GDK_BACKEND=wayland
   --env HOME=/home/fedora
   --env QT_QPA_PLATFORM=wayland
+  --env SDL_VIDEODRIVER=wayland
   --env WAYLAND_DISPLAY=wayland-1
   --env WLR_BACKENDS=headless
   --env WLR_LIBINPUT_NO_DEVICES=1
@@ -161,6 +163,7 @@ Vnc Raw command: podman run
   --env GDK_BACKEND=wayland
   --env HOME=/home/fedora
   --env QT_QPA_PLATFORM=wayland
+  --env SDL_VIDEODRIVER=wayland
   --env WAYLAND_DISPLAY=wayland-1
   --env XDG_RUNTIME_DIR=/run/user/1000
   --env XDG_SESSION_TYPE=wayland
@@ -187,6 +190,7 @@ Raw command: podman run
   --env HOME=/home/fedora
   --env PULSE_SERVER=/run/user/1000/pulse/native
   --env QT_QPA_PLATFORM=wayland
+  --env SDL_VIDEODRIVER=wayland
   --env WAYLAND_DISPLAY=wayland-1
   --env XDG_RUNTIME_DIR=/run/user/1000
   --env XDG_SESSION_TYPE=wayland
@@ -372,6 +376,7 @@ Raw command: podman run
   --network none
   --env GDK_BACKEND=wayland
   --env QT_QPA_PLATFORM=wayland
+  --env SDL_VIDEODRIVER=wayland
   --env WAYLAND_DISPLAY=wayland-0
   --env XDG_RUNTIME_DIR=/run/user/1000
   --env XDG_SESSION_TYPE=wayland
