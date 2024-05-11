@@ -224,6 +224,7 @@ setWayland' (SocketName skt) = do
             . Ctx.addEnv "GDK_BACKEND" "wayland"
             . Ctx.addEnv "QT_QPA_PLATFORM" "wayland"
             . Ctx.addEnv "WAYLAND_DISPLAY" (toText skt)
+            . Ctx.addEnv "SDL_VIDEODRIVER" "wayland"
             . Ctx.addEnv "XDG_SESSION_TYPE" "wayland"
             . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
