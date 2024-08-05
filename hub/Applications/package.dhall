@@ -4,6 +4,7 @@
 , blender = ./blender.dhall
 , brave = ./brave.dhall
 , centos = ./centos.dhall
+, cgoban = ./cgoban.dhall
 , chromium = ./chromium.dhall
 , debian = ./debian.dhall
 , electrum = ./electrum.dhall
