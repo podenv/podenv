@@ -10,6 +10,14 @@ let mkUse =
       \(packages : List Text) ->
         Podenv.Container (fedora.image version pre-task packages)
 
+let mkUsePost =
+      \(version : Text) ->
+      \(pre-task : Text) ->
+      \(packages : List Text) ->
+      \(post-task : Text) ->
+        Podenv.Container
+          (fedora.image-with-post version post-task pre-task packages)
+
 let default =
       \(version : Text) ->
         Podenv.Application::{
@@ -120,6 +128,7 @@ let base =
       , latest =
         { use = mkUse "latest" ""
         , useGraphic = mkUse "latest" extraGraphic
+        , useGraphicPost = mkUsePost "latest" extraGraphic
         , useGraphicCodec = mkUse "latest" (extraGraphic ++ extraGraphicCodec)
         }
       , -- for xeyes ...

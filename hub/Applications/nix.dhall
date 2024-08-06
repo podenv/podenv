@@ -4,7 +4,7 @@ let setup = ../Builders/nix.dhall
 
 let -- | A pinned reference for the nixpkgs
     nixpkgs =
-      "github:NixOS/nixpkgs/7f256d7da238cb627ef189d56ed590739f42f13b"
+      "github:NixOS/nixpkgs/8b5b6723aca5a51edf075936439d9cd3947b7b2c"
 
 let -- | Setup a Nix runtime with custom installables and nixpkgs packages.
     uses =

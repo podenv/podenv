@@ -20,6 +20,7 @@
 , gworldclock = ./gworldclock.dhall
 , hydrogen = ./hydrogen.dhall
 , inkscape = ./inkscape.dhall
+, katrain = ./katrain.dhall
 , kigo = ./kigo.dhall
 , librecad = ./librecad.dhall
 , libreoffice = ./libreoffice.dhall
