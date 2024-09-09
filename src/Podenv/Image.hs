@@ -58,7 +58,7 @@ nixArgs :: Flakes -> [Text]
 nixArgs flakes = impureArgs <> nixExtraArgs <> nixCacheArgs <> installables flakes
   where
     impureArgs
-        | any (Text.isInfixOf "guibou/nixGL") (installables flakes) = ["--impure"]
+        | any (Text.isInfixOf "nix-community/nixGL") (installables flakes) = ["--impure"]
         | otherwise = []
     nixCacheArgs = case cache flakes of
         Just cacheKey ->
