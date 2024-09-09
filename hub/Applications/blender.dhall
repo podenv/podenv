@@ -3,10 +3,10 @@ let default =
       (../Podenv.dhall).Application::{
       , description = Some "3D creation suite"
       , runtime =
-          (./nix.dhall).uses
-            [ ./nixGL.dhall ]
-            [ "cudaPackages.cudatoolkit", "gcc10", "blender" ]
-      , command = [ "nixGL", "blender" ]
+          (./nix.dhall).useInstallables
+            [ "github:podenv/modularix/895e38a077190ae94c65aa2fa5b60733fa5c79f7#blender"
+            ]
+      , command = [ "blender" ]
       , capabilities = (../Podenv.dhall).Capabilities::{
         , dri = True
         , wayland = True
