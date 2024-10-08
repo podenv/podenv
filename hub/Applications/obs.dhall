@@ -10,5 +10,6 @@ in  Podenv.Application::{
       , dbus = True
       , video = True
       , pipewire = True
+      , pulseaudio = True
       }
     }
