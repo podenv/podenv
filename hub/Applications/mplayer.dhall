@@ -8,5 +8,6 @@ in  Podenv.Application::{
       , dri = True
       , pulseaudio = True
       , wayland = True
+      , hostfile = True
       }
     }

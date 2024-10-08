@@ -5,5 +5,6 @@
   , dri = True
   , x11 = True
   , pulseaudio = True
+  , hostfile = True
   }
 }
