@@ -36,6 +36,7 @@
 , nix = ./nix.dhall
 , nixify = ./nixify.dhall
 , obs = ./obs.dhall
+, ollama = ./ollama.dhall
 , openvpn = ./openvpn.dhall
 , polyglot = ./polyglot.dhall
 , pwsafe = ./pwsafe.dhall
