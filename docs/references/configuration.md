@@ -11,8 +11,8 @@ This includes the [Runtime](https://github.com/podenv/podenv/blob/main/hub/schem
 
 The podenv configuration can either be:
 
-- A single application: `podenv --config https://raw.githubusercontent.com/podenv/hub/main/Applications/audacity.dhall`.
-- A collection: `podenv --config https://github.com/podenv/hub/blob/main/Applications/package.dhall audacity`.
+- A single application: `podenv --config https://raw.githubusercontent.com/podenv/podenv/main/hub/Applications/audacity.dhall`.
+- A collection: `podenv --config https://github.com/podenv/podenv/blob/main/hub/Applications/package.dhall audacity`.
 
 ## Collection
 

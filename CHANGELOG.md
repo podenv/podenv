@@ -2,6 +2,9 @@
 
 ## next
 
+- added katrain and cgoban app
+- updated blender and obs app
+
 ## 0.5.0 (2024-05-11)
 
 - the `--ps` command can take a app name to return the pod id.

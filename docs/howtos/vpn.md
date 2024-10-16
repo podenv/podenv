@@ -1,7 +1,7 @@
 # Configure a VPN
 
 In this how-to guide we'll see how to use podenv to run the openvpn application
-from the [podenv/hub](https://github.com/podenv/podenv/tree/main/hub).
+from the [hub](https://github.com/podenv/podenv/tree/main/hub).
 
 ## Create an openvpn container
 
