@@ -2,6 +2,8 @@
 
 ## next
 
+## 0.6.0 (2024-10-16)
+
 - added katrain and cgoban app
 - updated blender and obs app
 
