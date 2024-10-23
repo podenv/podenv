@@ -39,15 +39,15 @@ $ podenv --list
 
 … that can be executed by their name instead of `image:`.
 
-Try running the application named `xeyes` to verify your installation is correct:
+Try running the application named `eglgears` to verify your installation is correct:
 
 ```bash
-$ podenv xeyes
-[googly eyes appear]
+$ podenv eglgears
+[spinning 3d gears appear]
 ```
 
-This should display the `xeyes` window. To do that, podenv built a container
-image as described by the `xeyes` application, then it used the podman command
+This should display a mesa demo window. To do that, podenv built a container
+image as described by the `eglgears` application, then it used the podman command
 to run the image by giving it access to your graphical desktop.
 
 Checkout the next tutorials to learn how to create a new application:
