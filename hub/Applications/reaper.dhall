@@ -2,7 +2,7 @@
 , description = Some "Complete digital audio production application"
 , runtime =
     (./nix.dhall).useInstallables
-      [ "github:podenv/modularix/c3077ce442d1d6ca9cfaeb110cfb22c69826440d#reaper"
+      [ "github:podenv/modularix/78ffb5608dec9a512a52b8c00bd4c95b7ed5e862#reaper"
       ]
 , capabilities = (../Podenv.dhall).Capabilities::{
   , dri = True
