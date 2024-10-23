@@ -7,6 +7,7 @@
 , cgoban = ./cgoban.dhall
 , chromium = ./chromium.dhall
 , debian = ./debian.dhall
+, eglgears = ./eglgears.dhall
 , electrum = ./electrum.dhall
 , fbrnch = ./fbrnch.dhall
 , fedora = ./fedora.dhall
