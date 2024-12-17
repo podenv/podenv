@@ -23,6 +23,7 @@ module Podenv.Env (
 
     -- * Lenses
     envHostXdgRunDir,
+    envHostXdgDesktop,
     envHostWaylandSocket,
     envHostDisplay,
     envHostSSHAgent,
@@ -55,6 +56,7 @@ data AppEnvState = Resolved | UnknownState
 
 data AppEnv (s :: AppEnvState) = AppEnv
     { _envHostXdgRunDir :: Maybe FilePath
+    , _envHostXdgDesktop :: Maybe String
     , _envHostWaylandSocket :: Maybe SocketName
     , _envHostDisplay :: String
     , _envHostSSHAgent :: Maybe FilePath
@@ -107,7 +109,8 @@ getRootfsHome _ (Just hostHome) "/" = pure $ Just hostHome
 getRootfsHome uid _ fp = do
     passwd <- readFileM (fp </> "etc/passwd")
     pure $
-        toString . Data.List.NonEmpty.head
+        toString
+            . Data.List.NonEmpty.head
             <$> Data.List.NonEmpty.nonEmpty (Data.Maybe.mapMaybe isUser $ Podenv.Prelude.lines passwd)
   where
     isUser l = case Data.Text.splitOn ":" l of
@@ -142,6 +145,7 @@ createEnv = do
     _envHostUid <- getRealUserID
     _envHostHomeDir <- lookupEnv "HOME"
     _envHostXdgRunDir <- lookupEnv "XDG_RUNTIME_DIR"
+    _envHostXdgDesktop <- lookupEnv "XDG_CURRENT_DESKTOP"
     _envHostWaylandSocket <- fmap SocketName <$> lookupEnv "WAYLAND_DISPLAY"
     _envHostDisplay <- fromMaybe ":0" <$> lookupEnv "DISPLAY"
     _envHostSSHAgent <- lookupEnv "SSH_AUTH_SOCK"
