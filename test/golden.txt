@@ -125,6 +125,7 @@ Display Raw command: podman run
   --security-opt label=disable
   --user 1000
   --userns keep-id
+  --ipc=host
   --hostname default
   --network none
   --workdir /home/fedora
@@ -156,6 +157,7 @@ Vnc Raw command: podman run
   --security-opt label=disable
   --user 1000
   --userns keep-id
+  --ipc=host
   --hostname vnc
   --network none
   --workdir /home/fedora
@@ -212,6 +214,7 @@ Raw command: podman run
   --security-opt label=disable
   --user 1000
   --userns keep-id
+  --ipc=host
   --hostname vnc-viewer
   --network container:sway.vnc
   --workdir /home/fedora
@@ -227,8 +230,8 @@ Raw command: podman run
 Raw command: bwrap
   --die-with-parent
   --unshare-pid
-  --unshare-ipc
   --unshare-uts
+  --unshare-ipc
   --unshare-net
   --ro-bind /usr /usr
   --ro-bind /lib /lib
@@ -289,8 +292,8 @@ Raw command: podman run
 Raw command: bwrap
   --die-with-parent
   --unshare-pid
-  --unshare-ipc
   --unshare-uts
+  --unshare-ipc
   --unshare-net
   --ro-bind /usr /usr
   --ro-bind /lib /lib
@@ -448,8 +451,8 @@ Raw command: podman run
 Raw command: bwrap
   --die-with-parent
   --unshare-pid
-  --unshare-ipc
   --unshare-uts
+  --unshare-ipc
   --unshare-net
   --ro-bind /srv /
   --proc /proc
