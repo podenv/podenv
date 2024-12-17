@@ -48,6 +48,7 @@ module Podenv.Context (
     ctxSyscaps,
     ctxInteractive,
     ctxNetwork,
+    ctxHostIPC,
     ctxRO,
     ctxPrivileged,
     ctxTerminal,
@@ -90,6 +91,7 @@ data Context = Context
     , _ctxSELinux :: Bool
     , _ctxAnyUid :: UserID
     -- ^ the unique uid for this container
+    , _ctxHostIPC :: Bool
     , _ctxCommand :: [Text]
     -- ^ container command
     , _ctxWorkdir :: Maybe FilePath
@@ -127,6 +129,7 @@ defaultContext _ctxRuntime =
         , _ctxMounts = mempty
         , _ctxDevices = mempty
         , _ctxSyscaps = mempty
+        , _ctxHostIPC = False
         , _ctxRO = True
         , _ctxWorkdir = Nothing
         , _ctxInteractive = False

@@ -461,9 +461,13 @@ bwrapRunArgs GlobalEnv{..} ctx fp = toString <$> args
         | ctx ^. ctxRO = "--ro-bind"
         | otherwise = "--bind"
     doBind p = toText <$> [bindMode, fp </> p, "/" </> p]
+    ipcNS
+        | ctx ^. ctxHostIPC = []
+        | otherwise = ["--unshare-ipc"]
     args =
         userArg
-            <> ["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts"]
+            <> ["--die-with-parent", "--unshare-pid", "--unshare-uts"]
+            <> ipcNS
             <> networkArg
             <> commonArgs ctx
             <> rootMounts
@@ -557,6 +561,10 @@ podmanRunArgs gl rmode ctx image = toString <$> args
       where
         mkLabel (k, v) = ["--label", k <> "=" <> v]
 
+    ipcNS
+        | ctx ^. ctxHostIPC = ["--ipc=host"]
+        | otherwise = []
+
     args =
         ["run"]
             <> podmanArgs ctx
@@ -566,6 +574,7 @@ podmanRunArgs gl rmode ctx image = toString <$> args
             <> cond (ctx ^. ctxRO) ["--read-only=true"]
             <> cond (not (ctx ^. ctxSELinux)) ["--security-opt", "label=disable"]
             <> userArg
+            <> ipcNS
             <> maybe [] (\n -> ["--hostname", n]) (ctx ^. ctxHostname)
             <> networkArg
             <> commonArgs ctx

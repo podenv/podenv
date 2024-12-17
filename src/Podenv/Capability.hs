@@ -301,7 +301,10 @@ setX11 :: AppEnvT (Ctx.Context -> Ctx.Context)
 setX11 = do
     display <- askL envHostDisplay
     pure $
-        Ctx.directMount "/tmp/.X11-unix" . Ctx.addEnv "DISPLAY" (toText display) . Ctx.addMount "/dev/shm" Ctx.tmpfs
+        (ctxHostIPC .~ True)
+            . Ctx.directMount "/tmp/.X11-unix"
+            . Ctx.addEnv "DISPLAY" (toText display)
+            . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
 setCwd :: AppEnvT (Ctx.Context -> Ctx.Context)
 setCwd = do

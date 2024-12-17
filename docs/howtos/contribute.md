@@ -26,6 +26,11 @@ Install in your PATH:
 $ cabal install exe:podenv --installdir=$HOME/.local/bin
 ```
 
+## Golden tests
+
+The tests may fail the first time when the golden output is changed.
+Commit the changes if they are expected, then the test will succeed.
+
 ## Run tests
 
 ```ShellSession
