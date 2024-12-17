@@ -407,17 +407,22 @@ addXdgRun fp = snd <$> addXdgRun' fp
 addXdgRun' :: FilePath -> AppEnvT (FilePath, Ctx.Context -> Ctx.Context)
 addXdgRun' fp = do
     hostXdg <- getXdgRuntimeDir
+    hostDesktop <- askL envHostXdgDesktop
     huid <- askL envHostUid
     let containerPath = runDir </> fp
         hostPath = hostXdg </> fp
         runBaseDir = "/run/user"
         runDir = runBaseDir <> "/" <> show huid
+        addDesktop = case hostDesktop of
+            Nothing -> id
+            Just d -> Ctx.addEnv "XDG_CURRENT_DESKTOP" (toText d)
     pure
         ( containerPath
         , Ctx.addEnv "XDG_RUNTIME_DIR" (toText runDir)
             -- Podman creates parent directory as root, ensure user can r/w xdgdir using tmpfs
             . Ctx.addMount runBaseDir Ctx.tmpfs
             . Ctx.addMount containerPath (Ctx.rwHostPath hostPath)
+            . addDesktop
         )
 
 -- | Helper for capabilities that are directly represented in the context
