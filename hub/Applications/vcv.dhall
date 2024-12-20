@@ -2,7 +2,7 @@
 , description = Some "The EuroRack simulator"
 , runtime =
     (./nix.dhall).useInstallables
-      [ "github:podenv/modularix/e079cd811ddafa9d931a2185829970ee12866a02#vcv" ]
+      [ "github:podenv/modularix/b0b6a962a27c46379008e29db47f18e67f63088c#vcv" ]
 , capabilities = (../Podenv.dhall).Capabilities::{
   , dri = True
   , x11 = True

@@ -10,7 +10,9 @@ in  Podenv.Application::{
     , command = [ "google-chrome" ]
     , capabilities = Podenv.Capabilities::{
       , network = True
+      , dri = True
       , wayland = True
+      , pulseaudio = True
       , -- | chrome somehow still needs x11
         x11 = True
       }
