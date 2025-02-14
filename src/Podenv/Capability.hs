@@ -36,12 +36,12 @@ prepare mode ar = do
     let ctx =
             defaultContext (app ^. appRuntime)
                 & (ctxNamespace .~ (ar ^. arMetadata . metaNamespace))
-                    . (ctxName .~ (Name . mappend nsPrefix <$> ar ^. arMetadata . metaName))
-                    . (ctxLabels .~ labels)
-                    . setNetwork
-                    . setHostname
-                    . addSysCaps
-                    . addEnvs
+                . (ctxName .~ (Name . mappend nsPrefix <$> ar ^. arMetadata . metaName))
+                . (ctxLabels .~ labels)
+                . setNetwork
+                . setHostname
+                . addSysCaps
+                . addEnvs
 
     setVolumes <- addVolumes (ar ^. arVolumes <> app ^. appVolumes)
 
@@ -218,15 +218,15 @@ setWayland = do
 setWayland' :: SocketName -> AppEnvT (Ctx.Context -> Ctx.Context)
 setWayland' (SocketName skt) = do
     shareSkt <- addXdgRun skt
-    pure $
-        Ctx.directMount "/etc/machine-id"
-            . shareSkt
-            . Ctx.addEnv "GDK_BACKEND" "wayland"
-            . Ctx.addEnv "QT_QPA_PLATFORM" "wayland"
-            . Ctx.addEnv "WAYLAND_DISPLAY" (toText skt)
-            . Ctx.addEnv "SDL_VIDEODRIVER" "wayland"
-            . Ctx.addEnv "XDG_SESSION_TYPE" "wayland"
-            . Ctx.addMount "/dev/shm" Ctx.tmpfs
+    pure
+        $ Ctx.directMount "/etc/machine-id"
+        . shareSkt
+        . Ctx.addEnv "GDK_BACKEND" "wayland"
+        . Ctx.addEnv "QT_QPA_PLATFORM" "wayland"
+        . Ctx.addEnv "WAYLAND_DISPLAY" (toText skt)
+        . Ctx.addEnv "SDL_VIDEODRIVER" "wayland"
+        . Ctx.addEnv "XDG_SESSION_TYPE" "wayland"
+        . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
 setPipewire :: AppEnvT (Ctx.Context -> Ctx.Context)
 setPipewire = do
@@ -238,10 +238,10 @@ setDbus :: AppEnvT (Ctx.Context -> Ctx.Context)
 setDbus = do
     let skt = "bus" -- TODO discover skt name
     (sktPath, shareSkt) <- addXdgRun' skt
-    pure $
-        Ctx.directMount "/etc/machine-id"
-            . Ctx.addEnv "DBUS_SESSION_BUS_ADDRESS" ("unix:path=" <> toText sktPath)
-            . shareSkt
+    pure
+        $ Ctx.directMount "/etc/machine-id"
+        . Ctx.addEnv "DBUS_SESSION_BUS_ADDRESS" ("unix:path=" <> toText sktPath)
+        . shareSkt
 
 setVideo :: AppEnvT (Ctx.Context -> Ctx.Context)
 setVideo = do
@@ -254,8 +254,8 @@ setDri :: AppEnvT (Ctx.Context -> Ctx.Context)
 setDri = do
     let base = Ctx.addDevice "/dev/dri"
     nvidia <- isNVIDIAEnabled
-    pure $
-        if nvidia
+    pure
+        $ if nvidia
             then foldr ((.) . Ctx.addDevice) base nvidiaDevs
             else base
   where
@@ -266,10 +266,10 @@ setPulseaudio = do
     shareSkt <- addXdgRun "pulse"
     huid <- askL envHostUid
     let pulseServer = "/run/user/" <> show huid <> "/pulse/native"
-    pure $
-        Ctx.directMount "/etc/machine-id"
-            . shareSkt
-            . Ctx.addEnv "PULSE_SERVER" pulseServer
+    pure
+        $ Ctx.directMount "/etc/machine-id"
+        . shareSkt
+        . Ctx.addEnv "PULSE_SERVER" pulseServer
 
 getHomes :: Text -> AppEnvT (FilePath, FilePath)
 getHomes help = do
@@ -300,11 +300,11 @@ setGpg = do
 setX11 :: AppEnvT (Ctx.Context -> Ctx.Context)
 setX11 = do
     display <- askL envHostDisplay
-    pure $
-        (ctxHostIPC .~ True)
-            . Ctx.directMount "/tmp/.X11-unix"
-            . Ctx.addEnv "DISPLAY" (toText display)
-            . Ctx.addMount "/dev/shm" Ctx.tmpfs
+    pure
+        $ (ctxHostIPC .~ True)
+        . Ctx.directMount "/tmp/.X11-unix"
+        . Ctx.addEnv "DISPLAY" (toText display)
+        . Ctx.addMount "/dev/shm" Ctx.tmpfs
 
 setCwd :: AppEnvT (Ctx.Context -> Ctx.Context)
 setCwd = do
