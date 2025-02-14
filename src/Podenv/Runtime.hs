@@ -112,7 +112,7 @@ data ContainerBuildRuntime = CBR
     , cbrAge :: ContextEnvT (Maybe Second)
     }
 
-createLocalhostRunEnv :: AppEnv 'UnknownState -> RunEnv
+createLocalhostRunEnv :: AppEnv 'UnknownHome -> RunEnv
 createLocalhostRunEnv appEnv = RunEnv{..}
   where
     appToContext amode ar = do
@@ -267,7 +267,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             setResolv <- ensureResolvConf "/"
             pure $ ctx & setResolv . (ctxName ?~ builderName)
 
-createHeadlessRunEnv :: Config -> AppEnv 'UnknownState -> RunEnv
+createHeadlessRunEnv :: Config -> AppEnv 'UnknownHome -> RunEnv
 createHeadlessRunEnv cfg appEnv =
     headlessRun
         { showCmd = headlessShow
