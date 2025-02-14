@@ -92,7 +92,7 @@
       };
       packages."x86_64-linux".static = static-exe;
       packages."x86_64-linux".release = release;
-      devShells."x86_64-linux".hoogle = pkgs.hspkgs.shellFor {
+      devShells."x86_64-linux".hoogle = pkgs.haskellPackages.shellFor {
         packages = p: [ pkg ];
         buildInputs = [
           (pkgs.writeScriptBin "run" ''
@@ -103,13 +103,13 @@
         withHoogle = true;
       };
 
-      devShells."x86_64-linux".ci = pkgs.hspkgs.shellFor {
+      devShells."x86_64-linux".ci = pkgs.haskellPackages.shellFor {
         packages = p: [ pkg ];
         buildInputs = [
           pkgs.cabal-install
           pkgs.hlint
-          pkgs.fourmolu
-          pkgs.hspkgs.doctest
+          pkgs.haskellPackages.fourmolu
+          pkgs.haskellPackages.doctest
           weeder_wrapper
           (pkgs.writeScriptBin "run" ''
             set -e
