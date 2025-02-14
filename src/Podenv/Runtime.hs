@@ -10,7 +10,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 -- | This module contains the podman/bubblewrap context wrapper
@@ -221,15 +220,15 @@ createLocalhostRunEnv appEnv = RunEnv{..}
           where
             imageNameToFP = Text.replace "/" "_" . Text.replace ":" "-"
 
-    prepareNix :: Flakes -> ContextEnvT ()
-    prepareNix flakes = do
-        withCacheFile fileName (show $ nixArgs flakes) $ do
+    prepareNix :: Text -> ContextEnvT ()
+    prepareNix installable = do
+        withCacheFile fileName installable $ do
             ensureNixInstalled
             debug "Building flakes"
             ctx <- liftIO buildCtx
             execute Foreground ctx
       where
-        flakeName = Text.take 9 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ show @Text flakes
+        flakeName = Text.take 9 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ installable
         fileName = toString $ "nix_" <> flakeName
 
         -- The location where we expect to find the `nix` command
@@ -258,9 +257,8 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         buildCtx = do
             let args =
                     [toText nixCommandPath, "--verbose"]
-                        <> nixFlags
                         <> ["build", "--no-link"]
-                        <> nixArgs flakes
+                        <> nixArgs installable
             ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
                 setNix <- Podenv.Capability.setNix
                 setNix <$> Podenv.Capability.prepare (Regular args) ar

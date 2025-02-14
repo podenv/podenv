@@ -6,7 +6,6 @@
 , ContainerBuild = ./ContainerBuild.dhall
 , Image = (./Runtime.dhall).Image
 , Nix = (./Runtime.dhall).Nix
-, Flakes = ./Flakes.dhall
 , Container = (./Runtime.dhall).Container
 , Rootfs = (./Runtime.dhall).Rootfs
 , Containerfile =

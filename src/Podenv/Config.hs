@@ -78,7 +78,7 @@ defaultSelector s
     imageApp x = mkApp (Image $ Text.drop (Text.length "image:") x)
     nixApp x = nixApp' (Text.drop (Text.length "nix:") x)
     rootfsApp x = mkApp (Rootfs $ Text.drop (Text.length "rootfs:") x)
-    nixApp' x = mkApp (Nix $ Flakes Nothing [x] Nothing)
+    nixApp' x = mkApp (Nix x)
     mkApp r = Just (s, defaultApp r)
 
 -- | Inject the package.dhall into the environ so that config can use `env:PODENV`
@@ -312,16 +312,10 @@ appRecordDecoder = ApplicationRecord <$> Dhall.Decoder extract expected
     runtimeFromRecord :: DM.Map Text (Dhall.RecordField s Void) -> Dhall.Expr Void Void
     runtimeFromRecord kv = case recordItems kv of
         [("image", x)] -> mkRuntime "Image" x
-        [("nix", x)] -> mkRuntime "Nix" (mkNixRecord x)
+        [("nix", x)] -> mkRuntime "Nix" x
         [("containerfile", x)] -> mkRuntime "Container" (pref containerBuildDefault (mkRecord [("containerfile", x)]))
         _ -> mkRuntime "Container" (pref containerBuildDefault (Dhall.denote (Dhall.RecordLit kv)))
       where
-        mkNixRecord v =
-            mkRecord
-                [ ("installables", Dhall.ListLit Nothing $ fromList [v])
-                , ("nixpkgs", Dhall.App Dhall.None Dhall.Text)
-                , ("cache", Dhall.App Dhall.None Dhall.Text)
-                ]
         mkRuntime field =
             Dhall.App (Dhall.Field runtimeType (Dhall.FieldSelection Nothing field Nothing))
 

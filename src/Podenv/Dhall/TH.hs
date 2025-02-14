@@ -47,7 +47,6 @@ Dhall.TH.makeHaskellTypes
           , main "Application"
           , main "ApplicationResource"
           , main "ContainerBuild"
-          , main "Flakes"
           , Dhall.TH.SingleConstructor "LabelKV" "LabelKV" "{mapKey : Text, mapValue : Text}"
           , main "Metadata"
           , Dhall.TH.MultipleConstructors "Runtime" "./hub/schemas/Runtime.dhall"
@@ -72,10 +71,6 @@ deriving instance Eq Runtime
 deriving instance Show ContainerBuild
 
 deriving instance Eq ContainerBuild
-
-deriving instance Show Flakes
-
-deriving instance Eq Flakes
 
 deriving instance Show Capabilities
 
