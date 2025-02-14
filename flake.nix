@@ -4,14 +4,13 @@
   nixConfig.bash-prompt = "[nix(podenv)] ";
 
   inputs = {
-    hspkgs.url =
-      "github:podenv/hspkgs/90eadd304c6375f926a0970f87b470e765e7f176";
-      # "path:///srv/github.com/podenv/hspkgs";
+    nixpkgs.url =
+      "github:NixOS/nixpkgs/d3780c92e64472e8f9aa54f7bbb0dd4483b98303";
   };
 
-  outputs = { self, hspkgs }:
+  outputs = { self, nixpkgs }:
     let
-      pkgs = hspkgs.pkgs;
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
       rev = if self ? rev then
         self.rev
       else
@@ -35,9 +34,42 @@
           PODENV_COMMIT = commit;
         });
 
-      basePkg = podenvPkg pkgs.hspkgs;
+      basePkg = podenvPkg pkgs.haskellPackages;
+
+      # A package set for building haskell package with musl
+      # As mentioned in https://github.com/cdepillabout/example-static-haskell-nix/blob/master/nix/overlay.nix#L11
+      # This needs to be ghc-9.4 or earlier
+      staticSet = pkgs.pkgsMusl.haskell.packages.ghc927.extend
+        (hpFinal: hpPrev: {
+          # quickcheck internal test takes forever
+          QuickCheck = pkgs.haskell.lib.dontCheck hpPrev.QuickCheck;
+        });
+
+      # Make a static executable, borrowed from dhall-haskell
+      statify = drv:
+        pkgs.haskell.lib.appendConfigureFlags
+        (pkgs.haskell.lib.justStaticExecutables
+          (pkgs.haskell.lib.dontCheck drv)) [
+            "--enable-executable-static"
+            "--extra-lib-dirs=${
+              pkgs.pkgsMusl.ncurses.override { enableStatic = true; }
+            }/lib"
+            "--extra-lib-dirs=${
+              pkgs.pkgsMusl.gmp6.override { withStatic = true; }
+            }/lib"
+            "--extra-lib-dirs=${pkgs.pkgsMusl.zlib.static}/lib"
+            "--extra-lib-dirs=${
+              pkgs.pkgsMusl.libsodium.overrideAttrs
+              (old: { dontDisableStatic = true; })
+            }/lib"
+            "--extra-lib-dirs=${
+              pkgs.pkgsMusl.libffi.overrideAttrs
+              (old: { dontDisableStatic = true; })
+            }/lib"
+          ];
+
       exe = pkgs.haskell.lib.justStaticExecutables (basePkg rev);
-      static-exe = hspkgs.mk-static-haskell (podenvPkg pkgs.hspkgsMusl rev);
+      static-exe = statify (podenvPkg staticSet rev);
       pkg = basePkg "";
 
       release = pkgs.runCommand "podenv-release" { } ''
@@ -114,7 +146,7 @@
           '')
         ];
       };
-      devShell."x86_64-linux" = pkgs.hspkgs.shellFor {
+      devShell."x86_64-linux" = pkgs.haskellPackages.shellFor {
         packages = p: [ pkg ];
         buildInputs = [
           (pkgs.writeScriptBin "ghcid" ''
@@ -126,7 +158,8 @@
             exec ${pkgs.ghcid}/bin/ghcid --command='cabal v2-repl test:tests' -W --test Main.main
           '')
           pkgs.cabal-install
-          pkgs.hlint
+          pkgs.haskellPackages.hlint
+          pkgs.haskellPackages.fourmolu
           pkgs.haskell-language-server
           weeder_wrapper
         ];
