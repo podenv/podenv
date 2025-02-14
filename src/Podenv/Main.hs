@@ -222,7 +222,14 @@ cliConfigLoad :: FilePath -> AppEnv 'UnknownHome -> Config -> CLI -> IO (Applica
 cliConfigLoad volumesDir env config cli@CLI{..} = do
     (extraArgs, baseApp) <-
         case selector >>= Podenv.Config.defaultSelector of
-            Just (sel, app) -> pure (cliExtraArgs, defaultAppRes app & setSelector sel)
+            Just (sel, app) -> do
+                let fixHome =
+                        case app ^. appRuntime of
+                            Nix f | "~/" `Text.isPrefixOf` f -> case env ^. envHostHomeDir of
+                                Just homeDir -> appRuntime .~ Nix (toText (toString homeDir </> toString (Text.drop 2 f)))
+                                Nothing -> id
+                            _ -> id
+                pure (cliExtraArgs, defaultAppRes (fixHome app) & setSelector sel)
             Nothing -> do
                 (extraArgs, app) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
                 pure (extraArgs, app)
