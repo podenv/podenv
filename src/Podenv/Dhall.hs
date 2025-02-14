@@ -58,7 +58,6 @@ module Podenv.Dhall (
     -- * Runtime
     ContainerBuild,
     Runtime (..),
-    Flakes (..),
     cbImage_home,
     cbImage_name,
     cbImage_volumes,

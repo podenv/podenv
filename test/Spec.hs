@@ -132,22 +132,6 @@ spec (config, goldenConfig) = describe "unit tests" $ do
             (_, baseApp) <- mayFail $ Podenv.Config.select config ["nixify", "firefox", "about:blank"]
             let be = Podenv.Runtime.createLocalhostRunEnv testEnv
             Text.take 34 (Podenv.Runtime.showBuildInfo be (baseApp ^. arApplication . appRuntime)) `shouldBe` "# Containerfile localhost/3c922bca"
-        it "override nixpkgs when necessary" $ do
-            let mkApp installables' pin =
-                    Podenv.Config.defaultApp (Podenv.Dhall.Nix (Podenv.Dhall.Flakes Nothing installables' pin))
-                        & (appName .~ "test")
-
-                checkCommand test app expected = do
-                    ctx <- runPrepare (Regular []) testEnv (defaultAppRes app)
-                    (ctx ^. ctxCommand) `test` expected
-                commandShouldContain = checkCommand shouldContain
-                commandShouldNotContain = checkCommand shouldNotContain
-
-            mkApp ["nixpkgs#hello"] (Just "nixpkgs/42") `commandShouldContain` ["--override-input", "nixpkgs"]
-
-            mkApp ["nixpkgs/42#hello"] (Just "nixpkgs/42") `commandShouldNotContain` ["--override-input", "nixpkgs"]
-
-            mkApp ["nixpkgs/42#hello", "nixGL"] (Just "nixpkgs/42") `commandShouldContain` ["--override-input", "nixpkgs"]
 
     describe "cli parser" $ do
         it "pass command args" $ do
@@ -172,17 +156,19 @@ spec (config, goldenConfig) = describe "unit tests" $ do
                 "env // { description = Some \"ab\"}"
 
     describe "nix test" $ do
-        it "nix run without args" $ nixTest "{ runtime.nix = \"test\"}" [] ["run", "test"]
+        let mkArg cmd x = [cmd, "--impure", "--extra-experimental-features", "nix-command flakes", x]
+        it "nix run without args" $ nixTest "{ runtime.nix = \"test\"}" [] $ mkArg "run" "test"
         it "nix run with args"
             $ nixTest
                 "{env, test = { runtime.nix = \"test\"}}"
                 ["test", "--help"]
-                ["run", "test", "--", "--help"]
+            $ mkArg "run" "test"
+            <> ["--", "--help"]
         it "nix run with shell"
             $ nixTest
                 "{env, test = { runtime.nix = \"test\", command = [\"cmd\"]}}"
-                ["test", "--help"]
-                ["shell", "test", "--command", "cmd", "--help"]
+                ["--shell", "test"]
+            $ mkArg "shell" "test"
 
     describe "podman ctx" $ do
         let defRun xs = ["run", "--rm"] <> xs <> ["--label", "podenv.selector=unknown", defImg]
@@ -263,7 +249,7 @@ spec (config, goldenConfig) = describe "unit tests" $ do
 
     nixTest code args expectedCommand = do
         ctx <- getApp code args
-        drop 3 (ctx ^. ctxCommand) `shouldBe` expectedCommand
+        drop 1 (ctx ^. ctxCommand) `shouldBe` expectedCommand
 
     addCap code capCode =
         "( " <> code <> " // { capabilities = (" <> code <> ").capabilities // {" <> capCode <> "}})"

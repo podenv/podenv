@@ -77,20 +77,20 @@ prepare mode ar = do
             | otherwise = id
 
     let mkCommand extraArgs = case app ^. appRuntime of
-            Nix flakes ->
-                [toText nixCommandPath] <> nixFlags <> case app ^. appCommand of
-                    [] ->
-                        ["run"] <> nixArgs flakes <> case extraArgs of
-                            [] -> []
-                            xs -> ["--"] <> xs
-                    appArgs -> ["shell"] <> nixArgs flakes <> ["--command"] <> appArgs <> extraArgs
+            Nix installable ->
+                [toText nixCommandPath, "run"] <> nixArgs installable <> case (app ^. appCommand) <> extraArgs of
+                    [] -> []
+                    xs -> "--" : xs
             _ -> (app ^. appCommand) <> extraArgs
 
     setCommand <- case mode of
         Regular extraArgs
             | app ^. appCapabilities . capHostfile -> resolveFileArgs (mkCommand extraArgs)
             | otherwise -> pure $ ctxCommand .~ mkCommand extraArgs
-        Shell -> pure $ ctxCommand .~ ["/bin/sh"]
+        Shell ->
+            pure $ ctxCommand .~ case app ^. appRuntime of
+                Nix installable -> [toText nixCommandPath, "shell"] <> nixArgs installable
+                _ -> ["/bin/sh"]
 
     pure (disableSelinux . setHome . setCommand . shareEgl . setCaps . setVolumes . setNixEnv $ ctx)
   where
