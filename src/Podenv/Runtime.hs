@@ -260,7 +260,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                         <> ["build", "--no-link"]
                         <> nixArgs installable
             ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
-                setNix <- Podenv.Capability.setNix
+                setNix <- Podenv.Capability.setNix installable
                 setNix <$> Podenv.Capability.prepare (Regular args) ar
             setResolv <- ensureResolvConf "/"
             pure $ ctx & setResolv . (ctxName ?~ builderName)
