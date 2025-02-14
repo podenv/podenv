@@ -218,7 +218,7 @@ cliLoad cli = do
     cliConfigLoad volumesDir env config cli
 
 -- | Load the config
-cliConfigLoad :: FilePath -> AppEnv 'UnknownState -> Config -> CLI -> IO (ApplicationResource, AppMode, GlobalEnv, RunEnv)
+cliConfigLoad :: FilePath -> AppEnv 'UnknownHome -> Config -> CLI -> IO (ApplicationResource, AppMode, GlobalEnv, RunEnv)
 cliConfigLoad volumesDir env config cli@CLI{..} = do
     (extraArgs, baseApp) <-
         case selector >>= Podenv.Config.defaultSelector of

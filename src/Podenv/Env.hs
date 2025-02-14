@@ -13,7 +13,7 @@
 -- | The platform environment
 module Podenv.Env (
     SocketName (..),
-    AppEnvState (UnknownState),
+    AppEnvState (UnknownHome),
     AppEnvT,
     runAppEnv,
     isNVIDIAEnabled,
@@ -49,10 +49,10 @@ newtype SocketName = SocketName FilePath
 
 {- | A data kind to keep track of the application environment such as its user uid and home directory.
   These values depends on the runtime, and it can be costly to resolve them.
-  Thus we only query the information once before switching the state from Unknown to Resolved.
-  See the 'resolveAppEnv' function below
+  Thus we only query the information once before switching the state from Unknown to KnownHome.
+  See the 'resolveAppHome' function below
 -}
-data AppEnvState = Resolved | UnknownState
+data AppEnvState = UnknownHome | KnownHome
 
 data AppEnv (s :: AppEnvState) = AppEnv
     { _envHostXdgRunDir :: Maybe FilePath
@@ -73,8 +73,8 @@ data AppEnv (s :: AppEnvState) = AppEnv
 
 $(makeLenses ''AppEnv)
 
-resolveAppEnv :: AppEnv 'UnknownState -> Application -> IO (AppEnv 'Resolved)
-resolveAppEnv env app = do
+resolveAppHome :: AppEnv 'UnknownHome -> Application -> IO (AppEnv 'KnownHome)
+resolveAppHome env app = do
     appHomeDir <- resolveHomeDir
     pure $ env & envAppHomeDir .~ appHomeDir
   where
@@ -83,9 +83,9 @@ resolveAppEnv env app = do
         | otherwise = (env ^. envGetAppHomeDir) app
 
 -- | This newtype hide the inner IO so that only the ones defined below are available.
-newtype AppEnvT a = AppEnvT (ReaderT (AppEnv 'Resolved) IO a)
+newtype AppEnvT a = AppEnvT (ReaderT (AppEnv 'KnownHome) IO a)
     deriving newtype (Functor, Applicative, Monad)
-    deriving newtype (MonadReader (AppEnv 'Resolved))
+    deriving newtype (MonadReader (AppEnv 'KnownHome))
 
 isNVIDIAEnabled :: AppEnvT Bool
 isNVIDIAEnabled = AppEnvT $ lift =<< askL envIsNVIDIAEnabled
@@ -97,9 +97,9 @@ getCertLocation :: AppEnvT (Maybe FilePath)
 getCertLocation = AppEnvT $ lift =<< askL envGetCertLocation
 
 -- | 'runAppEnv' is the only available runner to perform a 'AppEnvT' action.
-runAppEnv :: AppEnv 'UnknownState -> ApplicationResource -> (ApplicationResource -> AppEnvT a) -> IO a
+runAppEnv :: AppEnv 'UnknownHome -> ApplicationResource -> (ApplicationResource -> AppEnvT a) -> IO a
 runAppEnv env ar action = do
-    appEnv <- resolveAppEnv env (ar ^. arApplication)
+    appEnv <- resolveAppHome env (ar ^. arApplication)
     let AppEnvT r = action ar
     runReaderT r appEnv
 
@@ -140,7 +140,7 @@ doGetCertLocation = runMaybeT $ Control.Monad.msum $ [checkEnv] <> (checkPath <$
         , "/etc/ssl/certs/ca-bundle.crt"
         ]
 
-createEnv :: IO (AppEnv 'UnknownState)
+createEnv :: IO (AppEnv 'UnknownHome)
 createEnv = do
     _envHostUid <- getRealUserID
     _envHostHomeDir <- lookupEnv "HOME"
