@@ -81,7 +81,7 @@
 
       weeder_wrapper = pkgs.writeScriptBin "weeder" ''
         #!/bin/sh
-        exec ${pkgs.weeder}/bin/weeder --require-hs-files --config ./.weeder.dhall
+        exec ${pkgs.haskellPackages.weeder}/bin/weeder --require-hs-files --config ./.weeder.toml
       '';
 
     in {
