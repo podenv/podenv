@@ -24,6 +24,7 @@ module Podenv.Env (
     -- * Lenses
     envHostXdgRunDir,
     envHostXdgDesktop,
+    envHostXauth,
     envHostWaylandSocket,
     envHostDisplay,
     envHostSSHAgent,
@@ -57,6 +58,7 @@ data AppEnvState = UnknownHome | KnownHome
 data AppEnv (s :: AppEnvState) = AppEnv
     { _envHostXdgRunDir :: Maybe FilePath
     , _envHostXdgDesktop :: Maybe String
+    , _envHostXauth :: Maybe FilePath
     , _envHostWaylandSocket :: Maybe SocketName
     , _envHostDisplay :: String
     , _envHostSSHAgent :: Maybe FilePath
@@ -146,6 +148,7 @@ createEnv = do
     _envHostHomeDir <- lookupEnv "HOME"
     _envHostXdgRunDir <- lookupEnv "XDG_RUNTIME_DIR"
     _envHostXdgDesktop <- lookupEnv "XDG_CURRENT_DESKTOP"
+    _envHostXauth <- lookupEnv "XAUTHORITY"
     _envHostWaylandSocket <- fmap SocketName <$> lookupEnv "WAYLAND_DISPLAY"
     _envHostDisplay <- fromMaybe ":0" <$> lookupEnv "DISPLAY"
     _envHostSSHAgent <- lookupEnv "SSH_AUTH_SOCK"

@@ -225,6 +225,7 @@ spec (config, goldenConfig) = describe "unit tests" $ do
         AppEnv
             { _envHostXdgRunDir = Just "/run/user/1000"
             , _envHostXdgDesktop = Nothing
+            , _envHostXauth = Nothing
             , _envHostWaylandSocket = Just (SocketName "wayland-0")
             , _envHostHomeDir = Just "/home/user"
             , _envHostCwd = "/usr/src/podenv"

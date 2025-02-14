@@ -300,11 +300,16 @@ setGpg = do
 setX11 :: AppEnvT (Ctx.Context -> Ctx.Context)
 setX11 = do
     display <- askL envHostDisplay
+    xauth <- askL envHostXauth
+    let addXauth = case xauth of
+            Nothing -> id
+            Just fp -> Ctx.directMount fp . Ctx.addEnv "XAUTHORITY" (toText fp)
     pure
         $ (ctxHostIPC .~ True)
         . Ctx.directMount "/tmp/.X11-unix"
         . Ctx.addEnv "DISPLAY" (toText display)
         . Ctx.addMount "/dev/shm" Ctx.tmpfs
+        . addXauth
 
 setCwd :: AppEnvT (Ctx.Context -> Ctx.Context)
 setCwd = do
