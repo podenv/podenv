@@ -69,7 +69,7 @@ prepare mode ar = do
         pure $ setHome . ensureWorkdir . ensureHome . setRunAs
 
     setNixEnv <- case app ^. appRuntime of
-        Nix _ -> setNix
+        Nix installable -> setNix installable
         _ -> pure id
 
     let shareEgl
@@ -167,18 +167,35 @@ data Cap = Cap
     -- ^ How the capability change the context:
     }
 
-setNix :: AppEnvT (Ctx.Context -> Ctx.Context)
-setNix = do
+data FlakePath = FlakeRemote | FlakeAbs FilePath | FlakeRel FilePath FilePath
+
+setNix :: Text -> AppEnvT (Ctx.Context -> Ctx.Context)
+setNix installable = do
     certs <- toText . fromMaybe (error "Can't find ca-bundle") <$> getCertLocation
     setNixVolumes <- addVolumes ["nix-store:/nix", "nix-cache:~/.cache/nix", "nix-config:~/.config/nix"]
+    setInstallEnv <-
+        getLocalPath >>= \case
+            FlakeAbs flakePath -> pure $ Ctx.directMount flakePath
+            FlakeRel cwd flakePath -> pure $ (ctxWorkdir ?~ cwd) . Ctx.directMount flakePath
+            FlakeRemote -> pure id
     let setEnv =
             Ctx.addEnv "NIX_SSL_CERT_FILE" certs
                 . Ctx.addEnv "TERM" "xterm-256color"
                 . Ctx.addEnv "LC_ALL" "C.UTF-8"
                 . Ctx.addEnv "NIXPKGS_ALLOW_UNFREE" "1"
                 . Ctx.addEnv "PATH" "/nix/var/nix/profiles/nix-install/bin:/bin"
+                . setInstallEnv
 
     pure $ setEnv . setNixVolumes
+  where
+    fp = Text.takeWhile (/= '#') installable
+    getLocalPath :: AppEnvT FlakePath
+    getLocalPath
+        | "/" `Text.isPrefixOf` fp = pure $ FlakeAbs $ toString fp
+        | "." `Text.isPrefixOf` fp = do
+            localDir <- getCWD
+            pure $ FlakeRel localDir $ localDir </> toString fp
+        | otherwise = pure FlakeRemote
 
 -- | The main list of capabilities
 capsAll, capsToggle :: [Cap]

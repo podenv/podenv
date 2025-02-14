@@ -19,6 +19,7 @@ module Podenv.Env (
     isNVIDIAEnabled,
     getVideoDevices,
     getCertLocation,
+    getCWD,
     createEnv,
 
     -- * Lenses
@@ -88,6 +89,9 @@ resolveAppHome env app = do
 newtype AppEnvT a = AppEnvT (ReaderT (AppEnv 'KnownHome) IO a)
     deriving newtype (Functor, Applicative, Monad)
     deriving newtype (MonadReader (AppEnv 'KnownHome))
+
+getCWD :: AppEnvT FilePath
+getCWD = AppEnvT $ lift getCurrentDirectory
 
 isNVIDIAEnabled :: AppEnvT Bool
 isNVIDIAEnabled = AppEnvT $ lift =<< askL envIsNVIDIAEnabled
