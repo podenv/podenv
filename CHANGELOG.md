@@ -2,6 +2,9 @@
 
 ## next
 
+- added XDG_CURRENT_DESKTOP environment
+- added XAUTHORITY environment
+
 ## 0.6.0 (2024-10-16)
 
 - added katrain and cgoban app
