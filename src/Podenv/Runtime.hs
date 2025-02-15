@@ -274,24 +274,31 @@ createLocalhostRunEnv appEnv = RunEnv{..}
 
         -- Resolve the flake output path according to the 'flake run' documentation
         discoverFlake :: Text -> ContextEnvT Text
-        discoverFlake name = do
+        discoverFlake name
+            | not isNixpkgs = do
+                -- Try "apps.<system>.<name>"
+                eApp <- tryRun $ evalApp $ mkPath "#apps."
+                case eApp of
+                    Left (P.ExitCodeException{}) -> do
+                        -- Try "packages.<system>.<name>"
+                        debug $ name <> " is not an app, trying as a package"
+                        ePkg <- tryRun $ evalPackage $ mkPath "#packages."
+                        case ePkg of
+                            Left (P.ExitCodeException{}) -> do
+                                -- Try "legacyPackages.<system>.<name>"
+                                debug $ name <> " is not a package, trying as legacyPackages"
+                                evalLegacyPackage
+                            Right fp -> pure fp
+                    Right fp -> pure fp
+            | -- try legacyPackages directly for nixpkgs
+              otherwise =
+                evalLegacyPackage
+          where
+            isNixpkgs = "nixpkgs" `Text.isPrefixOf` installable || "github:nixos/nixpkgs" `Text.isPrefixOf` Text.toLower installable
+            evalLegacyPackage = evalPackage $ mkPath "#legacyPackages."
             -- TODO: support aarch
-            let system = "x86_64-linux"
-            let mkPath kind = mconcat [baseFlake, kind, system, ".", name]
-            -- Try "apps.<system>.<name>"
-            eApp <- tryRun $ evalApp $ mkPath "#apps."
-            case eApp of
-                Left (P.ExitCodeException{}) -> do
-                    -- Try "packages.<system>.<name>"
-                    debug $ name <> " is not an app, trying as a package"
-                    ePkg <- tryRun $ evalPackage $ mkPath "#packages."
-                    case ePkg of
-                        Left (P.ExitCodeException{}) -> do
-                            -- Try "legacyPackages.<system>.<name>"
-                            debug $ name <> " is not a package, trying as legacyPackages"
-                            evalPackage $ mkPath "#legacyPackages."
-                        Right fp -> pure fp
-                Right fp -> pure fp
+            system = "x86_64-linux"
+            mkPath kind = mconcat [baseFlake, kind, system, ".", name]
 
         -- Get the location of the app program attribute
         evalApp :: Text -> ContextEnvT Text
