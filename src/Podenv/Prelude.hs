@@ -14,6 +14,7 @@ module Podenv.Prelude (
 
     -- * io
     readFileM,
+    deleteFileM,
     hPutStrLn,
 
     -- * base env
@@ -102,6 +103,11 @@ readFileM fp' = do
     if exist
         then liftIO $ Data.Text.IO.readFile fp'
         else pure ""
+
+deleteFileM :: FilePath -> IO ()
+deleteFileM fp' = do
+    exist <- liftIO $ doesFileExist fp'
+    when exist $ removeFile fp'
 
 doesSymlinkExist :: FilePath -> IO Bool
 doesSymlinkExist fp =

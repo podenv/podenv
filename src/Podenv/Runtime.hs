@@ -71,18 +71,20 @@ timeDiff now old = Second (truncate pico)
 data RunEnv = RunEnv
     { showBuildInfo :: Runtime -> Text
     , showCmd :: ExecMode -> Context -> ContextEnvT Text
-    , buildRuntime :: Runtime -> ContextEnvT ()
+    , buildRuntime :: Runtime -> ContextEnvT (Maybe Text)
+    -- ^ Prepare the runtime, and maybe return the path to the app
     , updateRuntime :: Runtime -> ContextEnvT ()
     , getRuntimeAge :: Runtime -> ContextEnvT (Maybe Second)
     , appToContext :: AppMode -> ApplicationResource -> IO Context
-    , execute :: ExecMode -> Context -> ContextEnvT ()
+    , execute :: ExecMode -> Context -> ContextEnvT (Maybe Text)
+    -- ^ Execute the runtime, and return the command output when ExecMode is Read
     }
 
 data RuntimeBackend
     = Podman ImageName
     | Bubblewrap FilePath
 
-data ExecMode = Foreground | Background deriving (Eq, Show)
+data ExecMode = Foreground | Background | Read deriving (Eq, Show)
 
 ensureResolvConf :: FilePath -> IO (Context -> Context)
 ensureResolvConf fp
@@ -142,9 +144,9 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         Nix expr -> "nix:" <> show expr
 
     buildRuntime = \case
-        Container cb -> cbrBuild $ manageContainer cb
+        Container cb -> Nothing <$ cbrBuild (manageContainer cb)
         Nix flakes -> prepareNix flakes
-        _ -> pure ()
+        _ -> pure Nothing
 
     updateRuntime = \case
         Image iname -> error $ "todo: podman pull " <> show iname
@@ -152,20 +154,36 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             -- ensure the image exist
             cbrBuild $ manageContainer cb
             cbrUpdate $ manageContainer cb
-        Nix _expr -> error "Nix update is not implemented"
+        Nix expr -> do
+            let fileName = nixFileName expr
+            debug $ "Deleting cached result: " <> fileName
+            deleteCachedResult $ toString fileName
         Rootfs _ -> pure ()
 
-    execute :: ExecMode -> Context -> ContextEnvT ()
+    execute :: ExecMode -> Context -> ContextEnvT (Maybe Text)
     execute em ctx = do
         re <- ask
         traverse_ (liftIO . ensureHostDirectory (volumesDir re)) (Map.elems $ ctx ^. ctxMounts)
         -- Always ensure the runtime is built before running it
-        buildRuntime (ctx ^. ctxRuntime)
+        buildOutput <- buildRuntime $ ctx ^. ctxRuntime
+        -- Replace the nix run command with a cached program path output
+        let swapNixRun path = \case
+                ("/nix/var/nix/profiles/nix-install/bin/nix" : "run" : rest) ->
+                    -- remove everything until '--'
+                    path : (drop 1 $ dropWhile (/= "--") rest)
+                xs -> xs
+        ctx' <- case buildOutput of
+            Nothing -> pure ctx
+            Just path -> do
+                debug $ "Using cached path: " <> path
+                pure $ ctx & ctxCommand .~ (swapNixRun path $ ctx ^. ctxCommand)
+
         case getRuntimeBackend (ctx ^. ctxRuntime) of
-            Podman image -> executePodman em ctx image
+            Podman image -> Nothing <$ executePodman em ctx' image
             Bubblewrap fp -> case em of
-                Foreground -> executeBubblewrap ctx fp
+                Foreground -> Nothing <$ executeBubblewrap ctx' fp
                 Background -> error "NotImplemented"
+                Read -> Just <$> readBubblewrap ctx' fp
 
     showCmd em ctx = do
         re <- ask
@@ -174,6 +192,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             Bubblewrap fp -> case em of
                 Foreground -> show . P.proc "bwrap" $ bwrapRunArgs re ctx fp
                 Background -> error "NotImplemented"
+                Read -> error "Read NotImplemented"
 
     manageContainer :: ContainerBuild -> ContainerBuildRuntime
     manageContainer cb = CBR{..}
@@ -220,16 +239,27 @@ createLocalhostRunEnv appEnv = RunEnv{..}
           where
             imageNameToFP = Text.replace "/" "_" . Text.replace ":" "-"
 
-    prepareNix :: Text -> ContextEnvT ()
+    nixFileName :: Text -> Text
+    nixFileName installable =
+        mconcat
+            [ "nix_"
+            , Text.take 10 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ installable
+            ]
+    prepareNix :: Text -> ContextEnvT (Maybe Text)
     prepareNix installable = do
-        withCacheFile fileName installable $ do
+        withCachedResult (toString fileName) $ do
             ensureNixInstalled
-            debug "Building flakes"
-            ctx <- liftIO buildCtx
-            execute Foreground ctx
+            if "#apps" `Text.isInfixOf` installable
+                then do
+                    debug $ "Caching app to: " <> fileName
+                    ctx <- liftIO $ buildCtx appArgs
+                    execute Read ctx
+                else do
+                    debug "Building flakes"
+                    ctx <- liftIO $ buildCtx packageArgs
+                    execute Foreground ctx
       where
-        flakeName = Text.take 9 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ installable
-        fileName = toString $ "nix_" <> flakeName
+        fileName = nixFileName installable
 
         -- The location where we expect to find the `nix` command
         nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
@@ -250,15 +280,20 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                         Right (_, setupApp) -> setupApp
                 debug "Installing nix-store with nix.setup"
                 ctx <- liftIO $ appToContext (Regular []) nixSetupApp
-                execute Foreground ctx
+                void $ execute Foreground ctx
 
-        builderName = Name $ "nix-builder-" <> flakeName
+        builderName = Name $ "builder-" <> fileName
         builderApp = defaultApp (Rootfs "/") & (appCapabilities . capNetwork) .~ True
-        buildCtx = do
-            let args =
-                    [toText nixCommandPath, "--verbose"]
-                        <> ["build", "--no-link"]
-                        <> nixArgs installable
+
+        appArgs =
+            [toText nixCommandPath]
+                <> ["eval", "--raw"]
+                <> nixArgs (installable <> ".program")
+        packageArgs =
+            [toText nixCommandPath, "--verbose"]
+                <> ["build", "--no-link"]
+                <> nixArgs installable
+        buildCtx args = do
             ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
                 setNix <- Podenv.Capability.setNix installable
                 setNix <$> Podenv.Capability.prepare (Regular args) ar
@@ -332,10 +367,11 @@ createHeadlessRunEnv cfg appEnv =
                     localRun
                     (Regular ["localhost"])
                     (clientApp & arNetwork .~ Shared "container:vnc")
-        execute localRun Background displayCtx
-        execute localRun Background vncCtx
-        execute localRun Background clientCtx
-        execute localRun em ctx
+        void $ execute localRun Background displayCtx
+        void $ execute localRun Background vncCtx
+        void $ execute localRun Background clientCtx
+        void $ execute localRun em ctx
+        pure Nothing
 
 -- | Build a container image
 buildImage :: Text -> FilePath -> Text -> [Text] -> ContextEnvT ()
@@ -374,15 +410,25 @@ checkImageExist imageName = do
     res <- P.runProcess (Podenv.Runtime.podman ["image", "exists", Text.unpack imageName])
     pure $ res == ExitSuccess
 
-withCacheFile :: (MonadIO m) => FilePath -> Text -> m () -> m ()
-withCacheFile fileName expected action = do
+deleteCachedResult :: (MonadIO m) => FilePath -> m ()
+deleteCachedResult fileName = do
+    cacheDir <- liftIO getCacheDir
+    liftIO $ deleteFileM $ cacheDir </> fileName
+
+withCachedResult :: (MonadIO m) => FilePath -> m (Maybe Text) -> m (Maybe Text)
+withCachedResult fileName action = do
     cacheDir <- liftIO getCacheDir
     liftIO $ createDirectoryIfMissing True cacheDir
     let cachePath = cacheDir </> fileName
-    current <- liftIO $ readFileM cachePath
-    unless (current == expected) $ do
-        action
-        liftIO $ Text.writeFile cachePath expected
+    liftIO (readFileM cachePath) >>= \case
+        -- A new cache
+        "" -> do
+            result <- action
+            liftIO $ Text.writeFile cachePath $ fromMaybe "\n" result
+            pure result
+        -- An empty cache
+        "\n" -> pure Nothing
+        current -> pure $ Just current
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
@@ -407,6 +453,14 @@ executeBubblewrap ctx fp = do
     let cmd = bwrap args
     debug $ show cmd
     runProcess cmd
+
+readBubblewrap :: Context -> FilePath -> ContextEnvT Text
+readBubblewrap ctx fp = do
+    re <- ask
+    let args = bwrapRunArgs re ctx fp
+    let cmd = bwrap args
+    debug $ show cmd
+    readProcess cmd
 
 bwrap :: [String] -> P.ProcessConfig () () ()
 bwrap = P.setDelegateCtlc True . P.proc "bwrap"
@@ -496,6 +550,15 @@ runProcess p = do
     case res of
         ExitSuccess -> pure ()
         ExitFailure code -> do
+            logMessage Error $ "Command failed (" <> show code <> ") :" <> show p
+            fail "process error"
+
+readProcess :: P.ProcessConfig a b c -> ContextEnvT Text
+readProcess p = do
+    res <- liftIO $ P.readProcessStdout p
+    case res of
+        (ExitSuccess, output) -> pure (decodeUtf8 output)
+        (ExitFailure code, _) -> do
             logMessage Error $ "Command failed (" <> show code <> ") :" <> show p
             fail "process error"
 
@@ -650,6 +713,7 @@ executePodman rm ctx image = do
                 Running -> case rm of
                     Foreground -> cfail "container is already running, use `exec` to join, or `--name new` to start a new instance"
                     Background -> pure Nothing
+                    Read -> error "Read NotImplemented"
                 Unknown _ -> do
                     deletePodmanPod name
                     pure $ Just $ podmanRunArgs re rm ctx image
@@ -660,6 +724,7 @@ executePodman rm ctx image = do
             debug $ show cmd
             case rm of
                 Foreground -> runProcess cmd
+                Read -> error "Read NotImplemented"
                 Background -> do
                     name <- executeBackgroundPodman args
                     let waitForRunning count

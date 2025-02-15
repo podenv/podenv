@@ -6,6 +6,7 @@
 - added XAUTHORITY environment
 - changed Nix runtime definition to contain a single installable
 - added support for local flake usage
+- added flake program path discovery and caching
 
 ## 0.6.0 (2024-10-16)
 
