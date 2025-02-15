@@ -70,6 +70,7 @@ prepare mode ar = do
 
     setNixEnv <- case app ^. appRuntime of
         Nix installable -> setNix installable
+        DevShell devShell -> setNix devShell
         _ -> pure id
 
     let shareEgl
@@ -81,6 +82,10 @@ prepare mode ar = do
                 [toText nixCommandPath, "run"] <> nixArgs installable <> case (app ^. appCommand) <> extraArgs of
                     [] -> []
                     xs -> "--" : xs
+            DevShell devShell ->
+                [toText nixCommandPath, "develop"] <> nixArgs devShell <> case (app ^. appCommand) <> extraArgs of
+                    [] -> []
+                    xs -> "--command" : xs
             _ -> (app ^. appCommand) <> extraArgs
 
     setCommand <- case mode of
@@ -90,6 +95,7 @@ prepare mode ar = do
         Shell ->
             pure $ ctxCommand .~ case app ^. appRuntime of
                 Nix installable -> [toText nixCommandPath, "shell"] <> nixArgs installable
+                DevShell devShell -> [toText nixCommandPath, "develop"] <> nixArgs devShell
                 _ -> ["/bin/sh"]
 
     pure (disableSelinux . setHome . setCommand . shareEgl . setCaps . setVolumes . setNixEnv $ ctx)

@@ -162,6 +162,7 @@ createEnv = do
             Container cb -> pure $ toString <$> cb ^. cbImage_home
             Rootfs fp -> getRootfsHome _envHostUid _envHostHomeDir (toString fp)
             Nix _ -> pure _envHostHomeDir
+            DevShell _ -> pure _envHostHomeDir
             Image _ -> pure Nothing
         _envGetVideoDevices = doGetVideoDevices
         _envGetCertLocation = doGetCertLocation

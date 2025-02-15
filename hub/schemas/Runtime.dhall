@@ -5,6 +5,7 @@
 -- Rootfs: a local directory
 < Image : Text
 | Nix : Text
+| DevShell : Text
 | Container : (./ContainerBuild.dhall).Type
 | Rootfs : Text
 >
