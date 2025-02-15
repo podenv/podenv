@@ -2,6 +2,8 @@
 
 ## next
 
+## 0.7.0 (2025-02-14)
+
 - added XDG_CURRENT_DESKTOP environment
 - added XAUTHORITY environment
 - changed Nix runtime definition to contain a single installable
