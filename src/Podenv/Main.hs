@@ -222,14 +222,7 @@ cliConfigLoad :: FilePath -> AppEnv 'UnknownHome -> Config -> CLI -> IO (Applica
 cliConfigLoad volumesDir env config cli@CLI{..} = do
     (extraArgs, baseApp) <-
         case selector >>= Podenv.Config.defaultSelector of
-            Just (sel, app) -> do
-                let fixHome =
-                        case app ^. appRuntime of
-                            Nix f | "~/" `Text.isPrefixOf` f -> case env ^. envHostHomeDir of
-                                Just homeDir -> appRuntime .~ Nix (toText (toString homeDir </> toString (Text.drop 2 f)))
-                                Nothing -> id
-                            _ -> id
-                pure (cliExtraArgs, defaultAppRes (fixHome app) & setSelector sel)
+            Just (sel, app) -> pure (cliExtraArgs, defaultAppRes app & setSelector sel)
             Nothing -> do
                 (extraArgs, app) <- mayFail $ Podenv.Config.select config (maybeToList selector <> cliExtraArgs)
                 pure (extraArgs, app)
@@ -240,7 +233,14 @@ cliConfigLoad volumesDir env config cli@CLI{..} = do
             pure $ Podenv.Runtime.createHeadlessRunEnv ecfg env
         Nothing -> pure $ Podenv.Runtime.createLocalhostRunEnv env
 
-    let app = baseApp & cliPrepare cli
+    let fixHome =
+            case baseApp ^. arApplication . appRuntime of
+                Nix f | "~/" `Text.isPrefixOf` f -> case env ^. envHostHomeDir of
+                    Just homeDir -> arApplication . appRuntime .~ Nix (toText (toString homeDir </> toString (Text.drop 2 f)))
+                    Nothing -> id
+                _ -> id
+
+    let app = baseApp & fixHome . cliPrepare cli
         caps = app ^. arApplication . appCapabilities
 
     notifier <-
