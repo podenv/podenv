@@ -171,13 +171,13 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         let swapNixRun path = \case
                 ("/nix/var/nix/profiles/nix-install/bin/nix" : "run" : rest) ->
                     -- remove everything until '--'
-                    path : (drop 1 $ dropWhile (/= "--") rest)
+                    path : drop 1 (dropWhile (/= "--") rest)
                 xs -> xs
         ctx' <- case buildOutput of
             Nothing -> pure ctx
             Just path -> do
                 debug $ "Using cached path: " <> path
-                pure $ ctx & ctxCommand .~ (swapNixRun path $ ctx ^. ctxCommand)
+                pure $ ctx & ctxCommand .~ swapNixRun path (ctx ^. ctxCommand)
 
         case getRuntimeBackend (ctx ^. ctxRuntime) of
             Podman image -> Nothing <$ executePodman em ctx' image
@@ -305,7 +305,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         -- Get the location of the package executable path
         evalPackage :: Text -> ContextEnvT Text
         evalPackage installableFull = do
-            path <- evalRun $ installableFull
+            path <- evalRun installableFull
             pname <- evalRun $ installableFull <> ".pname"
 
             -- ensure the package is available in the store (eval may not produce the executable)
