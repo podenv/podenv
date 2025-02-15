@@ -284,7 +284,13 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                 Left (P.ExitCodeException{}) -> do
                     -- Try "packages.<system>.<name>"
                     debug $ name <> " is not an app, trying as a package"
-                    evalPackage $ mkPath "#packages."
+                    ePkg <- tryRun $ evalPackage $ mkPath "#packages."
+                    case ePkg of
+                        Left (P.ExitCodeException{}) -> do
+                            -- Try "legacyPackages.<system>.<name>"
+                            debug $ name <> " is not a package, trying as legacyPackages"
+                            evalPackage $ mkPath "#legacyPackages."
+                        Right fp -> pure fp
                 Right fp -> pure fp
 
         -- Get the location of the app program attribute
