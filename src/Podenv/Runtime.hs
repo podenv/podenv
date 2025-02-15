@@ -289,13 +289,30 @@ createLocalhostRunEnv appEnv = RunEnv{..}
 
         -- Get the location of the app program attribute
         evalApp :: Text -> ContextEnvT Text
-        evalApp installableFull = evalRun $ installableFull <> ".program"
+        evalApp installableFull = do
+            let installableProgram = installableFull <> ".program"
+            path <- evalRun installableProgram
+
+            -- ensure the app is available in the store (eval may not produce the executable)
+            -- this is a bit weird because flakes #apps. are not derivation, and nix run doesn't have a '--dry-run' option.
+            -- so we can force the build of the app program by computing it's hash!
+            ctx <- liftIO $ buildCtx $ [toText nixCommandPath] <> ["eval", "--raw", "--apply", "builtins.hashFile \"sha1\""] <> nixArgs installableProgram
+            void $ execute Read ctx
+
+            -- Return the final path
+            pure path
 
         -- Get the location of the package executable path
         evalPackage :: Text -> ContextEnvT Text
         evalPackage installableFull = do
             path <- evalRun $ installableFull
             pname <- evalRun $ installableFull <> ".pname"
+
+            -- ensure the package is available in the store (eval may not produce the executable)
+            ctx <- liftIO $ buildCtx $ [toText nixCommandPath] <> ["build", "--no-link"] <> nixArgs installableFull
+            void $ execute Foreground ctx
+
+            -- Return the final path
             pure $ path <> "/bin/" <> pname
 
         fileName = nixFileName installable
