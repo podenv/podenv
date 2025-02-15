@@ -39,6 +39,7 @@ module Podenv.Runtime (
 ) where
 
 import Control.Concurrent (threadDelay)
+import Control.Exception (try)
 import Data.Aeson qualified as Aeson
 import Data.Digest.Pure.SHA qualified as SHA
 import Data.List qualified
@@ -145,7 +146,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
 
     buildRuntime = \case
         Container cb -> Nothing <$ cbrBuild (manageContainer cb)
-        Nix flakes -> prepareNix flakes
+        Nix flakes -> Just <$> prepareNix flakes
         _ -> pure Nothing
 
     updateRuntime = \case
@@ -243,23 +244,67 @@ createLocalhostRunEnv appEnv = RunEnv{..}
     nixFileName installable =
         mconcat
             [ "nix_"
-            , Text.take 10 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ installable
+            , Text.take 10 . toText . SHA.showDigest . SHA.sha1 . encodeUtf8 $ installableLoc
             ]
-    prepareNix :: Text -> ContextEnvT (Maybe Text)
+      where
+        installableLoc
+            | "." `Text.isPrefixOf` installable = toText (appEnv ^. envHostCwd) <> installable
+            | otherwise = installable
+
+    -- The goal of 'prepareNix' is to convert an installable string into a local executable path
+    prepareNix :: Text -> ContextEnvT Text
     prepareNix installable = do
         withCachedResult (toString fileName) $ do
             ensureNixInstalled
-            if "#apps" `Text.isInfixOf` installable
-                then do
-                    debug $ "Caching app to: " <> fileName
-                    ctx <- liftIO $ buildCtx appArgs
-                    execute Read ctx
-                else do
-                    debug "Building flakes"
-                    ctx <- liftIO $ buildCtx packageArgs
-                    execute Foreground ctx
+            case decodeInstallable installable of
+                InstallableApp -> do
+                    debug $ "Discovering flake app path " <> installable <> ", cache:" <> fileName
+                    evalApp installable
+                InstallablePkg -> do
+                    debug $ "Discovering flake package path " <> installable <> ", cache:" <> fileName
+                    evalPackage installable
+                InstallableAttr name -> do
+                    debug $ "Discovering flake attr path " <> installable <> ", cache:" <> fileName
+                    discoverFlake name
+                InstallableDefault -> do
+                    debug $ "Discovering flake default path " <> installable <> ", cache:" <> fileName
+                    discoverFlake "default"
       where
+        baseFlake = Text.takeWhile (/= '#') installable
+
+        -- Resolve the flake output path according to the 'flake run' documentation
+        discoverFlake :: Text -> ContextEnvT Text
+        discoverFlake name = do
+            -- TODO: support aarch
+            let system = "x86_64-linux"
+            let mkPath kind = mconcat [baseFlake, kind, system, ".", name]
+            -- Try "apps.<system>.<name>"
+            eApp <- tryRun $ evalApp $ mkPath "#apps."
+            case eApp of
+                Left (P.ExitCodeException{}) -> do
+                    -- Try "packages.<system>.<name>"
+                    debug $ name <> " is not an app, trying as a package"
+                    evalPackage $ mkPath "#packages."
+                Right fp -> pure fp
+
+        -- Get the location of the app program attribute
+        evalApp :: Text -> ContextEnvT Text
+        evalApp installableFull = evalRun $ installableFull <> ".program"
+
+        -- Get the location of the package executable path
+        evalPackage :: Text -> ContextEnvT Text
+        evalPackage installableFull = do
+            path <- evalRun $ installableFull
+            pname <- evalRun $ installableFull <> ".pname"
+            pure $ path <> "/bin/" <> pname
+
         fileName = nixFileName installable
+        evalRun arg = do
+            let args = [toText nixCommandPath] <> ["eval", "--raw"] <> nixArgs arg
+            ctx <- liftIO $ buildCtx args
+            execute Read ctx >>= \case
+                Nothing -> error "The impossible has happened"
+                Just output -> pure output
 
         -- The location where we expect to find the `nix` command
         nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
@@ -285,20 +330,23 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         builderName = Name $ "builder-" <> fileName
         builderApp = defaultApp (Rootfs "/") & (appCapabilities . capNetwork) .~ True
 
-        appArgs =
-            [toText nixCommandPath]
-                <> ["eval", "--raw"]
-                <> nixArgs (installable <> ".program")
-        packageArgs =
-            [toText nixCommandPath, "--verbose"]
-                <> ["build", "--no-link"]
-                <> nixArgs installable
         buildCtx args = do
             ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
                 setNix <- Podenv.Capability.setNix installable
                 setNix <$> Podenv.Capability.prepare (Regular args) ar
             setResolv <- ensureResolvConf "/"
             pure $ ctx & setResolv . (ctxName ?~ builderName)
+
+data InstallableKind = InstallableApp | InstallablePkg | InstallableAttr Text | InstallableDefault
+
+decodeInstallable :: Text -> InstallableKind
+decodeInstallable installable
+    | "apps." `Text.isPrefixOf` attr = InstallableApp
+    | "packages." `Text.isPrefixOf` attr = InstallablePkg
+    | "" == attr = InstallableDefault
+    | otherwise = InstallableAttr attr
+  where
+    attr = Text.drop 1 $ Text.dropWhile (/= '#') installable
 
 createHeadlessRunEnv :: Config -> AppEnv 'UnknownHome -> RunEnv
 createHeadlessRunEnv cfg appEnv =
@@ -415,7 +463,7 @@ deleteCachedResult fileName = do
     cacheDir <- liftIO getCacheDir
     liftIO $ deleteFileM $ cacheDir </> fileName
 
-withCachedResult :: (MonadIO m) => FilePath -> m (Maybe Text) -> m (Maybe Text)
+withCachedResult :: (MonadIO m) => FilePath -> m Text -> m Text
 withCachedResult fileName action = do
     cacheDir <- liftIO getCacheDir
     liftIO $ createDirectoryIfMissing True cacheDir
@@ -424,11 +472,9 @@ withCachedResult fileName action = do
         -- A new cache
         "" -> do
             result <- action
-            liftIO $ Text.writeFile cachePath $ fromMaybe "\n" result
+            liftIO $ Text.writeFile cachePath result
             pure result
-        -- An empty cache
-        "\n" -> pure Nothing
-        current -> pure $ Just current
+        current -> pure current
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
@@ -461,6 +507,9 @@ readBubblewrap ctx fp = do
     let cmd = bwrap args
     debug $ show cmd
     readProcess cmd
+
+tryRun :: (Exception e) => ContextEnvT a -> ContextEnvT (Either e a)
+tryRun (ReaderT inner) = ReaderT \env -> try $ inner env
 
 bwrap :: [String] -> P.ProcessConfig () () ()
 bwrap = P.setDelegateCtlc True . P.proc "bwrap"
@@ -555,12 +604,8 @@ runProcess p = do
 
 readProcess :: P.ProcessConfig a b c -> ContextEnvT Text
 readProcess p = do
-    res <- liftIO $ P.readProcessStdout p
-    case res of
-        (ExitSuccess, output) -> pure (decodeUtf8 output)
-        (ExitFailure code, _) -> do
-            logMessage Error $ "Command failed (" <> show code <> ") :" <> show p
-            fail "process error"
+    output <- liftIO $ P.readProcessStdout_ p
+    pure $ decodeUtf8 output
 
 defaultGlobalEnv :: FilePath -> GlobalEnv
 defaultGlobalEnv = GlobalEnv True Nothing defaultNotifier
