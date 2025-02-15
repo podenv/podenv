@@ -234,10 +234,13 @@ cliConfigLoad volumesDir env config cli@CLI{..} = do
         Nothing -> pure $ Podenv.Runtime.createLocalhostRunEnv env
 
     let fixHome =
-            case baseApp ^. arApplication . appRuntime of
-                Nix f | "~/" `Text.isPrefixOf` f -> case env ^. envHostHomeDir of
-                    Just homeDir -> arApplication . appRuntime .~ Nix (toText (toString homeDir </> toString (Text.drop 2 f)))
-                    Nothing -> id
+            case (baseApp ^. arApplication . appRuntime, env ^. envHostHomeDir) of
+                (Nix f, Just homeDir)
+                    | "~/" `Text.isPrefixOf` f ->
+                        arApplication . appRuntime .~ Nix (toText (toString homeDir </> toString (Text.drop 2 f)))
+                (DevShell f, Just homeDir)
+                    | "~/" `Text.isPrefixOf` f ->
+                        arApplication . appRuntime .~ DevShell (toText (toString homeDir </> toString (Text.drop 2 f)))
                 _ -> id
 
     let app = baseApp & fixHome . cliPrepare cli

@@ -72,7 +72,7 @@ timeDiff now old = Second (truncate pico)
 data RunEnv = RunEnv
     { showBuildInfo :: Runtime -> Text
     , showCmd :: ExecMode -> Context -> ContextEnvT Text
-    , buildRuntime :: Runtime -> ContextEnvT (Maybe Text)
+    , buildRuntime :: Runtime -> ContextEnvT (Maybe RuntimeCache)
     -- ^ Prepare the runtime, and maybe return the path to the app
     , updateRuntime :: Runtime -> ContextEnvT ()
     , getRuntimeAge :: Runtime -> ContextEnvT (Maybe Second)
@@ -80,6 +80,8 @@ data RunEnv = RunEnv
     , execute :: ExecMode -> Context -> ContextEnvT (Maybe Text)
     -- ^ Execute the runtime, and return the command output when ExecMode is Read
     }
+
+data RuntimeCache = AppCache Text | ShellCache Text
 
 data RuntimeBackend
     = Podman ImageName
@@ -137,16 +139,19 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         Rootfs root -> Bubblewrap $ toString root
         Container cb -> Podman . mkImageName $ cb
         Nix _ -> Bubblewrap "/"
+        DevShell _ -> Bubblewrap "/"
 
     showBuildInfo = \case
         Image iname -> "image:" <> iname
         Rootfs fp -> "rootfs:" <> fp
         Container cb -> cbrInfo $ manageContainer cb
         Nix expr -> "nix:" <> show expr
+        DevShell expr -> "devshell:" <> show expr
 
     buildRuntime = \case
         Container cb -> Nothing <$ cbrBuild (manageContainer cb)
-        Nix flakes -> Just <$> prepareNix flakes
+        Nix installable -> Just . AppCache <$> prepareNix installable
+        DevShell devShell -> Just . ShellCache <$> prepareNixShell devShell
         _ -> pure Nothing
 
     updateRuntime = \case
@@ -155,11 +160,14 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             -- ensure the image exist
             cbrBuild $ manageContainer cb
             cbrUpdate $ manageContainer cb
-        Nix expr -> do
+        Nix expr -> cleanNix expr
+        DevShell expr -> cleanNix expr
+        Rootfs _ -> pure ()
+      where
+        cleanNix expr = do
             let fileName = nixFileName expr
             debug $ "Deleting cached result: " <> fileName
             deleteCachedResult $ toString fileName
-        Rootfs _ -> pure ()
 
     execute :: ExecMode -> Context -> ContextEnvT (Maybe Text)
     execute em ctx = do
@@ -173,11 +181,24 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                     -- remove everything until '--'
                     path : drop 1 (dropWhile (/= "--") rest)
                 xs -> xs
+        let swapNixDevelop path = \case
+                ("/nix/var/nix/profiles/nix-install/bin/nix" : "develop" : rest) ->
+                    -- remove everything until '--command'
+                    "bash" : "--rcfile" : path : "-i" : case drop 1 (dropWhile (/= "--command") rest) of
+                        [] -> []
+                        xs -> ["-c", Text.unwords $ quoteArguments xs]
+                xs -> xs
         ctx' <- case buildOutput of
             Nothing -> pure ctx
-            Just path -> do
+            Just (AppCache path) -> do
                 debug $ "Using cached path: " <> path
                 pure $ ctx & ctxCommand .~ swapNixRun path (ctx ^. ctxCommand)
+            Just (ShellCache path) -> do
+                debug $ "Using cached shell: " <> path
+                let addCache = case appEnv ^. envHostHomeDir of
+                        Nothing -> id
+                        Just f -> directMount (f </> ".cache/podenv")
+                pure $ ctx & addCache . (ctxCommand .~ swapNixDevelop path (ctx ^. ctxCommand))
 
         case getRuntimeBackend (ctx ^. ctxRuntime) of
             Podman image -> Nothing <$ executePodman em ctx' image
@@ -251,10 +272,24 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             | "." `Text.isPrefixOf` installable = toText (appEnv ^. envHostCwd) <> installable
             | otherwise = installable
 
+    -- The goal of 'prepareNixShell' is to convert a devShell into a rcscript
+    prepareNixShell :: Text -> ContextEnvT Text
+    prepareNixShell installable =
+        Text.pack . fst <$> do
+            withCachedResult (toString fileName) $ do
+                ensureNixInstalled
+
+                ctx <- liftIO $ mkBuildCtx fileName installable $ [toText nixCommandPath] <> ["print-dev-env"] <> nixArgs installable
+                execute Read ctx >>= \case
+                    Nothing -> error "The impossible have happened"
+                    Just e -> pure e
+      where
+        fileName = nixFileName $ installable <> " devshell"
+
     -- The goal of 'prepareNix' is to convert an installable string into a local executable path
     prepareNix :: Text -> ContextEnvT Text
     prepareNix installable = do
-        withCachedResult (toString fileName) $ do
+        withCachedResult' (toString fileName) $ do
             ensureNixInstalled
             case decodeInstallable installable of
                 InstallableApp -> do
@@ -337,35 +372,42 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                 Just output -> pure output
 
         -- The location where we expect to find the `nix` command
-        nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
-        ensureNixInstalled = do
-            re <- ask
-            let store = nixStore re
-            nixInstalled <- liftIO $ doesSymlinkExist $ store </> nixCommandProfile
-            unless nixInstalled $ do
-                debug $ toText $ store </> nixCommandProfile <> " does not exists, installing nix.setup"
+        buildCtx = mkBuildCtx fileName installable
+    builderApp = defaultApp (Rootfs "/") & (appCapabilities . capNetwork) .~ True
+    mkBuildCtx fileName installable args = do
+        let builderName = Name $ "builder-" <> fileName
+        ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
+            setNix <- Podenv.Capability.setNix installable
+            setNix <$> Podenv.Capability.prepare (Regular args) ar
+        setResolv <- ensureResolvConf "/"
+        pure $ ctx & setResolv . (ctxName ?~ builderName)
 
-                -- ensure we are not somehow overwritting an existing store
-                storeExist <- liftIO $ doesDirectoryExist $ store </> "store"
-                when storeExist $ error $ "existing nix-store is invalid, try removing " <> toText (nixStore re)
+    nixStore re = Podenv.Runtime.volumesDir re </> "nix-store"
+    ensureNixInstalled = do
+        re <- ask
+        let store = nixStore re
+        nixInstalled <- liftIO $ doesSymlinkExist $ store </> nixCommandProfile
+        unless nixInstalled $ do
+            debug $ toText $ store </> nixCommandProfile <> " does not exists, installing nix.setup"
 
-                let cfg = fromMaybe (error "Need config") $ config re
-                    nixSetupApp = case Podenv.Config.select cfg ["nix.setup"] of
-                        Left e -> error e
-                        Right (_, setupApp) -> setupApp
-                debug "Installing nix-store with nix.setup"
-                ctx <- liftIO $ appToContext (Regular []) nixSetupApp
-                void $ execute Foreground ctx
+            -- ensure we are not somehow overwritting an existing store
+            storeExist <- liftIO $ doesDirectoryExist $ store </> "store"
+            when storeExist $ error $ "existing nix-store is invalid, try removing " <> toText (nixStore re)
 
-        builderName = Name $ "builder-" <> fileName
-        builderApp = defaultApp (Rootfs "/") & (appCapabilities . capNetwork) .~ True
+            let cfg = fromMaybe (error "Need config") $ config re
+                nixSetupApp = case Podenv.Config.select cfg ["nix.setup"] of
+                    Left e -> error e
+                    Right (_, setupApp) -> setupApp
+            debug "Installing nix-store with nix.setup"
+            ctx <- liftIO $ appToContext (Regular []) nixSetupApp
+            void $ execute Foreground ctx
 
-        buildCtx args = do
-            ctx <- runAppEnv appEnv (defaultAppRes builderApp) $ \ar -> do
-                setNix <- Podenv.Capability.setNix installable
-                setNix <$> Podenv.Capability.prepare (Regular args) ar
-            setResolv <- ensureResolvConf "/"
-            pure $ ctx & setResolv . (ctxName ?~ builderName)
+quoteArguments :: [Text] -> [Text]
+quoteArguments [] = []
+quoteArguments (x : xs)
+    | x == "" = "\"\"" : quoteArguments xs
+    | Just _ <- Text.findIndex (== ' ') x = mconcat ["\"", x, "\""] : quoteArguments xs
+    | otherwise = x : quoteArguments xs
 
 data InstallableKind = InstallableApp | InstallablePkg | InstallableAttr Text | InstallableDefault
 
@@ -493,7 +535,10 @@ deleteCachedResult fileName = do
     cacheDir <- liftIO getCacheDir
     liftIO $ deleteFileM $ cacheDir </> fileName
 
-withCachedResult :: (MonadIO m) => FilePath -> m Text -> m Text
+withCachedResult' :: (MonadIO m) => FilePath -> m Text -> m Text
+withCachedResult' fileName action = snd <$> withCachedResult fileName action
+
+withCachedResult :: (MonadIO m) => FilePath -> m Text -> m (FilePath, Text)
 withCachedResult fileName action = do
     cacheDir <- liftIO getCacheDir
     liftIO $ createDirectoryIfMissing True cacheDir
@@ -503,8 +548,8 @@ withCachedResult fileName action = do
         "" -> do
             result <- action
             liftIO $ Text.writeFile cachePath result
-            pure result
-        current -> pure current
+            pure (cachePath, result)
+        current -> pure (cachePath, current)
 
 -- | Create host directory and set SELinux label if needed
 ensureHostDirectory :: FilePath -> Volume -> IO ()
