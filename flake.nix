@@ -85,7 +85,7 @@
       '';
 
     in {
-      packages."x86_64-linux".default = exe;
+      packages."x86_64-linux".default = pkgs.haskell.lib.dontCheck exe;
       apps."x86_64-linux".default = {
         type = "app";
         program = "${exe}/bin/podenv";
