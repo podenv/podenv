@@ -21,7 +21,6 @@ let default =
         , network = True
         }
       , runtime = use "nix"
-      , command = [ "nix" ]
       }
 
 in  { setup, use, default }
