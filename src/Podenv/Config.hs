@@ -72,6 +72,7 @@ defaultSelector s
     | "image:" `Text.isPrefixOf` s = imageApp s
     | "nix:" `Text.isPrefixOf` s = nixApp s
     | "devshell:" `Text.isPrefixOf` Text.toLower s = shellApp s
+    | "shell:" `Text.isPrefixOf` s = mkApp (Shell [Text.drop (Text.length "shell:") s])
     | "nixpkgs#" `Text.isPrefixOf` s = nixApp' s
     | "rootfs:" `Text.isPrefixOf` s = rootfsApp s
     | otherwise = Nothing

@@ -81,7 +81,7 @@ data RunEnv = RunEnv
     -- ^ Execute the runtime, and return the command output when ExecMode is Read
     }
 
-data RuntimeCache = AppCache Text | ShellCache Text
+data RuntimeCache = AppCache Text | ShellCache Text | PathsCache [Text]
 
 data RuntimeBackend
     = Podman ImageName
@@ -140,6 +140,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         Container cb -> Podman . mkImageName $ cb
         Nix _ -> Bubblewrap "/"
         DevShell _ -> Bubblewrap "/"
+        Shell _ -> Bubblewrap "/"
 
     showBuildInfo = \case
         Image iname -> "image:" <> iname
@@ -147,11 +148,13 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         Container cb -> cbrInfo $ manageContainer cb
         Nix expr -> "nix:" <> show expr
         DevShell expr -> "devshell:" <> show expr
+        Shell expr -> "shell:" <> show expr
 
     buildRuntime = \case
         Container cb -> Nothing <$ cbrBuild (manageContainer cb)
         Nix installable -> Just . AppCache <$> prepareNix installable
-        DevShell devShell -> Just . ShellCache <$> prepareNixShell devShell
+        DevShell devShell -> Just . ShellCache <$> prepareNixDevShell devShell
+        Shell installables -> Just . PathsCache <$> prepareNixShell installables
         _ -> pure Nothing
 
     updateRuntime = \case
@@ -160,12 +163,12 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             -- ensure the image exist
             cbrBuild $ manageContainer cb
             cbrUpdate $ manageContainer cb
-        Nix expr -> cleanNix expr
-        DevShell expr -> cleanNix expr
+        Nix expr -> cleanNix $ nixFileName expr
+        DevShell expr -> cleanNix $ nixDevShellFileName expr
+        Shell exprs -> mapM_ cleanNix (nixShellFileName <$> exprs)
         Rootfs _ -> pure ()
       where
-        cleanNix expr = do
-            let fileName = nixFileName expr
+        cleanNix fileName = do
             debug $ "Deleting cached result: " <> fileName
             deleteCachedResult $ toString fileName
 
@@ -188,17 +191,32 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                         [] -> []
                         xs -> ["-c", Text.unwords $ quoteArguments xs]
                 xs -> xs
+        let swapNixShell = \case
+                ("/nix/var/nix/profiles/nix-install/bin/nix" : "shell" : rest) ->
+                    -- remove everything until '--command'
+                    "bash" : "-i" : case drop 1 (dropWhile (/= "--command") rest) of
+                        [] -> []
+                        xs -> ["-c", Text.unwords $ quoteArguments xs]
+                xs -> xs
         ctx' <- case buildOutput of
             Nothing -> pure ctx
             Just (AppCache path) -> do
                 debug $ "Using cached path: " <> path
-                pure $ ctx & ctxCommand .~ swapNixRun path (ctx ^. ctxCommand)
+                pure $ ctx & ctxCommand %~ swapNixRun path
             Just (ShellCache path) -> do
                 debug $ "Using cached shell: " <> path
                 let addCache = case appEnv ^. envHostHomeDir of
                         Nothing -> id
                         Just f -> directMount (f </> ".cache/podenv")
-                pure $ ctx & addCache . (ctxCommand .~ swapNixDevelop path (ctx ^. ctxCommand))
+                pure $ ctx & addCache . (ctxCommand %~ swapNixDevelop path)
+            Just (PathsCache paths) -> do
+                debug $ "Using cached paths: " <> Text.unwords paths
+                let pathEnv = Text.intercalate ":" paths
+                let doAddPathEnv = \case
+                        Just prev -> Just $ pathEnv <> ":" <> prev
+                        Nothing -> Just pathEnv
+                let addPathEnv = ctxEnviron %~ Map.alter doAddPathEnv "PATH"
+                pure $ ctx & addPathEnv . (ctxCommand %~ swapNixShell)
 
         case getRuntimeBackend (ctx ^. ctxRuntime) of
             Podman image -> Nothing <$ executePodman em ctx' image
@@ -271,10 +289,17 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         installableLoc
             | "." `Text.isPrefixOf` installable = toText (appEnv ^. envHostCwd) <> installable
             | otherwise = installable
+    nixDevShellFileName i = nixFileName i <> " devshell"
+    nixShellFileName i = nixFileName i <> " shell"
 
-    -- The goal of 'prepareNixShell' is to convert a devShell into a rcscript
-    prepareNixShell :: Text -> ContextEnvT Text
-    prepareNixShell installable =
+    prepareNixShell :: [Text] -> ContextEnvT [Text]
+    prepareNixShell installables = do
+        paths <- traverse prepareNix installables
+        pure $ map (Text.dropEnd 1 . Text.dropWhileEnd (/= '/')) paths
+
+    -- The goal of 'prepareNixDevShell' is to convert a devShell into a rcscript
+    prepareNixDevShell :: Text -> ContextEnvT Text
+    prepareNixDevShell installable =
         Text.pack . fst <$> do
             withCachedResult (toString fileName) $ do
                 ensureNixInstalled
@@ -284,7 +309,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                     Nothing -> error "The impossible have happened"
                     Just e -> pure e
       where
-        fileName = nixFileName $ installable <> " devshell"
+        fileName = nixDevShellFileName installable
 
     -- The goal of 'prepareNix' is to convert an installable string into a local executable path
     prepareNix :: Text -> ContextEnvT Text
