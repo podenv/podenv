@@ -7,6 +7,7 @@
 , Image = (./Runtime.dhall).Image
 , Nix = (./Runtime.dhall).Nix
 , DevShell = (./Runtime.dhall).DevShell
+, Shell = (./Runtime.dhall).Shell
 , Container = (./Runtime.dhall).Container
 , Rootfs = (./Runtime.dhall).Rootfs
 , Containerfile =

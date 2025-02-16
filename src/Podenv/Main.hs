@@ -241,6 +241,9 @@ cliConfigLoad volumesDir env config cli@CLI{..} = do
                 (DevShell f, Just homeDir)
                     | "~/" `Text.isPrefixOf` f ->
                         arApplication . appRuntime .~ DevShell (toText (toString homeDir </> toString (Text.drop 2 f)))
+                (Shell (f : fs), Just homeDir) -- TODO: support multiple local installables
+                    | "~/" `Text.isPrefixOf` f ->
+                        arApplication . appRuntime .~ Shell (toText (toString homeDir </> toString (Text.drop 2 f)) : fs)
                 _ -> id
 
     let app = baseApp & fixHome . cliPrepare cli
@@ -253,7 +256,7 @@ cliConfigLoad volumesDir env config cli@CLI{..} = do
                 else Podenv.Notifications.Console
 
     let re = GlobalEnv{verbose, volumesDir, config = Just config, notifier}
-        mode = if shell then Shell else Regular extraArgs
+        mode = if shell then ShellMode else Regular extraArgs
 
     pure (app, mode, re, run)
 

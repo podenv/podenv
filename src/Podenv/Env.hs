@@ -163,6 +163,7 @@ createEnv = do
             Rootfs fp -> getRootfsHome _envHostUid _envHostHomeDir (toString fp)
             Nix _ -> pure _envHostHomeDir
             DevShell _ -> pure _envHostHomeDir
+            Shell _ -> pure _envHostHomeDir
             Image _ -> pure Nothing
         _envGetVideoDevices = doGetVideoDevices
         _envGetCertLocation = doGetCertLocation

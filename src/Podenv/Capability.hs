@@ -28,7 +28,7 @@ import Podenv.Env
 import Podenv.Image
 import Podenv.Prelude
 
-data AppMode = Regular [Text] | Shell deriving (Show, Eq)
+data AppMode = Regular [Text] | ShellMode deriving (Show, Eq)
 
 -- | Converts an Application into a Context
 prepare :: AppMode -> ApplicationResource -> AppEnvT Context
@@ -71,6 +71,8 @@ prepare mode ar = do
     setNixEnv <- case app ^. appRuntime of
         Nix installable -> setNix installable
         DevShell devShell -> setNix devShell
+        -- TODO: support multiple local installables
+        Shell (installable : _) -> setNix installable
         _ -> pure id
 
     let shareEgl
@@ -86,13 +88,17 @@ prepare mode ar = do
                 [toText nixCommandPath, "develop"] <> nixArgs devShell <> case (app ^. appCommand) <> extraArgs of
                     [] -> []
                     xs -> "--command" : xs
+            Shell (i : is) ->
+                [toText nixCommandPath, "shell"] <> nixArgs i <> is <> case (app ^. appCommand) <> extraArgs of
+                    [] -> []
+                    xs -> "--command" : xs
             _ -> (app ^. appCommand) <> extraArgs
 
     setCommand <- case mode of
         Regular extraArgs
             | app ^. appCapabilities . capHostfile -> resolveFileArgs (mkCommand extraArgs)
             | otherwise -> pure $ ctxCommand .~ mkCommand extraArgs
-        Shell ->
+        ShellMode ->
             pure $ ctxCommand .~ case app ^. appRuntime of
                 Nix installable -> [toText nixCommandPath, "shell"] <> nixArgs installable
                 DevShell devShell -> [toText nixCommandPath, "develop"] <> nixArgs devShell

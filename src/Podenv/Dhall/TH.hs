@@ -36,7 +36,7 @@ containerBuildDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Contain
 appDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Application.dhall).default")
 capsDefault = $(Dhall.TH.staticDhallExpression "(./hub/schemas/Capabilities.dhall).default")
 
-{- | Generate Haskell Types from Dhall Types..
+{- | Generate Haskell Types from Dhall Types.
 See: https://hackage.haskell.org/package/dhall-1.40.0/docs/Dhall-TH.html
 -}
 Dhall.TH.makeHaskellTypes
