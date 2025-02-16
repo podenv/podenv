@@ -6,8 +6,7 @@ let default =
           "Programming environment for real-time audio and video processing"
       , runtime =
           (../Podenv.dhall).Nix
-            "github:podenv/modularix/e3d85b9fc5f9a66ae4abce8817f9df51b1304b81#supercollider"
-      , command = [ "nixGL", "scide" ]
+            "github:podenv/modularix/c7a19b1a56034440dc787b854daf15a870d09f89#supercollider-nixGL"
       , capabilities = Podenv.Capabilities::{
         , dri = True
         , x11 = True
@@ -21,8 +20,7 @@ let lang =
           "Programming environment for real-time audio and video processing"
       , runtime =
           (../Podenv.dhall).Nix
-            "github:podenv/modularix/aeeca74b03d36a8a866e1f4f76aa3f925d24cf98#sclang"
-      , command = [ "nixGL", "sclang" ]
+            "github:podenv/modularix/c7a19b1a56034440dc787b854daf15a870d09f89#sclang-nixGL"
       , volumes = [ "supercollider-home:~" ]
       , capabilities = Podenv.Capabilities::{
         , dri = True
