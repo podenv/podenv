@@ -44,6 +44,7 @@
 , reaper = ./reaper.dhall
 , rosegarden = ./rosegarden.dhall
 , seq24 = ./seq24.dhall
+, signal = ./signal.dhall
 , shell = ./shell.dhall
 , ssh = ./ssh.dhall
 , steam = ./steam.dhall
