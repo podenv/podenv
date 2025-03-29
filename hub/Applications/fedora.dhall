@@ -131,6 +131,12 @@ let base =
         , useGraphicPost = mkUsePost "latest" extraGraphic
         , useGraphicCodec = mkUse "latest" (extraGraphic ++ extraGraphicCodec)
         }
+      , `40` =
+        { use = mkUse "40" ""
+        , useGraphic = mkUse "40" extraGraphic
+        , useGraphicPost = mkUsePost "40" extraGraphic
+        , useGraphicCodec = mkUse "40" (extraGraphic ++ extraGraphicCodec)
+        }
       , -- for xeyes ...
         `34` = useD "34"
       , rawhide = useD "rawhide"
