@@ -655,8 +655,12 @@ bwrapRunArgs GlobalEnv{..} ctx fp = toString <$> args
         _ -> doBind ""
 
     sysMounts
-        | Data.Set.null (ctx ^. ctxDevices) = []
+        | ctx ^. ctxAllDevices || Data.Set.null (ctx ^. ctxDevices) = []
         | otherwise = ["--ro-bind", "/sys", "/sys"]
+
+    devMounts
+        | ctx ^. ctxAllDevices = ["--bind", "/dev", "/dev", "--bind", "/sys", "/sys"]
+        | otherwise = concatMap (\d -> ["--dev-bind", toText d, toText d]) (ctx ^. ctxDevices)
 
     bindMode
         | ctx ^. ctxRO = "--ro-bind"
@@ -676,7 +680,7 @@ bwrapRunArgs GlobalEnv{..} ctx fp = toString <$> args
             <> ["--dev", "/dev"]
             <> ["--perms", "01777", "--tmpfs", "/tmp"]
             <> concatMap volumeArg (Map.toAscList (ctx ^. ctxMounts))
-            <> concatMap (\d -> ["--dev-bind", toText d, toText d]) (ctx ^. ctxDevices)
+            <> devMounts
             <> sysMounts
             <> ["--clearenv"]
             <> concatMap (\(k, v) -> ["--setenv", toText k, v]) (Map.toAscList (ctx ^. ctxEnviron))
@@ -772,6 +776,10 @@ podmanRunArgs gl rmode ctx image = toString <$> args
         | ctx ^. ctxHostIPC = ["--ipc=host"]
         | otherwise = []
 
+    deviceArgs
+        | ctx ^. ctxAllDevices = ["--mount", "type=bind,src=/dev,target=/dev,shared", "--mount", "type=bind,src=/sys,target=/sys,shared"]
+        | otherwise = concatMap (\d -> ["--device", toText d]) (ctx ^. ctxDevices)
+
     args =
         ["run"]
             <> podmanArgs ctx
@@ -785,7 +793,7 @@ podmanRunArgs gl rmode ctx image = toString <$> args
             <> maybe [] (\n -> ["--hostname", n]) (ctx ^. ctxHostname)
             <> networkArg
             <> commonArgs ctx
-            <> concatMap (\d -> ["--device", toText d]) (ctx ^. ctxDevices)
+            <> deviceArgs
             <> maybe [] (\wd -> ["--workdir", toText wd]) (ctx ^. ctxWorkdir)
             <> concatMap (\(k, v) -> ["--env", toText $ k <> "=" <> v]) (Map.toAscList (ctx ^. ctxEnviron))
             <> concatMap volumeArg (("/tmp", MkVolume RW TmpFS) : Map.toAscList (ctx ^. ctxMounts))
