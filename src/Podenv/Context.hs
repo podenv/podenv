@@ -44,6 +44,7 @@ module Podenv.Context (
     ctxCommand,
     ctxMounts,
     ctxDevices,
+    ctxAllDevices,
     ctxSELinux,
     ctxSyscaps,
     ctxInteractive,
@@ -102,6 +103,7 @@ data Context = Context
     , _ctxSyscaps :: Set Capability
     , _ctxRO :: Bool
     , _ctxDevices :: Set FilePath
+    , _ctxAllDevices :: Bool
     -- ^ container devices
     , _ctxInteractive :: Bool
     , _ctxTerminal :: Bool
@@ -129,6 +131,7 @@ defaultContext _ctxRuntime =
         , _ctxMounts = mempty
         , _ctxDevices = mempty
         , _ctxSyscaps = mempty
+        , _ctxAllDevices = False
         , _ctxHostIPC = False
         , _ctxRO = True
         , _ctxWorkdir = Nothing

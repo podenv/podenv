@@ -2,6 +2,8 @@
 
 ## next
 
+- added the `devices` capability to share all the devices and support hot-pluggable devices.
+
 ## 0.7.0 (2025-02-14)
 
 - added XDG_CURRENT_DESKTOP environment

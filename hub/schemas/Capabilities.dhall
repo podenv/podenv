@@ -33,6 +33,8 @@
     , alsa : Bool
     , network : Bool
     , tun : Bool
+    , -- All devices
+      devices : Bool
     , --
       -- Host filesystem
       --
@@ -56,6 +58,7 @@
   , ssh = False
   , gpg = False
   , video = False
+  , devices = False
   , dri = False
   , kvm = False
   , alsa = False

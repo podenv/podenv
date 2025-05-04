@@ -47,6 +47,7 @@ module Podenv.Dhall (
     capSsh,
     capGpg,
     capVideo,
+    capDevices,
     capDri,
     capKvm,
     capAlsa,

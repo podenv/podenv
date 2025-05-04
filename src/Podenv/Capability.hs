@@ -220,6 +220,7 @@ capsToggle =
     , Cap "wayland" "share wayland socket" capWayland setWayland
     , Cap "pipewire" "share pipewire socket" capPipewire setPipewire
     , Cap "video" "share video devices" capVideo setVideo
+    , Cap "devices" "share all devices" capDevices (contextSet ctxAllDevices True)
     , Cap "dri" "share graphic device" capDri setDri
     , Cap "kvm" "share kvm device" capKvm (pure $ Ctx.addDevice "/dev/kvm")
     , Cap "tun" "share tun device" capTun (pure $ Ctx.addDevice "/dev/net/tun")
