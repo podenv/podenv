@@ -41,6 +41,7 @@
 , polyglot = ./polyglot.dhall
 , pwsafe = ./pwsafe.dhall
 , qtractor = ./qtractor.dhall
+, readest = ./readest.dhall
 , reaper = ./reaper.dhall
 , rosegarden = ./rosegarden.dhall
 , seq24 = ./seq24.dhall
