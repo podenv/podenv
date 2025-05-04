@@ -10,6 +10,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 -- | This module contains the podman/bubblewrap context wrapper
@@ -379,7 +380,8 @@ createLocalhostRunEnv appEnv = RunEnv{..}
         evalPackage :: Text -> ContextEnvT Text
         evalPackage installableFull = do
             path <- evalRun installableFull
-            pname <- evalRun $ installableFull <> ".pname"
+            -- runCommand package like 'nixGL' only provides a 'name' attribute.
+            pname <- evalRun (installableFull <> ".pname") `tryOr` evalRun (installableFull <> ".name")
 
             -- ensure the package is available in the store (eval may not produce the executable)
             ctx <- liftIO $ buildCtx $ [toText nixCommandPath] <> ["build", "--no-link"] <> nixArgs installableFull
@@ -610,6 +612,12 @@ readBubblewrap ctx fp = do
 
 tryRun :: (Exception e) => ContextEnvT a -> ContextEnvT (Either e a)
 tryRun (ReaderT inner) = ReaderT \env -> try $ inner env
+
+tryOr :: ContextEnvT a -> ContextEnvT a -> ContextEnvT a
+tryOr p q =
+    tryRun @P.ExitCodeException p >>= \case
+        Right a -> pure a
+        Left _ -> q
 
 bwrap :: [String] -> P.ProcessConfig () () ()
 bwrap = P.setDelegateCtlc True . P.proc "bwrap"
