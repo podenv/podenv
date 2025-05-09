@@ -52,6 +52,7 @@ let -- | Extra layer to install common graphic packages
               , "qt5-qtwayland"
               , "xdg-utils"
               , "glx-utils"
+              , "libglvnd-gles"
               , "harfbuzz-icu"
               ]
             # [ "dejavu-sans-mono-fonts", "dejavu-sans-mono-fonts" ]
@@ -85,9 +86,9 @@ let -- | Extra layer to install codec
       let repo = fusion-repo "free" "\$(rpm -E %fedora)"
 
       in  ''
-          RUN dnf install -y ${repo} && dnf install -y ${Prelude.Text.concatSep
-                                                           " "
-                                                           gfx-pkgs}
+          RUN dnf install -y ${repo} && dnf install -y --best --allowerasing ${Prelude.Text.concatSep
+                                                                                 " "
+                                                                                 gfx-pkgs}
           ''
 
 let -- | Simpler helper where app == package == command
