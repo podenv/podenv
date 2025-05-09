@@ -25,7 +25,7 @@ import Dhall.TH qualified
 import Lens.Family.TH (makeLensesBy)
 import Podenv.Prelude
 
--- | Embed static dhall code
+-- | Embed static dhall code.
 podenvPackage :: Expr Void Void
 podenvPackage = $(Dhall.TH.staticDhallExpression "./hub/package.dhall")
 
