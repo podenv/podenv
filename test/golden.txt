@@ -47,7 +47,7 @@ Raw command: podman run
   --volume /run/user/1000/pulse:/run/user/1000/pulse
   --volume /run/user/1000/wayland-0:/run/user/1000/wayland-0
   --volume /usr/share/egl:/usr/share/egl
-  --label podenv.selector=legacy.web localhost/a11f4b04b30280f4b42fda62852e24461e6a38b9c3eaeaf7589e144996516cfd firefox
+  --label podenv.selector=legacy.web localhost/ce120027ffc66b135df642402f523036e4d4ff463d8b0ff55b0746fa78990570 firefox
   --no-remote
 
 ==== ["corp.vpn"]
@@ -148,7 +148,7 @@ Display Raw command: podman run
   --volume /volumes/headless-xdg:/run/user/1000
   --volume /volumes/headless-x11:/tmp/.X11-unix
   --name headless-display
-  --label podenv.selector=default localhost/54686e286365c64ce62faa03147fbed4ac57db15c5882a1c6a810a76858a3055 sway
+  --label podenv.selector=default localhost/a2c8a1e1597736a88a04fdd2b13386e5f6b0bdafac676c4d8272f33dd7a6e91e sway
 
 Vnc Raw command: podman run
   --detach
@@ -177,7 +177,7 @@ Vnc Raw command: podman run
   --volume /volumes/headless-xdg:/run/user/1000
   --volume /volumes/headless-x11:/tmp/.X11-unix
   --name headless-vnc
-  --label podenv.selector=vnc localhost/54686e286365c64ce62faa03147fbed4ac57db15c5882a1c6a810a76858a3055 wayvnc
+  --label podenv.selector=vnc localhost/a2c8a1e1597736a88a04fdd2b13386e5f6b0bdafac676c4d8272f33dd7a6e91e wayvnc
 
 Raw command: podman run
   --rm
@@ -204,7 +204,7 @@ Raw command: podman run
   --volume /volumes/headless-xdg:/run/user/1000
   --volume /volumes/headless-pulse:/run/user/1000/pulse
   --volume /usr/share/egl:/usr/share/egl
-  --label podenv.selector=firefox localhost/a11f4b04b30280f4b42fda62852e24461e6a38b9c3eaeaf7589e144996516cfd firefox
+  --label podenv.selector=firefox localhost/ce120027ffc66b135df642402f523036e4d4ff463d8b0ff55b0746fa78990570 firefox
   --no-remote
 
 ==== ["--network","container:sway.vnc","vnc-viewer","localhost"]
@@ -224,7 +224,7 @@ Raw command: podman run
   --mount type=tmpfs,destination=/dev/shm
   --volume /volumes/vnc-viewer-home:/home/fedora
   --volume /tmp/.X11-unix:/tmp/.X11-unix
-  --label podenv.selector=vnc-viewer localhost/e0e8db75d1b8e0140e00466bf0ce2f61119b975a638b5ee9ac6386d23c16bf5a vncviewer localhost
+  --label podenv.selector=vnc-viewer localhost/17900283b475d6c7d7940e5771d29f7b4bc925ec77bfcaef45088be800bfd353 vncviewer localhost
 
 ==== ["podenv"]
 Raw command: bwrap
