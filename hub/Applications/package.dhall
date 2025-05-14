@@ -14,6 +14,7 @@
 , feh = ./feh.dhall
 , firefox = ./firefox.dhall
 , ffmpeg = ./ffmpeg.dhall
+, freecad = ./freecad.dhall
 , gimp = ./gimp.dhall
 , google-chrome = ./google-chrome.dhall
 , gscan2pdf = ./gscan2pdf.dhall
