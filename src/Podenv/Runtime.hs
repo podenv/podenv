@@ -388,7 +388,16 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             void $ execute Foreground ctx
 
             -- Return the final path
-            pure $ path <> "/bin/" <> pname
+            re <- ask
+            let store = nixStore re
+            let binPath = path <> "/bin/"
+            let defaultPath = binPath <> pname
+            liftIO $ doesPathExist (store <> Text.unpack (Text.drop 4 defaultPath)) >>= \case
+                True -> pure defaultPath
+                False ->
+                    listDirectory (store <> Text.unpack (Text.drop 4 binPath)) >>= \case
+                        [x] -> pure $ binPath <> Text.pack x
+                        xs -> error $ "Too many option in " <> show xs
 
         fileName = nixFileName installable
         evalRun arg = do
