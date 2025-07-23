@@ -343,7 +343,12 @@ createLocalhostRunEnv appEnv = RunEnv{..}
                     Left (P.ExitCodeException{}) -> do
                         -- Try "packages.<system>.<name>"
                         debug $ name <> " is not an app, trying as a package"
-                        ePkg <- tryRun $ evalPackage $ mkPath "#packages."
+                        let tryPackage = evalPackage $ mkPath "#packages."
+                        ePkg <-
+                            tryRun
+                                $ if name == "default"
+                                    then tryOr tryPackage (evalPackage $ mconcat [baseFlake, "#defaultPackage.", system])
+                                    else tryPackage
                         case ePkg of
                             Left (P.ExitCodeException{}) -> do
                                 -- Try "legacyPackages.<system>.<name>"
