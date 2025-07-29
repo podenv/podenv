@@ -7,7 +7,7 @@ This tutorial teachs you how to install and use podenv.
 Download the `podenv-x86_64-linux.tar.bz2` archive from the release page and put in your PATH:
 
 ```bash
-curl -L https://github.com/podenv/podenv/releases/download/v0.6.0/podenv-x86_64-linux.tar.bz2 -o - | tar -xjvf - -C ~/.local/
+curl -L https://github.com/podenv/podenv/releases/download/v0.8.0/podenv-x86_64-linux.tar.bz2 -o - | tar -xjvf - -C ~/.local/
 ```
 
 Or install the Fedora package from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/podenv/).

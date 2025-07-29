@@ -2,6 +2,8 @@
 
 ## next
 
+## 0.8.0 (2025-07-29)
+
 - added the `devices` capability to share all the devices and support hot-pluggable devices.
 - fix support for direct nixGL, see the readest app.
 - added readest and freecad app.
