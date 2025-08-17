@@ -100,7 +100,7 @@ Podenv support the [Nix installables syntax](https://nixos.org/manual/nix/stable
 (env:PODENV).Application::{
 , name = "polyglot"
 , description = Some "Tool to count lines of source code."
-, runtime = (env:PODENV).Hub.nix.useInstallables [ "github:podenv/polyglot.nix" ]
+, runtime = (env:PODENV).Nix "github:podenv/polyglot.nix"
 , capabilities = (env:PODENV).Capabilities::{ cwd = True }
 }
 ```
