@@ -379,11 +379,15 @@ resolveFileArgs args = do
     addCommand :: Text -> Ctx.Context -> Ctx.Context
     addCommand arg = ctxCommand %~ (arg :)
     checkExist :: Text -> AppEnvT (Either Text FilePath)
-    checkExist arg = do
-        fpM <- resolveHostPath arg
-        case fpM of
-            Nothing -> pure $ Left arg
-            Just fp -> pure $ Right fp
+    checkExist arg
+        | -- Avoid adding nix path to the hostfile, this should be mounted differently
+          "/nix" `Text.isPrefixOf` arg =
+            pure $ Left arg
+        | otherwise = do
+            fpM <- resolveHostPath arg
+            case fpM of
+                Nothing -> pure $ Left arg
+                Just fp -> pure $ Right fp
 
     addFileArg :: Either Text FilePath -> Ctx.Context -> Ctx.Context
     addFileArg (Left arg) = addCommand arg

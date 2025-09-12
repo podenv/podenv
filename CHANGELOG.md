@@ -2,6 +2,8 @@
 
 ## next
 
+- fix support for hostfile with nix runtime.
+
 ## 0.8.0 (2025-07-29)
 
 - added the `devices` capability to share all the devices and support hot-pluggable devices.
