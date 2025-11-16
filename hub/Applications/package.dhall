@@ -18,6 +18,7 @@
 , gimp = ./gimp.dhall
 , google-chrome = ./google-chrome.dhall
 , gscan2pdf = ./gscan2pdf.dhall
+, guix = ./guix.dhall
 , gworldclock = ./gworldclock.dhall
 , hydrogen = ./hydrogen.dhall
 , inkscape = ./inkscape.dhall
