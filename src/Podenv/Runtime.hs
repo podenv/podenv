@@ -400,7 +400,7 @@ createLocalhostRunEnv appEnv = RunEnv{..}
             liftIO $ doesPathExist (store <> Text.unpack (Text.drop 4 defaultPath)) >>= \case
                 True -> pure defaultPath
                 False ->
-                    listDirectory (store <> Text.unpack (Text.drop 4 binPath)) >>= \case
+                    liftIO $ listNixBins (store <> Text.unpack (Text.drop 4 binPath)) >>= \case
                         [x] -> pure $ binPath <> Text.pack x
                         xs -> error $ "Too many option in " <> show xs
 
@@ -962,3 +962,10 @@ getAppID name = go =<< getPodmanProcs
     go (p : rest)
         | getAppName (ppLabels p) == name = pure (ppId p)
         | otherwise = go rest
+
+notWrapped :: FilePath -> Bool
+notWrapped ('.' : fp) = "-wrapped" `Data.List.isSuffixOf` fp
+notWrapped _ = False
+
+listNixBins :: FilePath -> IO [FilePath]
+listNixBins = fmap (filter notWrapped) . listDirectory
