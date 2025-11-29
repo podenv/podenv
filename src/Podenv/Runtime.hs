@@ -681,7 +681,7 @@ bwrapRunArgs GlobalEnv{..} ctx fp = toString <$> args
         | otherwise = ["--ro-bind", "/sys", "/sys"]
 
     devMounts
-        | ctx ^. ctxAllDevices = ["--bind", "/dev", "/dev", "--bind", "/sys", "/sys"]
+        | ctx ^. ctxAllDevices = ["--dev-bind", "/dev", "/dev", "--bind", "/sys", "/sys"]
         | otherwise = concatMap (\d -> ["--dev-bind", toText d, toText d]) (ctx ^. ctxDevices)
 
     bindMode
