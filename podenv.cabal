@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               podenv
-version:            0.8.0
+version:            0.9.0
 synopsis:           A container wrapper
 description:
     Podenv provides a declarative interface to manage containerized applications.

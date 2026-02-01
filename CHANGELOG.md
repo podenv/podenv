@@ -2,7 +2,11 @@
 
 ## next
 
+## 0.9.0 (2026-02-01)
+
 - fix support for hostfile with nix runtime.
+- added guix application.
+- updated hub's apps.
 
 ## 0.8.0 (2025-07-29)
 
