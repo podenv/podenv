@@ -1,4 +1,4 @@
-let latest = "39"
+let latest = "43"
 
 let Prelude = ../Prelude.dhall
 
