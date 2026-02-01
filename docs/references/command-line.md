@@ -15,24 +15,28 @@ Here is the output of the `--help`:
 ```bash
 podenv - a container wrapper
 
-Usage: podenv [--version] [--list] [--list-caps] [--show] [--config ARG]
-              [--update] [--verbose] [--shell] [--namespace ARG] [--name NAME]
-              [--env ENV] [-v|--volume VOLUME] [APP] [ARGS]
+Usage: podenv [--version] [--list] [--list-caps] [--ps] [--show] [--config ARG]
+              [--update] [--verbose] [--network ARG] [--shell] [--namespace ARG]
+              [--name NAME] [--env ENV] [-v|--volume VOLUME] [--syscap CAP_NAME]
+              [APP] [ARGS]
 
 Available options:
   --version                Show version
   --list                   List available applications
   --list-caps              List available capabilities
+  --ps                     List running application
   --show                   Show the environment without running it
   --config ARG             A config expression
   --update                 Update the runtime
   --verbose                Increase verbosity
+  --network ARG            Network name
   --shell                  Start a shell instead of the application command
-  --namespace ARG          Share a network ns
-  --name NAME              Container name
+  --name NAME              The application name
   --env ENV                Extra env 'KEY=VALUE'
   -v,--volume VOLUME       Extra volumes 'volume|hostPath[:containerPath]'
-  APP                      Application config name or image:name or nix:expr
+  --syscap CAP_NAME        Extra capabilities(7)
+  APP                      Application config name or default selector, e.g.
+                           image:name
   ARGS                     Application args
   -h,--help                Show this help text
 ```
