@@ -6,7 +6,7 @@ let default =
           "Programming environment for real-time audio and video processing"
       , runtime =
           (../Podenv.dhall).Nix
-            "github:podenv/modularix/c7a19b1a56034440dc787b854daf15a870d09f89#supercollider-nixGL"
+            "git+https://codeberg.org/podenv/modularix#supercollider-nixGL"
       , capabilities = Podenv.Capabilities::{
         , dri = True
         , x11 = True
@@ -20,7 +20,7 @@ let lang =
           "Programming environment for real-time audio and video processing"
       , runtime =
           (../Podenv.dhall).Nix
-            "github:podenv/modularix/c7a19b1a56034440dc787b854daf15a870d09f89#sclang-nixGL"
+            "git+https://codeberg.org/podenv/modularix#sclang-nixGL"
       , volumes = [ "supercollider-home:~" ]
       , capabilities = Podenv.Capabilities::{
         , dri = True

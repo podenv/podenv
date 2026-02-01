@@ -4,7 +4,7 @@ let default =
       , description = Some "3D creation suite"
       , runtime =
           (../Podenv.dhall).Nix
-            "github:podenv/modularix/895e38a077190ae94c65aa2fa5b60733fa5c79f7#blender"
+            "git+https://codeberg.org/podenv/modularix#blender"
       , capabilities = (../Podenv.dhall).Capabilities::{
         , dri = True
         , wayland = True
