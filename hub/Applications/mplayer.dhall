@@ -2,7 +2,7 @@ let Podenv = ../Podenv.dhall
 
 in  Podenv.Application::{
     , description = Some "Media player software"
-    , runtime = (./fedora.dhall).latest.useGraphicCodec [ "mplayer" ]
+    , runtime = (./fedora.dhall).latest.useGraphic [ "mplayer" ]
     , command = [ "mplayer" ]
     , capabilities = Podenv.Capabilities::{
       , dri = True
