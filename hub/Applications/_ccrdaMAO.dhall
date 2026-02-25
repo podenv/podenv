@@ -13,19 +13,11 @@ in  \(description : Text) ->
     \(packages : List Text) ->
     \(command : Text) ->
     \(alsa : Bool) ->
-      Podenv.Application::{
-      , description = Some description
-      , runtime =
-          Podenv.Container
-            ( (./fedora.dhall).useGraphicImage
-                "latest"
-                "RUN rpm -Uvh ${url}"
-                packages
-            )
-      , command = [ command ]
-      , capabilities = Podenv.Capabilities::{
-        , pipewire = True
-        , x11 = True
-        , alsa
-        }
-      }
+          (./fedora.dhall).useGraphic description "RUN rpm -Uvh ${url}" packages
+      //  { command = [ command ]
+          , capabilities = Podenv.Capabilities::{
+            , pipewire = True
+            , x11 = True
+            , alsa
+            }
+          }

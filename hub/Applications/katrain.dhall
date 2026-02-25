@@ -3,7 +3,9 @@ let Podenv = ../Podenv.dhall
 in  Podenv.Application::{
     , description = Some " Improve your Baduk skills by training with KataGo!"
     , runtime =
-        (./fedora.dhall).`40`.useGraphicPost
+        (./fedora.dhall).useGraphicRuntime
+          "40"
+          ""
           [ "python3-pip"
           , "xclip"
           , "mesa-libOpenCL"
@@ -12,9 +14,11 @@ in  Podenv.Application::{
           , "gcc"
           , "python3-devel"
           , "mesa-libGL-devel"
+          , "sdl2-compat-devel"
+          , "ffmpeg-devel"
           ]
           ''
-          RUN python3 -mpip install katrain kivy==2.3.0
+          RUN python3 -mpip install katrain
           ''
     , command = [ "/usr/local/bin/katrain" ]
     , capabilities = Podenv.Capabilities::{

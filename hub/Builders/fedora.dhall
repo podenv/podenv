@@ -11,8 +11,8 @@ let mkVolumes = \(ver : Text) -> [ "cache-dnf-${ver}:/var/cache/dnf" ]
 let base-image =
       \(from : Text) ->
       \(ver : Text) ->
-      \(post-task : Text) ->
       \(pre-task : Text) ->
+      \(post-task : Text) ->
       \(pkgs : List Text) ->
         Podenv.ContainerBuild::{
         , containerfile =
@@ -31,8 +31,6 @@ let base-image =
         , image_update = Some "dnf update -y"
         }
 
-let image-with-post = \(ver : Text) -> base-image (image-ref (":" ++ ver)) ver
+let image = \(ver : Text) -> base-image (image-ref (":" ++ ver)) ver
 
-let image = \(ver : Text) -> base-image (image-ref (":" ++ ver)) ver ""
-
-in  { image-ref, mkVolumes, base-image, image, image-with-post, latest }
+in  { image-ref, mkVolumes, image, latest }

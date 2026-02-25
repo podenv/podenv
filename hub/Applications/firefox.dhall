@@ -11,7 +11,7 @@ let minimal =
 let default =
           minimal
       //  { runtime =
-              (./fedora.dhall).latest.useGraphicCodec
+              (./fedora.dhall).latest.useGraphic
                 [ "firefox"
                 , "gdouros-symbola-fonts"
                 , "pipewire-pulseaudio"
