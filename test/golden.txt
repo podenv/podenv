@@ -256,7 +256,6 @@ Raw command: bwrap
   --setenv TERM xterm-256color
   --new-session
   --chdir /home/user /nix/var/nix/profiles/nix-install/bin/nix run
-  --impure
   --extra-experimental-features "nix-command flakes" github:podenv/polyglot.nix
 
 
@@ -317,7 +316,6 @@ Raw command: bwrap
   --setenv TERM xterm-256color
   --new-session
   --chdir /home/user /nix/var/nix/profiles/nix-install/bin/nix run
-  --impure
   --extra-experimental-features "nix-command flakes" test
 
 ==== ["--name","test","image:ubi8"]

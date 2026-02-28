@@ -156,7 +156,7 @@ spec (config, goldenConfig) = describe "unit tests" $ do
                 "env // { description = Some \"ab\"}"
 
     describe "nix test" $ do
-        let mkArg cmd x = [cmd, "--impure", "--extra-experimental-features", "nix-command flakes", x]
+        let mkArg cmd x = [cmd, "--extra-experimental-features", "nix-command flakes", x]
         it "nix run without args" $ nixTest "{ runtime.nix = \"test\"}" [] $ mkArg "run" "test"
         it "nix run with args"
             $ nixTest
