@@ -12,6 +12,7 @@ module Podenv.Image (
 ) where
 
 import Data.Digest.Pure.SHA qualified as SHA
+import Data.Text qualified as Text
 import Podenv.Dhall
 import Podenv.Prelude
 
@@ -37,7 +38,10 @@ nixFlags :: [Text]
 nixFlags = ["--extra-experimental-features", "nix-command flakes"]
 
 nixArgs :: Text -> [Text]
-nixArgs installable = impureArgs <> nixFlags <> [installable]
+nixArgs installable = nixGLArgs <> nixFlags <> [installable]
   where
-    -- impure is necessary for nixGL to discover the nvidia driver
-    impureArgs = ["--impure"]
+    nixGLArgs
+        | "nixGL" `Text.isInfixOf` installable =
+            let nixpkgsVersion = "nixpkgs" -- TODO: figure out the nixpkgs from the other installable
+             in ["--impure", "--override-input", "nixpkgs", nixpkgsVersion]
+        | otherwise = []
