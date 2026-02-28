@@ -14,7 +14,7 @@ in  Podenv.Application::{
           , "gcc"
           , "python3-devel"
           , "mesa-libGL-devel"
-          , "sdl2-compat-devel"
+          , "SDL2-devel"
           , "ffmpeg-devel"
           ]
           ''
