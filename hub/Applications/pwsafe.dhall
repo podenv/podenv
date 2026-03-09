@@ -17,7 +17,7 @@ let copy =
         //  { description = Some "Copy a password to the wayland clipboard"
             , capabilities = default.capabilities // { wayland = True }
             , command =
-              [ "sh", "-c", "pwsafe -E -p ${name} | wl-copy -f -o -p" ]
+              [ "sh", "-c", "wl-copy -f -o -p \$(pwsafe -E -p ${name})" ]
             }
 
 in  { default, copy }
