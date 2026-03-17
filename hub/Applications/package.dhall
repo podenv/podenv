@@ -36,6 +36,7 @@
 , nix = ./nix.dhall
 , nixify = ./nixify.dhall
 , obs = ./obs.dhall
+, openscad = ./openscad.dhall
 , openvpn = ./openvpn.dhall
 , polyglot = ./polyglot.dhall
 , pwsafe = ./pwsafe.dhall
