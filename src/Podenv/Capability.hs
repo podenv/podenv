@@ -61,10 +61,15 @@ prepare mode ar = do
             setHome = case appHome of
                 Just x -> Ctx.addEnv "HOME" (toText x)
                 _ -> id
-            setRunAs = case appHome of
-                -- To keep it simple, when the app home is in `/home`, assume we share the host uid.
-                Just h | "/home" `Text.isPrefixOf` toText h -> ctxRunAs `setWhenNothing` Ctx.RunAsUID hostUID
-                _ -> id
+            setRunAs
+                | -- when sharing devices, we must not use a user ns, otherwise podman fails with
+                  -- Error: crun: chown `/dev/pts/6`: Operation not permitted: OCI permission denied
+                  app ^. appCapabilities . capDevices =
+                    ctxRunAs .~ Nothing
+                | otherwise = case appHome of
+                    -- To keep it simple, when the app home is in `/home`, assume we share the host uid.
+                    Just h | "/home" `Text.isPrefixOf` toText h -> ctxRunAs `setWhenNothing` Ctx.RunAsUID hostUID
+                    _ -> id
 
         pure $ setHome . ensureWorkdir . ensureHome . setRunAs
 
