@@ -8,8 +8,3 @@ pull_request_rules:
     actions:
       merge:
         method: merge
-  - actions:
-      delete_head_branch: {}
-    name: Delete head branch after merge
-    conditions:
-      - merged
