@@ -2,7 +2,10 @@
 
 ## next
 
+## 0.10.0 (2026-06-20)
+
 - fix support for devices and userns
+- improve nixGL detection
 
 ## 0.9.0 (2026-02-01)
 

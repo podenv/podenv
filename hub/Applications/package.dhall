@@ -51,6 +51,7 @@
 , streamtuner = ./streamtuner.dhall
 , supercollider = ./supercollider.dhall
 , tor = ./tor.dhall
+, unrar = ./unrar.dhall
 , vcv = ./vcv.dhall
 , virt-viewer = ./virt-viewer.dhall
 , vlc = ./vlc.dhall
