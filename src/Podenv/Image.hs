@@ -41,7 +41,7 @@ nixArgs :: Text -> [Text]
 nixArgs installable = nixGLArgs <> nixFlags <> [installable]
   where
     nixGLArgs
-        | "nixGL" `Text.isInfixOf` installable =
+        | "/nixGL" `Text.isInfixOf` installable =
             let nixpkgsVersion = "nixpkgs" -- TODO: figure out the nixpkgs from the other installable
              in ["--impure", "--override-input", "nixpkgs", nixpkgsVersion]
         | otherwise = []
