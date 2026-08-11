@@ -101,7 +101,7 @@ let useGraphic =
       \(packages : List Text) ->
         Podenv.Application::{
         , description = Some desc
-        , runtime = mkUse "latest" extraGraphic "" packages
+        , runtime = mkUse "latest" (extraGraphic ++ pre-task) "" packages
         }
 
 let useGraphicRuntime =
