@@ -32,6 +32,7 @@
 , mupdf = ./mupdf.dhall
 , muse = ./muse.dhall
 , musescore = ./musescore.dhall
+, netbird = ./netbird.dhall
 , network = ./network.dhall
 , nix = ./nix.dhall
 , nixify = ./nixify.dhall
